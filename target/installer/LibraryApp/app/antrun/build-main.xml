@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project name="maven-antrun-" default="main">
+  <target name="main">
+    <delete failonerror="false" dir="D:\Projects\lms-javafx\target/installer/LibraryApp" />
+  </target>
+</project>
