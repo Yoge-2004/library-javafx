@@ -241,7 +241,7 @@ public class CirculationView extends BorderPane {
         });
 
         // Note/rejection reason column - visible to users so they know why rejected
-        TableColumn<BorrowRequest, String> noteC = makeCol("Note / Reason",
+        TableColumn<BorrowRequest, String> noteC = makeCol("Reason",
                 r -> r.getNote() != null ? r.getNote() : "", 160);
         noteC.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(String s, boolean empty) {
@@ -350,7 +350,7 @@ public class CirculationView extends BorderPane {
         // ── Book picker ──────────────────────────────────────────
         Label bookLbl = fieldLabel("Select Book");
         TextField bookSearch = new TextField();
-        bookSearch.setPromptText("Search by title, author or ISBN...");
+        bookSearch.setPromptText("Search by title, author or ISBN");
         bookSearch.setStyle(inputStyle());
 
         ListView<Book> bookList = new ListView<>();
@@ -392,7 +392,7 @@ public class CirculationView extends BorderPane {
         // ── User picker ──────────────────────────────────────────
         Label userLbl = fieldLabel("Select User");
         TextField userSearch = new TextField();
-        userSearch.setPromptText("Search by username or name...");
+        userSearch.setPromptText("Search by username or name");
         userSearch.setStyle(inputStyle());
 
         ListView<User> userListView = new ListView<>();

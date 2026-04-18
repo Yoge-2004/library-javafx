@@ -236,7 +236,7 @@ public class LibraryConfigurationDialog {
                 "-fx-padding:9 12; -fx-font-size:14px;";
     }
     private static Button browseBtn(String title, TextField target, Stage owner) {
-        Button b = new Button("Browse...");
+        Button b = new Button("Browse");
         b.setStyle("-fx-background-color:#E2E8F0; -fx-background-radius:8px; " +
                 "-fx-border-radius:8px; -fx-cursor:hand; -fx-padding:8 14; -fx-font-weight:600;");
         b.setOnAction(e -> {

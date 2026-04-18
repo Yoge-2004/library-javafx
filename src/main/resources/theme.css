@@ -626,8 +626,11 @@
 }
 .dark-mode .theme-toggle-btn {
     -fx-text-fill: #E2E8F0;
-    -fx-background-color: rgba(255,255,255,0.08);
+    -fx-background-color: #334155;
+    -fx-border-color: #475569;
+    -fx-border-width: 1px;
     -fx-background-radius: 8px;
+    -fx-border-radius: 8px;
 }
 .theme-toggle-btn:hover { -fx-background-color: #E2E8F0; -fx-background-radius: 8px; }
 .dark-mode .theme-toggle-btn:hover { -fx-background-color: rgba(255,255,255,0.15); }

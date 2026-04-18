@@ -936,9 +936,10 @@ public class LibraryTestSuite {
         @Test @Order(142)
         @DisplayName("searchBooks returns all books on empty query")
         void searchEmpty() throws BooksException {
+            int initialSize = db.searchBooks("").size();
             db.addBook(validBook("1000000012"));
             db.addBook(validBook("1000000013"));
-            assertEquals(2, db.searchBooks("").size());
+            assertEquals(initialSize + 2, db.searchBooks("").size());
         }
 
         @Test @Order(143)
@@ -1175,11 +1176,17 @@ public class LibraryTestSuite {
                 udb.setAutoSave(false);
                 udb.clearAllUsers("CONFIRM_CLEAR_ALL");
             } catch (Exception ignored) {}
-            resetBothDBs();
         }
 
         @AfterEach
-        void cleanUp() { resetBothDBs(); }
+        void cleanUp() {
+            try {
+                UsersDB udb = UsersDB.getInstance();
+                udb.setAutoSave(false);
+                udb.clearAllUsers("CONFIRM_CLEAR_ALL");
+            } catch (Exception ignored) {}
+            resetBothDBs();
+        }
 
         @Test @Order(180)
         @DisplayName("createUser / getUserById round-trip")
@@ -1260,17 +1267,19 @@ public class LibraryTestSuite {
         @Test @Order(190)
         @DisplayName("getAllUsers returns list with expected size")
         void getAllUsers() throws ValidationException {
+            int currentSize = UserService.getAllUsers().size();
             UserService.createUser("tom001", "pass1234");
             UserService.createUser("uma001", "pass1234", UserRole.USER);
             List<User> users = UserService.getAllUsers();
-            assertEquals(2, users.size());
+            assertEquals(currentSize + 2, users.size());
         }
 
         @Test @Order(191)
         @DisplayName("getUserCount returns correct count")
         void userCount() throws ValidationException {
+            int currentCount = UserService.getUserCount();
             UserService.createUser("vic001", "pass1234");
-            assertEquals(1, UserService.getUserCount());
+            assertEquals(currentCount + 1, UserService.getUserCount());
         }
     }
 

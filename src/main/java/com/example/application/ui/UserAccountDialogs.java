@@ -54,15 +54,22 @@ public class UserAccountDialogs {
         TextField emailField   = field(user.getEmail());
         TextField contactField = field(user.getContactNumber());
 
-        grid.addRow(0, lbl("First Name"),     firstField);
-        grid.addRow(1, lbl("Last Name"),      lastField);
-        grid.addRow(2, lbl("Email"),          emailField);
-        grid.addRow(3, lbl("Contact Number"), contactField);
+        TextField roleField = field(user.getRole().toString());
+        roleField.setEditable(false);
+        roleField.setStyle("-fx-background-color:#E2E8F0; -fx-border-color:#D1D5DB; " +
+                "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
+                "-fx-padding:9 12; -fx-font-size:14px; -fx-text-fill:#64748B;");
+
+        grid.addRow(0, lbl("Account Type"),   roleField);
+        grid.addRow(1, lbl("First Name"),     firstField);
+        grid.addRow(2, lbl("Last Name"),      lastField);
+        grid.addRow(3, lbl("Email"),          emailField);
+        grid.addRow(4, lbl("Contact Number"), contactField);
 
         Label errLbl = new Label();
         errLbl.setStyle("-fx-text-fill:#DC2626; -fx-font-size:12px;");
         errLbl.setVisible(false);
-        grid.add(errLbl, 0, 4, 2, 1);
+        grid.add(errLbl, 0, 5, 2, 1);
 
         root.getChildren().addAll(heading, grid);
         pane.setContent(root);
@@ -237,6 +244,7 @@ public class UserAccountDialogs {
                     try {
                         UserService.updateUser(u);
                         refreshTable(table);
+                        table.refresh();
                     } catch (Exception ex) { alert("Approve failed: " + ex.getMessage()); }
                 });
                 editBtn.setOnAction(e -> {

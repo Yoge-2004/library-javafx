@@ -23,7 +23,7 @@ public class RegistrationDialog {
 
     public static Optional<RegistrationRequest> show(Stage owner, boolean isFirstUser) {
         Dialog<RegistrationRequest> dialog = new Dialog<>();
-        dialog.setTitle(isFirstUser ? "Create Administrator Account" : "Create Account");
+        dialog.setTitle(isFirstUser ? "Create Administrator Account" : "Sign Up");
         dialog.initOwner(owner);
         dialog.setResizable(true);
 
@@ -31,7 +31,13 @@ public class RegistrationDialog {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(500);
         pane.setMinWidth(460);
-        pane.setPrefHeight(640);
+
+        // Use Platform.runLater to correctly size dialog to content
+        javafx.application.Platform.runLater(() -> {
+            if (dialog.getDialogPane().getScene() != null && dialog.getDialogPane().getScene().getWindow() != null) {
+                dialog.getDialogPane().getScene().getWindow().sizeToScene();
+            }
+        });
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
 
@@ -47,7 +53,7 @@ public class RegistrationDialog {
         Label emoji = new Label(isFirstUser ? "🏛️" : "👤");
         emoji.setStyle("-fx-font-size: 32px;");
 
-        Label titleLbl = new Label(isFirstUser ? "Welcome to Library OS" : "Create Account");
+        Label titleLbl = new Label(isFirstUser ? "Welcome to Library OS" : "Sign Up");
         titleLbl.setStyle("-fx-font-size: 22px; -fx-font-weight: 800; -fx-text-fill: white;");
 
         Label libLbl = new Label(cfg.getLibraryName() + " . " + cfg.getBranchName());
@@ -158,7 +164,7 @@ public class RegistrationDialog {
         pane.setContent(root);
 
         // Buttons
-        ButtonType createBt = new ButtonType("Create Account", ButtonBar.ButtonData.OK_DONE);
+        ButtonType createBt = new ButtonType("Sign Up", ButtonBar.ButtonData.OK_DONE);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, createBt);
         Button okBtn = (Button) pane.lookupButton(createBt);
         okBtn.setStyle("-fx-background-color: #0D9488; -fx-text-fill: white; " +

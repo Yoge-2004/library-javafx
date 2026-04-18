@@ -99,7 +99,7 @@ public class CatalogView extends BorderPane {
 
         // Search field
         searchField = new TextField();
-        searchField.setPromptText("🔍 Search books by title, author, or ISBN...");
+        searchField.setPromptText("🔍 Search books by title, author, or ISBN");
         searchField.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
                 "-fx-font-size: 14px; -fx-prompt-text-fill: #94A3B8;");
         searchField.setPrefWidth(350);
@@ -146,18 +146,18 @@ public class CatalogView extends BorderPane {
         });
     }
 
-    /** Rebuild category dropdown from live book data + "Add category..." option. */
+    /** Rebuild category dropdown from live book data + "Add category" option. */
     private void refreshCategoryFilter() {
         String current = categoryFilter.getValue();
         java.util.Set<String> cats = new java.util.TreeSet<>();
         cats.add("All Categories");
         booksList.forEach(b -> { if (b.getCategory() != null) cats.add(b.getCategory()); });
-        cats.add("── Add Category...");
+        cats.add("── Add Category");
         categoryFilter.getItems().setAll(cats);
         categoryFilter.setValue(current != null && cats.contains(current) ? current : "All Categories");
-        // Handle "Add Category..." selection
+        // Handle "Add Category" selection
         categoryFilter.valueProperty().addListener((o, old, nv) -> {
-            if ("── Add Category...".equals(nv)) {
+            if ("── Add Category".equals(nv)) {
                 TextInputDialog td = new TextInputDialog();
                 td.setTitle("New Category");
                 td.setHeaderText("Enter a new category name:");

@@ -11,6 +11,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.chart.*;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.*;
@@ -70,10 +71,22 @@ public class AnalyticsDashboard extends BorderPane {
         content.setStyle("-fx-background-color:#F1F5F9;");
 
         // Header
-        VBox header = AppTheme.createHeaderBlock("OVERVIEW",
+        VBox headerText = AppTheme.createHeaderBlock("OVERVIEW",
                 "Library Dashboard",
                 isStaff ? "Real-time insights into your library's performance"
                         : "Your personal borrowing overview");
+
+        HBox header = new HBox(16);
+        header.setAlignment(Pos.CENTER_LEFT);
+
+        Button backBtn = AppTheme.createIconButton(AppTheme.ICON_ARROW_BACK, "Back", AppTheme.ButtonStyle.GHOST);
+        backBtn.setOnAction(e -> {
+            if (onNavigateToCatalog != null) {
+                onNavigateToCatalog.run();
+            }
+        });
+
+        header.getChildren().addAll(backBtn, headerText);
 
         statsGrid = new GridPane();
         statsGrid.setHgap(16); statsGrid.setVgap(16);
@@ -190,6 +203,7 @@ public class AnalyticsDashboard extends BorderPane {
 
     private void updateStats(Map<String, Object> stats, int totalUsers, int staffCount) {
         statsGrid.getChildren().clear();
+        statsGrid.getColumnConstraints().clear();
 
         if (isStaff) {
             int totalBooks     = num(stats, "totalBooks");
@@ -221,7 +235,7 @@ public class AnalyticsDashboard extends BorderPane {
             statsGrid.add(c4, 0, 1); statsGrid.add(c5, 1, 1);
             statsGrid.add(c6, 2, 1);
 
-            // Equal column widths
+            // Equal column widths for 4 columns
             for (int i = 0; i < 4; i++) {
                 ColumnConstraints cc = new ColumnConstraints();
                 cc.setPercentWidth(25);
@@ -387,7 +401,7 @@ public class AnalyticsDashboard extends BorderPane {
 
         Label t = new Label(title);
         t.setStyle("-fx-font-size:14px; -fx-font-weight:600; -fx-text-fill:#1E293B;");
-        t.setMaxWidth(220); t.setEllipsisString("...");
+        t.setMaxWidth(220); t.setEllipsisString("");
 
         Label s = new Label(sub);
         s.setStyle("-fx-font-size:12px; -fx-text-fill:" + color + ";");

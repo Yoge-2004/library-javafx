@@ -22,7 +22,7 @@ public class SettingsDialog {
     }
 
     public static void show(Stage owner, UserRole userRole, Actions actions) {
-        Dialog<Void> dialog = new Dialog<>();
+        Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Settings");
         dialog.initOwner(owner);
         dialog.setResizable(true);
@@ -40,11 +40,18 @@ public class SettingsDialog {
         VBox header = new VBox(6);
         header.setPadding(new Insets(28, 28, 20, 28));
         header.setStyle("-fx-background-color:#0F172A;");
-        Label titleLbl = new Label("⚙  Settings");
+
+        HBox titleBox = new HBox(8);
+        titleBox.setAlignment(Pos.CENTER_LEFT);
+        javafx.scene.shape.SVGPath titleIcon = AppTheme.createIcon(AppTheme.ICON_SETTINGS);
+        titleIcon.setFill(javafx.scene.paint.Color.WHITE);
+        Label titleLbl = new Label("Settings");
         titleLbl.setStyle("-fx-font-size:22px; -fx-font-weight:800; -fx-text-fill:white;");
+        titleBox.getChildren().addAll(titleIcon, titleLbl);
+
         Label subLbl = new Label("Account and system preferences");
         subLbl.setStyle("-fx-font-size:13px; -fx-text-fill:#94A3B8;");
-        header.getChildren().addAll(titleLbl, subLbl);
+        header.getChildren().addAll(titleBox, subLbl);
 
         // Content
         VBox content = new VBox(6);
@@ -54,13 +61,13 @@ public class SettingsDialog {
         content.getChildren().add(sectionLabel("ACCOUNT"));
 
         content.getChildren().addAll(
-                settingItem("👤", "Profile",
+                settingItem(AppTheme.ICON_USER, "Profile",
                         "Update your personal information and display name",
-                        "#0D9488", () -> { dialog.close(); actions.openProfile(); }),
+                        "#0D9488", () -> { dialog.setResult(ButtonType.OK); dialog.close(); actions.openProfile(); }),
 
-                settingItem("🔒", "Password",
+                settingItem(AppTheme.ICON_SETTINGS, "Password",
                         "Change your account password",
-                        "#3B82F6", () -> { dialog.close(); actions.openPassword(); })
+                        "#3B82F6", () -> { dialog.setResult(ButtonType.OK); dialog.close(); actions.openPassword(); })
         );
 
         // ── Administration section (staff only) ──────────────────
@@ -68,17 +75,17 @@ public class SettingsDialog {
             content.getChildren().add(sectionLabel("ADMINISTRATION"));
 
             content.getChildren().addAll(
-                    settingItem("👥", "User Management",
+                    settingItem(AppTheme.ICON_USER, "User Management",
                             "Add, remove or modify user accounts and roles",
-                            "#8B5CF6", () -> { dialog.close(); actions.openUserManagement(); }),
+                            "#8B5CF6", () -> { dialog.setResult(ButtonType.OK); dialog.close(); actions.openUserManagement(); }),
 
-                    settingItem("📚", "Library Configuration",
+                    settingItem(AppTheme.ICON_BOOK, "Library Configuration",
                             "Borrowing rules, fine rates, loan periods, email SMTP",
-                            "#F59E0B", () -> { dialog.close(); actions.openLibraryConfiguration(); }),
+                            "#F59E0B", () -> { dialog.setResult(ButtonType.OK); dialog.close(); actions.openLibraryConfiguration(); }),
 
-                    settingItem("💾", "Data Management",
+                    settingItem(AppTheme.ICON_SAVE, "Data Management",
                             "Backup data, import/export, view system statistics",
-                            "#16A34A", () -> { dialog.close(); actions.openDataManagement(); })
+                            "#16A34A", () -> { dialog.setResult(ButtonType.OK); dialog.close(); actions.openDataManagement(); })
             );
         }
 
@@ -90,8 +97,8 @@ public class SettingsDialog {
                 "-fx-border-radius:12px; -fx-border-color:#E2E8F0; -fx-border-width:1;");
         aboutCard.setAlignment(Pos.CENTER_LEFT);
 
-        Label aboutIcon = new Label("ℹ");
-        aboutIcon.setStyle("-fx-font-size:22px;");
+        javafx.scene.shape.SVGPath aboutIcon = AppTheme.createIcon(AppTheme.ICON_HELP);
+        aboutIcon.setFill(javafx.scene.paint.Color.web("#3B82F6"));
 
         VBox aboutTxt = new VBox(2);
         Label aboutTitle = new Label("Library OS  v3.1");
@@ -110,6 +117,9 @@ public class SettingsDialog {
 
         pane.setContent(scroll);
         pane.getButtonTypes().add(ButtonType.CLOSE);
+
+        // Hide actual close button, wait for explicit setting click
+        pane.lookupButton(ButtonType.CLOSE).setVisible(false);
 
         dialog.showAndWait();
     }
@@ -132,10 +142,14 @@ public class SettingsDialog {
         item.setCursor(javafx.scene.Cursor.HAND);
 
         // Colored icon bubble
-        Label bubble = new Label(emoji);
-        bubble.setStyle("-fx-font-size:20px; -fx-background-color:" + accentColor + "22; " +
+        javafx.scene.shape.SVGPath iconPath = AppTheme.createIcon(emoji);
+        iconPath.setFill(javafx.scene.paint.Color.web(accentColor));
+        StackPane bubble = new StackPane(iconPath);
+        bubble.setStyle("-fx-background-color:" + accentColor + "22; " +
                 "-fx-background-radius:10px; -fx-padding:8;");
         bubble.setMinWidth(44);
+        bubble.setMinHeight(44);
+        bubble.setAlignment(Pos.CENTER);
 
         VBox txt = new VBox(3);
         HBox.setHgrow(txt, Priority.ALWAYS);
@@ -146,8 +160,8 @@ public class SettingsDialog {
         descLbl.setWrapText(true);
         txt.getChildren().addAll(titleLbl, descLbl);
 
-        Label arrow = new Label("›");
-        arrow.setStyle("-fx-font-size:22px; -fx-text-fill:#CBD5E1;");
+        javafx.scene.shape.SVGPath arrow = AppTheme.createIcon(AppTheme.ICON_ARROW_FORWARD);
+        arrow.setFill(javafx.scene.paint.Color.web("#CBD5E1"));
 
         item.getChildren().addAll(bubble, txt, arrow);
 
