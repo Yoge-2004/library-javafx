@@ -62,7 +62,7 @@ public final class DataStorage {
 
     /**
      * Writes an object to file using serialization with improved atomic operation handling.
-     * This version addresses Windows file system issues and provides fallback mechanisms.
+     * FIXED: Removed unreachable FileAlreadyExistsException catch block.
      *
      * @param filename the file path
      * @param obj the object to serialize
@@ -80,12 +80,10 @@ public final class DataStorage {
         Path filePath = Paths.get(filename);
         Path parentDir = filePath.getParent();
 
-        // Ensure parent directories exist
         if (parentDir != null && !Files.exists(parentDir)) {
             Files.createDirectories(parentDir);
         }
 
-        // Create a unique temporary file name to avoid conflicts
         String tempFileName = filename + ".tmp." + System.currentTimeMillis() + "." + Thread.currentThread().getId();
         Path tempPath = Paths.get(tempFileName);
 
@@ -107,17 +105,13 @@ public final class DataStorage {
 
             // Strategy 1: Try atomic move with replace
             try {
-                if (Files.exists(filePath)) {
-                    Files.move(tempPath, filePath,
-                            StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE);
-                } else {
-                    Files.move(tempPath, filePath, StandardCopyOption.ATOMIC_MOVE);
-                }
+                Files.move(tempPath, filePath,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
                 moveSuccessful = true;
                 System.out.println("Successfully wrote object to: " + filename + " (atomic)");
 
-            } catch (AtomicMoveNotSupportedException | FileAlreadyExistsException e1) {
+            } catch (AtomicMoveNotSupportedException e1) {
                 // Strategy 2: Try non-atomic move with replace
                 try {
                     Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);

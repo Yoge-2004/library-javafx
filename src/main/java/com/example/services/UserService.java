@@ -1,6 +1,7 @@
 package com.example.services;
 
 import com.example.entities.User;
+import com.example.entities.UserRole;
 import com.example.entities.UsersDB;
 import com.example.exceptions.UserException;
 import com.example.exceptions.ValidationException;
@@ -66,10 +67,16 @@ public final class UserService {
      * @throws UserException if user creation fails
      */
     public static void createUser(String userId, String password) throws ValidationException {
+        createUser(userId, password, UserRole.USER);
+    }
+
+    public static void createUser(String userId, String password, UserRole role) throws ValidationException {
         validateUserCreationInput(userId, password);
 
         try {
-            userDB.addUser(userId, password);
+            User user = new User(userId.trim(), password);
+            user.setRole(role);
+            userDB.addUser(user);
             LOGGER.log(Level.INFO, "User created successfully: {0}", userId);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to create user: " + userId, e);
@@ -180,6 +187,47 @@ public final class UserService {
         }
     }
 
+    public static boolean hasRegisteredUsers() {
+        try {
+            return userDB.hasUsers();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to determine whether users exist", e);
+            return false;
+        }
+    }
+
+    /**
+     * FIXED: Added proper exception handling to prevent crashes when user not found.
+     * Returns null instead of throwing exception for safer UI consumption.
+     *
+     * @param userId the user ID
+     * @return UserRole or null if user not found
+     */
+    public static UserRole getUserRole(String userId) {
+        try {
+            return getUserById(userId).getRole();
+        } catch (UserException e) {
+            LOGGER.log(Level.WARNING, "Failed to get role for user: " + userId, e);
+            return null;
+        }
+    }
+
+    /**
+     * FIXED: Added proper exception handling to prevent crashes when user not found.
+     *
+     * @param userId the user ID
+     * @return true if user is admin, false if not found or not admin
+     */
+    public static boolean isAdmin(String userId) {
+        try {
+            UserRole role = getUserRole(userId);
+            return role != null && role.isAdmin();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to check admin status for user: " + userId, e);
+            return false;
+        }
+    }
+
     /**
      * Checks if a user exists.
      *
@@ -206,7 +254,6 @@ public final class UserService {
      */
     public static void persistDatabase() throws IOException {
         try {
-            // The UsersDB automatically persists on changes, but this ensures consistency
             userDB.forcePersist();
             LOGGER.log(Level.INFO, "User database persisted successfully");
         } catch (Exception e) {
@@ -247,7 +294,6 @@ public final class UserService {
             throw new ValidationException("Password cannot exceed " + MAX_PASSWORD_LENGTH + " characters");
         }
 
-        // Check for valid username characters (alphanumeric and common symbols)
         if (!trimmedUserId.matches("^[a-zA-Z0-9._-]+$")) {
             throw new ValidationException("Username can only contain letters, numbers, dots, underscores, and hyphens");
         }
@@ -262,7 +308,6 @@ public final class UserService {
             throw new UserException("Password cannot be empty");
         }
 
-        // Validate email format if provided
         if (user.getEmail() != null && !user.getEmail().trim().isEmpty()) {
             String email = user.getEmail().trim();
             if (!email.matches("^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$")) {
@@ -270,7 +315,6 @@ public final class UserService {
             }
         }
 
-        // Validate contact number format if provided
         if (user.getContactNumber() != null && !user.getContactNumber().trim().isEmpty()) {
             String contact = user.getContactNumber().trim();
             if (!contact.matches("^[+]?[0-9]{10,15}$")) {
@@ -278,9 +322,6 @@ public final class UserService {
             }
         }
     }
-
-
-    // Legacy method names for backward compatibility
 
     /**
      * @deprecated Use {@link #createUser(String, String)} instead
@@ -323,7 +364,6 @@ public final class UserService {
      */
     @Deprecated
     public static List<User> getUsers() {
-        // Fixed version:
         Collection<User> users = userDB.getUsers();
         return new ArrayList<>(users);
     }

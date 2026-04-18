@@ -1,6 +1,7 @@
 package com.example.services;
 
 import com.example.entities.Book;
+import com.example.entities.BorrowRequest;
 import com.example.entities.BooksDB;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.entities.User;
@@ -394,6 +395,30 @@ public final class BookService {
         }
     }
 
+    public static BorrowRequest requestBookForUser(String isbn, String userId, int quantity) {
+        return BorrowRequestService.createRequest(isbn, userId, quantity);
+    }
+
+    public static List<BorrowRequest> getAllBorrowRequests() {
+        return BorrowRequestService.getAllRequests();
+    }
+
+    public static List<BorrowRequest> getPendingBorrowRequests() {
+        return BorrowRequestService.getPendingRequests();
+    }
+
+    public static List<BorrowRequest> getBorrowRequestsForUser(String userId) {
+        return BorrowRequestService.getRequestsForUser(userId);
+    }
+
+    public static void approveBorrowRequest(String requestId, String processedBy) {
+        BorrowRequestService.approveRequest(requestId, processedBy);
+    }
+
+    public static void rejectBorrowRequest(String requestId, String processedBy, String note) {
+        BorrowRequestService.rejectRequest(requestId, processedBy, note);
+    }
+
     /**
      * Gets total number of books currently borrowed by a user.
      *
@@ -627,6 +652,7 @@ public final class BookService {
             statistics.put("overdueBooks", overdueBooks);
             statistics.put("totalFines", totalFines);
             statistics.put("utilizationRate", utilizationRate);
+            statistics.put("pendingRequests", BorrowRequestService.getPendingRequestCount());
             statistics.put("generatedAt", LocalDate.now());
 
             return Collections.unmodifiableMap(statistics);
@@ -679,6 +705,14 @@ public final class BookService {
             LOGGER.log(Level.WARNING, "Failed to get fine per day", e);
             return 2.0; // Default fallback
         }
+    }
+
+    public static void updateLibraryConfiguration(int maxBorrowLimit, int loanDays, double finePerDay)
+            throws IOException {
+        booksDB.setMaxBorrow(maxBorrowLimit);
+        booksDB.setLoanDays(loanDays);
+        booksDB.setFinePerDay(finePerDay);
+        persistBooksDatabase();
     }
 
     // --- Persistence Operations ---

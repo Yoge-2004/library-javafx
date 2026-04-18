@@ -10,11 +10,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Thread-safe singleton database class for user management with enhanced error handling
- * and automatic persistence.
+ * FIXED: Prevented admin promotion from overriding explicit role assignments.
+ * Added proper initialization flag to track first load vs subsequent loads.
  */
 public final class UsersDB implements Serializable {
-    private static final long serialVersionUID = 2L; // Incremented for version tracking
+    private static final long serialVersionUID = 3L; // Bumped for fixes
 
     private static final Logger LOGGER = Logger.getLogger(UsersDB.class.getName());
     private static final String USERS_DB_FILE = "data/users_db.ser";
@@ -24,6 +24,9 @@ public final class UsersDB implements Serializable {
 
     private final Map<String, User> users;
     private transient boolean autoSave = true;
+
+    // FIXED: Track if roles were explicitly assigned to prevent override
+    private boolean rolesInitialized = false;
 
     private UsersDB() {
         this.users = new LinkedHashMap<>();
@@ -60,13 +63,19 @@ public final class UsersDB implements Serializable {
     }
 
     /**
-     * Initializes transient fields after deserialization.
+     * FIXED: Initialize transient fields after deserialization.
+     * Only ensure admin exists on first creation, not on every load.
      */
     private void initializeAfterDeserialization() {
         if (users == null) {
             throw new IllegalStateException("Users map cannot be null after deserialization");
         }
         autoSave = true;
+        // FIXED: Only ensure admin on fresh creation, not on load
+        // This prevents demoted users from being re-promoted on restart
+        if (!rolesInitialized && users.isEmpty()) {
+            ensureAdminUserExists();
+        }
     }
 
     /**
@@ -85,7 +94,7 @@ public final class UsersDB implements Serializable {
         lock.readLock().lock();
         try {
             User user = users.get(userId.trim());
-            boolean isAuthenticated = user != null && user.getPassword().equals(password);
+            boolean isAuthenticated = user != null && user.isActive() && user.getPassword().equals(password);
 
             LOGGER.log(Level.FINE, "Authentication for user {0}: {1}",
                     new Object[]{userId, isAuthenticated ? "SUCCESS" : "FAILURE"});
@@ -123,6 +132,13 @@ public final class UsersDB implements Serializable {
             User newUser = new User(trimmedUserId, password);
             users.put(trimmedUserId, newUser);
 
+            // FIXED: Only auto-promote on very first user creation, not every add
+            if (users.size() == 1) {
+                ensureAdminUserExists();
+            }
+
+            rolesInitialized = true;
+
             LOGGER.log(Level.INFO, "User added successfully: {0}", trimmedUserId);
 
             if (autoSave) {
@@ -157,6 +173,13 @@ public final class UsersDB implements Serializable {
         lock.writeLock().lock();
         try {
             users.put(userId.trim(), user);
+
+            // FIXED: Only auto-promote on very first user
+            if (users.size() == 1) {
+                ensureAdminUserExists();
+            }
+
+            rolesInitialized = true;
             LOGGER.log(Level.INFO, "User object added successfully: {0}", userId);
 
             if (autoSave) {
@@ -242,6 +265,7 @@ public final class UsersDB implements Serializable {
             }
 
             users.put(trimmedUserId, user);
+            rolesInitialized = true;
             LOGGER.log(Level.INFO, "User updated successfully: {0}", trimmedUserId);
 
             if (autoSave) {
@@ -272,6 +296,11 @@ public final class UsersDB implements Serializable {
 
         lock.writeLock().lock();
         try {
+            User existingUser = users.get(trimmedUserId);
+            if (existingUser != null && existingUser.isAdmin() && getAdminCount() <= 1) {
+                throw new UserException("At least one administrator must remain in the system");
+            }
+
             User removedUser = users.remove(trimmedUserId);
             if (removedUser != null) {
                 LOGGER.log(Level.INFO, "User removed successfully: {0}", trimmedUserId);
@@ -348,6 +377,15 @@ public final class UsersDB implements Serializable {
         LOGGER.log(Level.INFO, "Auto-save set to: {0}", autoSave);
     }
 
+    public boolean hasUsers() {
+        lock.readLock().lock();
+        try {
+            return !users.isEmpty();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     /**
      * Clears all users (with confirmation for safety).
      *
@@ -384,6 +422,8 @@ public final class UsersDB implements Serializable {
             UsersDB loadedInstance = DataStorage.readSerialized(USERS_DB_FILE, UsersDB.class);
             if (loadedInstance != null && loadedInstance.users != null) {
                 users.putAll(loadedInstance.users);
+                this.rolesInitialized = loadedInstance.rolesInitialized;
+                // FIXED: Don't ensure admin on load - respect saved roles
                 LOGGER.log(Level.INFO, "Loaded {0} users from storage", users.size());
             } else {
                 LOGGER.log(Level.INFO, "No existing user data found, starting with empty database");
@@ -437,5 +477,27 @@ public final class UsersDB implements Serializable {
     @Override
     public String toString() {
         return String.format("UsersDB{userCount=%d, autoSave=%s}", getUserCount(), autoSave);
+    }
+
+    /**
+     * FIXED: Only promotes first user to admin if this is a fresh database (no users yet).
+     * Does not override explicit role assignments on subsequent loads.
+     */
+    private void ensureAdminUserExists() {
+        if (users.isEmpty()) {
+            return;
+        }
+
+        boolean hasAdmin = users.values().stream().anyMatch(User::isAdmin);
+        if (!hasAdmin && users.size() == 1) {
+            // Only auto-promote if this is the very first user ever created
+            User firstUser = users.values().iterator().next();
+            firstUser.setRole(UserRole.ADMIN);
+            LOGGER.log(Level.INFO, "Promoted first user {0} to ADMIN", firstUser.getUserId());
+        }
+    }
+
+    private long getAdminCount() {
+        return users.values().stream().filter(User::isAdmin).count();
     }
 }

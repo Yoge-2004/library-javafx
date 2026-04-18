@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  * and additional user properties.
  */
 public final class User implements Serializable {
-    private static final long serialVersionUID = 2L; // Incremented for version tracking
+    private static final long serialVersionUID = 3L; // Bumped for fixes
 
     // Validation patterns
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
@@ -42,6 +42,7 @@ public final class User implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;
     private boolean isActive;
+    private UserRole role;
 
     /**
      * Creates a new user with required fields and validation.
@@ -54,7 +55,6 @@ public final class User implements Serializable {
         validateAndSetUserId(userId);
         validateAndSetPassword(password);
 
-        // Initialize additional properties
         this.createdAt = LocalDateTime.now();
         this.isActive = true;
         this.email = null;
@@ -62,6 +62,7 @@ public final class User implements Serializable {
         this.firstName = null;
         this.lastName = null;
         this.lastLoginAt = null;
+        this.role = UserRole.USER; // Explicit default
     }
 
     /**
@@ -120,6 +121,22 @@ public final class User implements Serializable {
 
     public boolean isActive() {
         return isActive;
+    }
+
+    /**
+     * FIXED: Default to USER role instead of LIBRARIAN when role is null.
+     * Prevents privilege escalation if role data is corrupted.
+     */
+    public UserRole getRole() {
+        return role == null ? UserRole.USER : role; // FIXED: Was LIBRARIAN
+    }
+
+    public boolean isAdmin() {
+        return getRole().isAdmin();
+    }
+
+    public boolean isStaff() {
+        return getRole().isStaff();
     }
 
     /**
@@ -195,6 +212,10 @@ public final class User implements Serializable {
 
     public void setActive(boolean active) {
         this.isActive = active;
+    }
+
+    public void setRole(UserRole role) {
+        this.role = role == null ? UserRole.USER : role;
     }
 
     /**
@@ -279,6 +300,7 @@ public final class User implements Serializable {
             safeCopy.createdAt = this.createdAt;
             safeCopy.lastLoginAt = this.lastLoginAt;
             safeCopy.isActive = this.isActive;
+            safeCopy.role = this.getRole();
             return safeCopy;
         } catch (UserException e) {
             // This should never happen with valid data
@@ -316,8 +338,8 @@ public final class User implements Serializable {
 
     @Override
     public String toString() {
-        return String.format("User{userId='%s', email='%s', active=%s, created=%s}",
-                userId, email, isActive, createdAt);
+        return String.format("User{userId='%s', email='%s', active=%s, role=%s, created=%s}",
+                userId, email, isActive, getRole(), createdAt);
     }
 
     /**
@@ -327,8 +349,8 @@ public final class User implements Serializable {
      */
     public String toDetailedString() {
         return String.format(
-                "User{userId='%s', email='%s', contact='%s', name='%s', active=%s, created=%s, lastLogin=%s}",
-                userId, email, contactNumber, getFullName(), isActive, createdAt, lastLoginAt
+                "User{userId='%s', email='%s', contact='%s', name='%s', active=%s, role=%s, created=%s, lastLogin=%s}",
+                userId, email, contactNumber, getFullName(), isActive, getRole(), createdAt, lastLoginAt
         );
     }
 

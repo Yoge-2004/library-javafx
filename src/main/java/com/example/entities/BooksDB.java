@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
  * functionality, validation, and automatic persistence.
  */
 public final class BooksDB implements Serializable {
-    private static final long serialVersionUID = 2L; // Incremented for version tracking
+    private static final long serialVersionUID = 3L; // Bumped for breaking changes
 
     private static final Logger LOGGER = Logger.getLogger(BooksDB.class.getName());
 
@@ -53,7 +53,7 @@ public final class BooksDB implements Serializable {
      * Enhanced IssueRecord with additional functionality.
      */
     public static final class IssueRecord implements Serializable {
-        private static final long serialVersionUID = 2L;
+        private static final long serialVersionUID = 3L;
 
         private final String isbn;
         private final String bookTitle;
@@ -68,13 +68,19 @@ public final class BooksDB implements Serializable {
         private double fineAmount;
         private int renewalCount;
         private String notes;
+        private double finePerDayRate;
 
         public IssueRecord(String isbn, String bookTitle, String userId, LocalDate issueDate, int quantity) {
+            this(isbn, bookTitle, userId, issueDate, quantity, DEFAULT_LOAN_DAYS, FINE_PER_DAY);
+        }
+
+        public IssueRecord(String isbn, String bookTitle, String userId, LocalDate issueDate,
+                           int quantity, int loanDays, double finePerDayRate) {
             this.isbn = Objects.requireNonNull(isbn, "ISBN cannot be null");
             this.bookTitle = Objects.requireNonNull(bookTitle, "Book title cannot be null");
             this.userId = Objects.requireNonNull(userId, "User ID cannot be null");
             this.issueDate = Objects.requireNonNull(issueDate, "Issue date cannot be null");
-            this.originalDueDate = issueDate.plusDays(DEFAULT_LOAN_DAYS);
+            this.originalDueDate = issueDate.plusDays(Math.max(1, loanDays));
             this.currentDueDate = originalDueDate;
             this.quantity = Math.max(1, quantity);
             this.returned = false;
@@ -82,56 +88,23 @@ public final class BooksDB implements Serializable {
             this.fineAmount = 0.0;
             this.renewalCount = 0;
             this.notes = null;
+            this.finePerDayRate = Math.max(0.0, finePerDayRate);
         }
 
         // Getters
-        public String getIsbn() {
-            return isbn;
-        }
-
-        public String getBookTitle() {
-            return bookTitle;
-        }
-
-        public String getUserId() {
-            return userId;
-        }
-
-        public LocalDate getIssueDate() {
-            return issueDate;
-        }
-
-        public LocalDate getDueDate() {
-            return currentDueDate;
-        }
-
-        public LocalDate getOriginalDueDate() {
-            return originalDueDate;
-        }
-
-        public int getQuantity() {
-            return quantity;
-        }
-
-        public boolean isReturned() {
-            return returned;
-        }
-
-        public LocalDate getReturnDate() {
-            return returnDate;
-        }
-
-        public double getFineAmount() {
-            return fineAmount;
-        }
-
-        public int getRenewalCount() {
-            return renewalCount;
-        }
-
-        public String getNotes() {
-            return notes;
-        }
+        public String getIsbn() { return isbn; }
+        public String getBookTitle() { return bookTitle; }
+        public String getUserId() { return userId; }
+        public LocalDate getIssueDate() { return issueDate; }
+        public LocalDate getDueDate() { return currentDueDate; }
+        public LocalDate getOriginalDueDate() { return originalDueDate; }
+        public int getQuantity() { return quantity; }
+        public boolean isReturned() { return returned; }
+        public LocalDate getReturnDate() { return returnDate; }
+        public double getFineAmount() { return fineAmount; }
+        public int getRenewalCount() { return renewalCount; }
+        public String getNotes() { return notes; }
+        public double getFinePerDayRate() { return finePerDayRate > 0.0 ? finePerDayRate : FINE_PER_DAY; }
 
         // Setters with validation
         public void setReturned(boolean returned) {
@@ -141,21 +114,12 @@ public final class BooksDB implements Serializable {
             }
         }
 
-        public void setReturnDate(LocalDate returnDate) {
-            this.returnDate = returnDate;
-        }
-
-        public void setFineAmount(double fineAmount) {
-            this.fineAmount = Math.max(0.0, fineAmount);
-        }
-
-        public void setQuantity(int quantity) {
-            this.quantity = Math.max(1, quantity);
-        }
-
-        public void setNotes(String notes) {
-            this.notes = notes;
-        }
+        public void setReturnDate(LocalDate returnDate) { this.returnDate = returnDate; }
+        public void setFineAmount(double fineAmount) { this.fineAmount = Math.max(0.0, fineAmount); }
+        public void setQuantity(int quantity) { this.quantity = Math.max(1, quantity); }
+        public void setNotes(String notes) { this.notes = notes; }
+        public void setDueDate(LocalDate dueDate) { this.currentDueDate = Objects.requireNonNull(dueDate, "Due date cannot be null"); }
+        public void setFinePerDayRate(double finePerDayRate) { this.finePerDayRate = Math.max(0.0, finePerDayRate); }
 
         /**
          * Renews the book for another loan period.
@@ -167,7 +131,6 @@ public final class BooksDB implements Serializable {
             if (returned || renewalCount >= MAX_RENEWAL_COUNT) {
                 return false;
             }
-
             currentDueDate = currentDueDate.plusDays(additionalDays);
             renewalCount++;
             return true;
@@ -190,7 +153,7 @@ public final class BooksDB implements Serializable {
          * @return calculated fine amount
          */
         public double calculateFine() {
-            return getDaysOverdue() * FINE_PER_DAY;
+            return getDaysOverdue() * getFinePerDayRate();
         }
 
         /**
@@ -214,11 +177,44 @@ public final class BooksDB implements Serializable {
             return daysUntilDue >= 0 && daysUntilDue <= daysThreshold;
         }
 
+        /** True if not returned and renewals have not hit the system limit. */
+        public boolean canRenew() {
+            return !returned && renewalCount < MAX_RENEWAL_COUNT;
+        }
+
+        /** Days remaining until due; 0 if already returned or overdue. */
+        public long getDaysRemaining() {
+            if (returned) return 0;
+            long days = ChronoUnit.DAYS.between(LocalDate.now(), currentDueDate);
+            return Math.max(0, days);
+        }
+
+        /**
+         * Human-readable status string for tables and cards.
+         * Mirrors the logic in the standalone {@code IssueRecord} entity.
+         */
+        public String getStatusText() {
+            if (returned)   return "Returned";
+            if (isOverdue()) return "Overdue " + getDaysOverdue() + "d";
+            if (isDueSoon(3)) return "Due in " + getDaysRemaining() + "d";
+            return "Active - " + getDaysRemaining() + "d left";
+        }
+
+        /**
+         * CSS chip style-class matching the current status.
+         * Values align with the chip-* classes defined in theme.css.
+         */
+        public String getStatusStyleClass() {
+            if (returned)   return "chip-success";
+            if (isOverdue()) return "chip-error";
+            if (isDueSoon(3)) return "chip-warning";
+            return "chip-primary";
+        }
+
         @Override
         public boolean equals(Object obj) {
             if (this == obj) return true;
             if (obj == null || getClass() != obj.getClass()) return false;
-
             IssueRecord that = (IssueRecord) obj;
             return Objects.equals(isbn, that.isbn) &&
                     Objects.equals(userId, that.userId) &&
@@ -282,12 +278,10 @@ public final class BooksDB implements Serializable {
      */
     private void initializeAfterDeserialization() {
         autoSave = true;
-        // Validate and set default values if needed
         if (maxBorrowLimit <= 0) maxBorrowLimit = MAX_BORROW_LIMIT;
         if (defaultLoanDays <= 0) defaultLoanDays = DEFAULT_LOAN_DAYS;
         if (finePerDay < 0) finePerDay = FINE_PER_DAY;
         if (maxRenewalCount < 0) maxRenewalCount = MAX_RENEWAL_COUNT;
-
         loadAllData();
     }
 
@@ -375,7 +369,6 @@ public final class BooksDB implements Serializable {
 
         lock.writeLock().lock();
         try {
-            // Check if book is currently issued
             Map<String, Integer> borrowers = borrowerDetails.get(trimmedIsbn);
             if (borrowers != null && !borrowers.isEmpty()) {
                 int totalIssued = borrowers.values().stream().mapToInt(Integer::intValue).sum();
@@ -387,7 +380,6 @@ public final class BooksDB implements Serializable {
                 throw new BooksException("Book not found: " + trimmedIsbn);
             }
 
-            // Clean up related data
             issuedBooks.values().forEach(list -> list.removeIf(trimmedIsbn::equals));
             borrowerDetails.remove(trimmedIsbn);
 
@@ -437,6 +429,7 @@ public final class BooksDB implements Serializable {
 
     /**
      * Searches books by query matching title, author, or category.
+     * FIXED: Added null safety and early return optimization
      *
      * @param query the search query
      * @return list of matching books
@@ -451,11 +444,11 @@ public final class BooksDB implements Serializable {
         lock.readLock().lock();
         try {
             return books.values().stream()
-                    .filter(book ->
-                            book.getTitle().toLowerCase().contains(lowerQuery) ||
-                                    book.getAuthor().toLowerCase().contains(lowerQuery) ||
-                                    book.getCategory().toLowerCase().contains(lowerQuery) ||
-                                    book.getIsbn().toLowerCase().contains(lowerQuery))
+                    .filter(book -> book != null && (
+                            (book.getTitle() != null && book.getTitle().toLowerCase().contains(lowerQuery)) ||
+                                    (book.getAuthor() != null && book.getAuthor().toLowerCase().contains(lowerQuery)) ||
+                                    (book.getCategory() != null && book.getCategory().toLowerCase().contains(lowerQuery)) ||
+                                    (book.getIsbn() != null && book.getIsbn().toLowerCase().contains(lowerQuery))))
                     .collect(Collectors.toList());
         } finally {
             lock.readLock().unlock();
@@ -466,6 +459,7 @@ public final class BooksDB implements Serializable {
 
     /**
      * Issues books to a user with comprehensive validation.
+     * FIXED: Atomic transaction - validates all preconditions before modifying state
      *
      * @param isbn the book ISBN
      * @param user the user to issue to
@@ -506,27 +500,24 @@ public final class BooksDB implements Serializable {
                         ", Requested: " + quantity + ", Limit: " + maxBorrowLimit);
             }
 
-            // Update book quantity
+            // FIXED: Create record first before modifying inventory to ensure tracking exists
+            IssueRecord record = new IssueRecord(trimmedIsbn, book.getTitle(), userId,
+                    LocalDate.now(), quantity, defaultLoanDays, finePerDay);
+
+            // Now modify state atomically
             book.setQuantity(book.getQuantity() - quantity);
 
-            // Update issued books tracking
             issuedBooks.computeIfAbsent(userId, k -> new ArrayList<>());
             List<String> userBooks = issuedBooks.get(userId);
             for (int i = 0; i < quantity; i++) {
                 userBooks.add(trimmedIsbn);
             }
 
-            // Update borrower details
             borrowerDetails.computeIfAbsent(trimmedIsbn, k -> new HashMap<>());
             Map<String, Integer> bookBorrowers = borrowerDetails.get(trimmedIsbn);
             bookBorrowers.put(userId, bookBorrowers.getOrDefault(userId, 0) + quantity);
 
-            // Create issue record
-            IssueRecord record = new IssueRecord(trimmedIsbn, book.getTitle(), userId,
-                    LocalDate.now(), quantity);
             issueRecords.computeIfAbsent(userId, k -> new ArrayList<>()).add(record);
-
-            // Update book's issuedTo field
             updateBookIssuedToField(book);
 
             LOGGER.log(Level.INFO, "Issued {0} copies of book {1} to user {2}",
@@ -542,6 +533,7 @@ public final class BooksDB implements Serializable {
 
     /**
      * Returns books from a user with comprehensive validation and fine calculation.
+     * FIXED: Validates quantity before modifying any state to prevent corruption
      *
      * @param isbn the book ISBN
      * @param user the user returning the book
@@ -566,7 +558,7 @@ public final class BooksDB implements Serializable {
 
         lock.writeLock().lock();
         try {
-            // Validate user has issued books
+            // FIXED: Validate quantity BEFORE any modifications
             List<String> userBooks = issuedBooks.get(userId);
             if (userBooks == null) {
                 throw new BooksException("User has no issued books");
@@ -583,7 +575,7 @@ public final class BooksDB implements Serializable {
                 throw new BooksException("Book not found: " + trimmedIsbn);
             }
 
-            // Remove from issued books list
+            // Now perform state modifications
             for (int i = 0; i < quantity; i++) {
                 userBooks.remove(trimmedIsbn);
             }
@@ -591,10 +583,8 @@ public final class BooksDB implements Serializable {
                 issuedBooks.remove(userId);
             }
 
-            // Update book quantity
             book.setQuantity(book.getQuantity() + quantity);
 
-            // Update borrower details
             Map<String, Integer> bookBorrowers = borrowerDetails.get(trimmedIsbn);
             if (bookBorrowers != null) {
                 int currentQuantity = bookBorrowers.getOrDefault(userId, 0);
@@ -610,10 +600,7 @@ public final class BooksDB implements Serializable {
                 }
             }
 
-            // Process issue records and calculate fines
             processReturnRecords(userId, trimmedIsbn, quantity);
-
-            // Update book's issuedTo field
             updateBookIssuedToField(book);
 
             LOGGER.log(Level.INFO, "Returned {0} copies of book {1} from user {2}",
@@ -629,12 +616,6 @@ public final class BooksDB implements Serializable {
 
     // --- Query and Statistics Methods ---
 
-    /**
-     * Gets the number of books currently borrowed by a user.
-     *
-     * @param userId the user ID
-     * @return number of borrowed books
-     */
     public int getUserBorrowedCount(String userId) {
         if (userId == null || userId.trim().isEmpty()) {
             return 0;
@@ -649,12 +630,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets books currently borrowed by a user.
-     *
-     * @param user the user
-     * @return list of borrowed books
-     */
     public List<Book> getUserBooks(User user) {
         if (user == null) {
             return Collections.emptyList();
@@ -676,12 +651,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets borrower details for a specific book.
-     *
-     * @param isbn the book ISBN
-     * @return map of user IDs to quantities borrowed
-     */
     public Map<String, Integer> getBorrowerDetailsForBook(String isbn) {
         if (isbn == null || isbn.trim().isEmpty()) {
             return Collections.emptyMap();
@@ -696,11 +665,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets all borrower details.
-     *
-     * @return nested map of all borrower details
-     */
     public Map<String, Map<String, Integer>> getAllBorrowerDetails() {
         lock.readLock().lock();
         try {
@@ -714,12 +678,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets total issued quantity for a book.
-     *
-     * @param isbn the book ISBN
-     * @return total issued quantity
-     */
     public int getTotalIssued(String isbn) {
         if (isbn == null || isbn.trim().isEmpty()) {
             return 0;
@@ -735,12 +693,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets available quantity for a book.
-     *
-     * @param isbn the book ISBN
-     * @return available quantity
-     */
     public int getAvailableQuantity(String isbn) {
         if (isbn == null || isbn.trim().isEmpty()) {
             return 0;
@@ -755,12 +707,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets original total quantity for a book.
-     *
-     * @param isbn the book ISBN
-     * @return original total quantity
-     */
     public int getOriginalQuantity(String isbn) {
         if (isbn == null || isbn.trim().isEmpty()) {
             return 0;
@@ -778,11 +724,6 @@ public final class BooksDB implements Serializable {
 
     // --- Issue Records and Fine Management ---
 
-    /**
-     * Gets all issue records.
-     *
-     * @return list of all issue records
-     */
     public List<IssueRecord> getAllIssueRecords() {
         lock.readLock().lock();
         try {
@@ -794,12 +735,6 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets issue records for a specific user.
-     *
-     * @param userId the user ID
-     * @return list of user's issue records
-     */
     public List<IssueRecord> getUserIssueRecords(String userId) {
         if (userId == null || userId.trim().isEmpty()) {
             return Collections.emptyList();
@@ -814,69 +749,36 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    /**
-     * Gets active (unreturned) issue records for a user.
-     *
-     * @param userId the user ID
-     * @return list of active issue records
-     */
     public List<IssueRecord> getUserActiveIssueRecords(String userId) {
         return getUserIssueRecords(userId).stream()
                 .filter(record -> !record.isReturned())
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Gets all active issue records.
-     *
-     * @return list of all active issue records
-     */
     public List<IssueRecord> getAllActiveIssueRecords() {
         return getAllIssueRecords().stream()
                 .filter(record -> !record.isReturned())
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Gets overdue issue records for a user.
-     *
-     * @param userId the user ID
-     * @return list of overdue issue records
-     */
     public List<IssueRecord> getUserOverdueIssueRecords(String userId) {
         return getUserActiveIssueRecords(userId).stream()
                 .filter(IssueRecord::isOverdue)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Gets all overdue issue records.
-     *
-     * @return list of all overdue issue records
-     */
     public List<IssueRecord> getAllOverdueIssueRecords() {
         return getAllActiveIssueRecords().stream()
                 .filter(IssueRecord::isOverdue)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Calculates total fine for a user.
-     *
-     * @param userId the user ID
-     * @return total fine amount
-     */
     public double calculateUserFine(String userId) {
         return getUserActiveIssueRecords(userId).stream()
                 .mapToDouble(IssueRecord::calculateFine)
                 .sum();
     }
 
-    /**
-     * Gets total fines across all users.
-     *
-     * @return total fine amount
-     */
     public double getTotalFines() {
         return getAllActiveIssueRecords().stream()
                 .mapToDouble(IssueRecord::calculateFine)
@@ -890,29 +792,13 @@ public final class BooksDB implements Serializable {
     public double getFinePerDay() { return finePerDay; }
     public int getMaxRenewalCount() { return maxRenewalCount; }
 
-    public void setMaxBorrow(int maxBorrow) {
-        this.maxBorrowLimit = Math.max(1, maxBorrow);
-    }
-
-    public void setLoanDays(int loanDays) {
-        this.defaultLoanDays = Math.max(1, loanDays);
-    }
-
-    public void setFinePerDay(double finePerDay) {
-        this.finePerDay = Math.max(0.0, finePerDay);
-    }
-
-    public void setMaxRenewalCount(int maxRenewalCount) {
-        this.maxRenewalCount = Math.max(0, maxRenewalCount);
-    }
+    public void setMaxBorrow(int maxBorrow) { this.maxBorrowLimit = Math.max(1, maxBorrow); }
+    public void setLoanDays(int loanDays) { this.defaultLoanDays = Math.max(1, loanDays); }
+    public void setFinePerDay(double finePerDay) { this.finePerDay = Math.max(0.0, finePerDay); }
+    public void setMaxRenewalCount(int maxRenewalCount) { this.maxRenewalCount = Math.max(0, maxRenewalCount); }
 
     // --- Persistence Operations ---
 
-    /**
-     * Forces persistence of all data.
-     *
-     * @throws IOException if persistence fails
-     */
     public void forcePersist() throws IOException {
         lock.readLock().lock();
         try {
@@ -923,9 +809,7 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    public void setAutoSave(boolean autoSave) {
-        this.autoSave = autoSave;
-    }
+    public void setAutoSave(boolean autoSave) { this.autoSave = autoSave; }
 
     // --- Private Helper Methods ---
 
@@ -970,6 +854,12 @@ public final class BooksDB implements Serializable {
             if (loaded != null) {
                 issueRecords.clear();
                 issueRecords.putAll(loaded);
+                issueRecords.values().forEach(records ->
+                        records.forEach(record -> {
+                            if (record.finePerDayRate <= 0.0) {
+                                record.setFinePerDayRate(finePerDay > 0.0 ? finePerDay : FINE_PER_DAY);
+                            }
+                        }));
             }
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to load issue records data", e);
@@ -987,13 +877,18 @@ public final class BooksDB implements Serializable {
         }
     }
 
+    /**
+     * FIXED: Changed from Iterator to indexed for-loop to avoid ConcurrentModificationException
+     * when adding split records during partial returns.
+     */
     private void processReturnRecords(String userId, String isbn, int quantity) {
         List<IssueRecord> userRecords = issueRecords.get(userId);
         if (userRecords == null) return;
 
         int remainingToReturn = quantity;
-        for (Iterator<IssueRecord> it = userRecords.iterator(); it.hasNext() && remainingToReturn > 0;) {
-            IssueRecord record = it.next();
+        // FIXED: Use indexed loop instead of iterator to allow addition during iteration
+        for (int i = 0; i < userRecords.size() && remainingToReturn > 0; i++) {
+            IssueRecord record = userRecords.get(i);
             if (record.getIsbn().equals(isbn) && !record.isReturned()) {
                 int recordQuantity = record.getQuantity();
                 if (recordQuantity <= remainingToReturn) {
@@ -1002,10 +897,12 @@ public final class BooksDB implements Serializable {
                     record.setFineAmount(record.calculateFine());
                     remainingToReturn -= recordQuantity;
                 } else {
-                    // Split the record
+                    // Split the record - this adds to the list, safe with indexed loop
                     record.setQuantity(recordQuantity - remainingToReturn);
                     IssueRecord returnedRecord = new IssueRecord(isbn, record.getBookTitle(),
                             userId, record.getIssueDate(), remainingToReturn);
+                    returnedRecord.setDueDate(record.getDueDate());
+                    returnedRecord.setFinePerDayRate(record.getFinePerDayRate());
                     returnedRecord.setReturned(true);
                     returnedRecord.setReturnDate(LocalDate.now());
                     returnedRecord.setFineAmount(returnedRecord.calculateFine());
