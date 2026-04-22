@@ -1,7 +1,6 @@
 package com.example.application.ui;
 
 import com.example.entities.Book;
-import com.example.entities.BooksDB;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.services.BookService;
 import com.example.services.UserService;
@@ -10,121 +9,127 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
-import javafx.scene.chart.*;
+import javafx.scene.chart.BarChart;
+import javafx.scene.chart.CategoryAxis;
+import javafx.scene.chart.NumberAxis;
+import javafx.scene.chart.PieChart;
+import javafx.scene.chart.XYChart;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.layout.*;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-
 /**
- * Analytics dashboard — role-aware.
+ * Analytics dashboard — role-aware and responsive.
  *
- * Admin / Librarian: global stats (books, users, issued, overdue, fines, requests).
- * User: personal stats only (borrowed, overdue, fines, pending requests).
+ * Admin / Librarian: global stats, charts, and operational lists.
+ * User: personal stats only, with a cleaner borrow-focused layout.
  */
 public class AnalyticsDashboard extends BorderPane {
 
     private final Runnable onRefresh;
-    private final String  currentUser;
+    private final String currentUser;
     private final boolean isStaff;
+
     private Runnable onNavigateToCirculation;
     private Runnable onNavigateToCatalog;
 
-    private GridPane statsGrid;
-    private VBox     recentPanel;
-    private VBox     overduePanel;
+    private FlowPane statsPane;
+    private FlowPane chartsPane;
+    private FlowPane bottomPane;
+    private VBox recentPanel;
+    private VBox overduePanel;
     private PieChart categoryChart;
     private BarChart<String, Number> activityChart;
 
     public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff) {
-        this.onRefresh   = onRefresh;
+        this.onRefresh = onRefresh;
         this.currentUser = currentUser;
-        this.isStaff     = isStaff;
+        this.isStaff = isStaff;
         initUI();
     }
 
-    /** Allow the app to inject navigation callbacks so stat cards can redirect. */
     public void setNavigationCallbacks(Runnable toCirculation, Runnable toCatalog) {
         this.onNavigateToCirculation = toCirculation;
-        this.onNavigateToCatalog     = toCatalog;
+        this.onNavigateToCatalog = toCatalog;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // Build
-    // ═══════════════════════════════════════════════════════════════
-
     private void initUI() {
-        setStyle("-fx-background-color:#F1F5F9;");
+        setStyle("-fx-background-color:" + pageBackground() + ";");
 
         ScrollPane scroll = new ScrollPane();
         scroll.setFitToWidth(true);
-        scroll.setStyle("-fx-background:transparent;-fx-background-color:transparent;");
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
 
         VBox content = new VBox(24);
         content.setPadding(new Insets(24));
-        content.setStyle("-fx-background-color:#F1F5F9;");
+        content.setStyle("-fx-background-color:" + pageBackground() + ";");
 
-        // Header
-        VBox header = AppTheme.createHeaderBlock("OVERVIEW",
-                "Library Dashboard",
-                isStaff ? "Real-time insights into your library's performance"
-                        : "Your personal borrowing overview");
+        VBox header = AppTheme.createHeaderBlock(
+                "OVERVIEW",
+                isStaff ? "Library Dashboard" : "My Borrowing Snapshot",
+                isStaff
+                        ? "Real-time activity, circulation health, and collection usage."
+                        : "Your active books, requests, fines, and overdue items in one place.");
 
-        statsGrid = new GridPane();
-        statsGrid.setHgap(16); statsGrid.setVgap(16);
+        statsPane = createWrappingSection(16);
+        chartsPane = createWrappingSection(16);
+        bottomPane = createWrappingSection(16);
 
-        HBox charts  = buildCharts();
-        HBox bottom  = buildBottomPanels();
-
+        content.getChildren().addAll(header, statsPane);
         if (isStaff) {
-            content.getChildren().addAll(header, statsGrid, charts, bottom);
-        } else {
-            // For regular users skip the charts (irrelevant) — just stats + their activity
-            content.getChildren().addAll(header, statsGrid, bottom);
+            content.getChildren().add(chartsPane);
         }
+        content.getChildren().add(bottomPane);
+
+        buildCharts();
+        buildBottomPanels();
 
         scroll.setContent(content);
         setCenter(scroll);
         loadData();
     }
 
-    // ─── Charts ───────────────────────────────────────────────────
-
-    private HBox buildCharts() {
-        HBox section = new HBox(16);
+    private FlowPane createWrappingSection(double gap) {
+        FlowPane section = new FlowPane();
+        section.setHgap(gap);
+        section.setVgap(gap);
         section.setAlignment(Pos.TOP_LEFT);
+        section.prefWrapLengthProperty().bind(widthProperty().subtract(72));
+        return section;
+    }
 
-        // Category pie
-        VBox catPanel = new VBox(12);
-        catPanel.getStyleClass().add("surface-card");
-        catPanel.setPadding(new Insets(20));
-        catPanel.setPrefWidth(380);
+    private void buildCharts() {
+        chartsPane.getChildren().clear();
 
-        Label catTitle = new Label("Books by Category");
-        catTitle.setStyle("-fx-font-size:16px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
+        VBox categoryPanel = createSurfacePanel("Books by Category");
+        categoryPanel.setPrefWidth(360);
+        categoryPanel.setMinWidth(320);
 
         categoryChart = new PieChart();
         categoryChart.setLabelsVisible(true);
         categoryChart.setLegendVisible(true);
         categoryChart.setLegendSide(javafx.geometry.Side.RIGHT);
-        categoryChart.setPrefHeight(260);
-        categoryChart.setStyle("-fx-font-size:11px;");
+        categoryChart.setPrefHeight(280);
+        categoryChart.setMinHeight(280);
+        categoryChart.setStyle("-fx-font-size: 11px;");
+        categoryPanel.getChildren().add(categoryChart);
 
-        catPanel.getChildren().addAll(catTitle, categoryChart);
-
-        // Monthly activity
-        VBox actPanel = new VBox(12);
-        actPanel.getStyleClass().add("surface-card");
-        actPanel.setPadding(new Insets(20));
-        HBox.setHgrow(actPanel, Priority.ALWAYS);
-
-        Label actTitle = new Label("Monthly Activity");
-        actTitle.setStyle("-fx-font-size:16px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
+        VBox activityPanel = createSurfacePanel("Monthly Activity");
+        activityPanel.setPrefWidth(520);
+        activityPanel.setMinWidth(360);
 
         CategoryAxis xAxis = new CategoryAxis();
         xAxis.setLabel("Month");
@@ -133,46 +138,42 @@ public class AnalyticsDashboard extends BorderPane {
 
         activityChart = new BarChart<>(xAxis, yAxis);
         activityChart.setLegendVisible(true);
-        activityChart.setStyle("-fx-font-size:11px;");
-        activityChart.setPrefHeight(260);
+        activityChart.setPrefHeight(280);
+        activityChart.setMinHeight(280);
         activityChart.setCategoryGap(16);
-        activityChart.setBarGap(2);
+        activityChart.setBarGap(3);
+        activityChart.setStyle("-fx-font-size: 11px;");
+        activityPanel.getChildren().add(activityChart);
 
-        actPanel.getChildren().addAll(actTitle, activityChart);
-        section.getChildren().addAll(catPanel, actPanel);
-        return section;
+        chartsPane.getChildren().addAll(categoryPanel, activityPanel);
     }
 
-    private HBox buildBottomPanels() {
-        HBox section = new HBox(16);
-        section.setAlignment(Pos.TOP_LEFT);
+    private void buildBottomPanels() {
+        bottomPane.getChildren().clear();
 
-        recentPanel = new VBox(12);
-        recentPanel.getStyleClass().add("surface-card");
-        recentPanel.setPadding(new Insets(20));
-        HBox.setHgrow(recentPanel, Priority.ALWAYS);
+        recentPanel = createSurfacePanel(isStaff ? "Recent Issues" : "My Active Books");
+        recentPanel.setPrefWidth(420);
+        recentPanel.setMinWidth(320);
 
-        overduePanel = new VBox(12);
-        overduePanel.getStyleClass().add("surface-card");
-        overduePanel.setPadding(new Insets(20));
-        HBox.setHgrow(overduePanel, Priority.ALWAYS);
+        overduePanel = createSurfacePanel(isStaff ? "Top Overdue" : "My Overdue Books");
+        overduePanel.setPrefWidth(420);
+        overduePanel.setMinWidth(320);
 
-        recentPanel.getChildren().add(panelTitle(isStaff ? "Recent Issues" : "My Active Books"));
-        overduePanel.getChildren().add(panelTitle(isStaff ? "Top Overdue" : "My Overdue Books"));
-
-        section.getChildren().addAll(recentPanel, overduePanel);
-        return section;
+        bottomPane.getChildren().addAll(recentPanel, overduePanel);
     }
 
-    private Label panelTitle(String t) {
-        Label l = new Label(t);
-        l.setStyle("-fx-font-size:16px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
-        return l;
-    }
+    private VBox createSurfacePanel(String title) {
+        VBox panel = new VBox(12);
+        panel.getStyleClass().add("surface-card");
+        panel.setPadding(new Insets(20));
 
-    // ═══════════════════════════════════════════════════════════════
-    // Update (called externally by LibraryApp)
-    // ═══════════════════════════════════════════════════════════════
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill:" + textPrimary() + ";");
+        titleLabel.setWrapText(true);
+
+        panel.getChildren().add(titleLabel);
+        return panel;
+    }
 
     public void update(Map<String, Object> stats, int totalUsers, int staffCount) {
         Platform.runLater(() -> {
@@ -186,117 +187,100 @@ public class AnalyticsDashboard extends BorderPane {
         });
     }
 
-    // ─── Stat cards ───────────────────────────────────────────────
-
     private void updateStats(Map<String, Object> stats, int totalUsers, int staffCount) {
-        statsGrid.getChildren().clear();
+        statsPane.getChildren().clear();
 
         if (isStaff) {
-            int totalBooks     = num(stats, "totalBooks");
-            int totalCopies    = num(stats, "totalCopies");
-            int available      = num(stats, "availableCopies");
-            int issued         = num(stats, "issuedCopies");
-            int overdue        = num(stats, "overdueBooks");
-            double fines       = dbl(stats, "totalFines");
-            int pending        = num(stats, "pendingRequests");
-            double util        = totalCopies > 0 ? issued * 100.0 / totalCopies : 0;
+            int totalBooks = num(stats, "totalBooks");
+            int totalCopies = num(stats, "totalCopies");
+            int available = num(stats, "availableCopies");
+            int issued = num(stats, "issuedCopies");
+            int overdue = num(stats, "overdueBooks");
+            double fines = dbl(stats, "totalFines");
+            int pending = num(stats, "pendingRequests");
+            double utilization = totalCopies > 0 ? issued * 100.0 / totalCopies : 0.0;
 
-            VBox c0 = statCard("📚", "Total Books",   str(totalBooks),
-                    totalCopies + " copies", "#0D9488", onNavigateToCatalog);
-            VBox c1 = statCard("✓", "Available",    str(available),
-                    String.format("%.1f%% free", 100-util), "#16A34A", onNavigateToCatalog);
-            VBox c2 = statCard("🔄", "Issued",       str(issued),
-                    String.format("%.1f%% utilisation", util), "#3B82F6", onNavigateToCirculation);
-            VBox c3 = statCard("⚠", "Overdue",      str(overdue),
-                    "Needs attention", "#DC2626", onNavigateToCirculation);
-            VBox c4 = statCard("💰", "Total Fines",  "$" + String.format("%.2f", fines),
-                    "Outstanding", "#F59E0B", onNavigateToCirculation);
-            VBox c5 = statCard("📝", "Pending",      str(pending),
-                    "Requests awaiting approval", "#8B5CF6", onNavigateToCirculation);
-            VBox c6 = statCard("👥", "Users",        str(totalUsers),
-                    staffCount + " staff", "#06B6D4", null);
-
-            statsGrid.add(c0, 0, 0); statsGrid.add(c1, 1, 0);
-            statsGrid.add(c2, 2, 0); statsGrid.add(c3, 3, 0);
-            statsGrid.add(c4, 0, 1); statsGrid.add(c5, 1, 1);
-            statsGrid.add(c6, 2, 1);
-
-            // Equal column widths
-            for (int i = 0; i < 4; i++) {
-                ColumnConstraints cc = new ColumnConstraints();
-                cc.setPercentWidth(25);
-                cc.setHgrow(Priority.ALWAYS);
-                statsGrid.getColumnConstraints().add(cc);
-            }
+            statsPane.getChildren().addAll(
+                    statCard(AppTheme.ICON_LIBRARY, "Books in Catalog", str(totalBooks),
+                            totalCopies + " copies across the collection", "#0D9488", onNavigateToCatalog),
+                    statCard(AppTheme.ICON_CHECK, "Available Copies", str(available),
+                            String.format("%.1f%% currently free", Math.max(0.0, 100.0 - utilization)), "#16A34A", onNavigateToCatalog),
+                    statCard(AppTheme.ICON_SYNC, "Books on Loan", str(issued),
+                            String.format("%.1f%% collection utilisation", utilization), "#3B82F6", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_WARNING, "Overdue Returns", str(overdue),
+                            "Requires staff follow-up", "#DC2626", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_SAVE, "Outstanding Fines", "$" + String.format("%.2f", fines),
+                            "Calculated from active overdue loans", "#F59E0B", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_NOTIFICATION, "Pending Requests", str(pending),
+                            "Awaiting staff action", "#8B5CF6", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_USER, "Registered Users", str(totalUsers),
+                            staffCount + " staff account(s)", "#06B6D4", null)
+            );
         } else {
-            // Personal view
             int myBorrowed = BookService.getUserTotalBorrowedBooks(currentUser);
-            int myOverdue  = BookService.getUserOverdueBooks(currentUser).size();
-            double myFine  = BookService.getUserTotalFine(currentUser);
-            int myPending  = (int) BookService.getBorrowRequestsForUser(currentUser).stream()
-                    .filter(r -> r.getStatus() == com.example.entities.BorrowRequest.Status.PENDING)
+            int myOverdue = BookService.getUserOverdueBooks(currentUser).size();
+            double myFine = BookService.getUserTotalFine(currentUser);
+            int myPending = (int) BookService.getBorrowRequestsForUser(currentUser).stream()
+                    .filter(request -> request.getStatus() == com.example.entities.BorrowRequest.Status.PENDING)
                     .count();
 
-            statsGrid.add(statCard("📖", "Borrowed",         str(myBorrowed),
-                    "Currently with you", "#0D9488", onNavigateToCirculation), 0, 0);
-            statsGrid.add(statCard("⚠", "Overdue",          str(myOverdue),
-                    "Need immediate return", "#DC2626", onNavigateToCirculation), 1, 0);
-            statsGrid.add(statCard("💰", "Your Fines",       "$" + String.format("%.2f", myFine),
-                    "Outstanding fine", "#F59E0B", onNavigateToCirculation), 2, 0);
-            statsGrid.add(statCard("📝", "Pending Requests", str(myPending),
-                    "Awaiting approval", "#8B5CF6", onNavigateToCirculation), 3, 0);
-
-            for (int i = 0; i < 4; i++) {
-                ColumnConstraints cc = new ColumnConstraints();
-                cc.setPercentWidth(25);
-                cc.setHgrow(Priority.ALWAYS);
-                statsGrid.getColumnConstraints().add(cc);
-            }
+            statsPane.getChildren().addAll(
+                    statCard(AppTheme.ICON_LIBRARY, "Borrowed Right Now", str(myBorrowed),
+                            "Books currently issued to you", "#0D9488", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_WARNING, "Need to Return", str(myOverdue),
+                            "Overdue items that need attention", "#DC2626", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_SAVE, "Outstanding Fine", "$" + String.format("%.2f", myFine),
+                            "Fine total on active overdue books", "#F59E0B", onNavigateToCirculation),
+                    statCard(AppTheme.ICON_NOTIFICATION, "Pending Requests", str(myPending),
+                            "Requests waiting for approval", "#8B5CF6", onNavigateToCirculation)
+            );
         }
     }
 
-    private VBox statCard(String emoji, String label, String value,
-                          String sub, String color, Runnable onClick) {
-        VBox card = new VBox(10);
+    private VBox statCard(String iconPath, String label, String value, String subText,
+                          String accentColor, Runnable onClick) {
+        VBox card = new VBox(12);
         card.getStyleClass().add("metric-card");
-        card.setPadding(new Insets(20));
+        card.setPadding(new Insets(18));
+        card.setPrefWidth(isStaff ? 235 : 250);
+        card.setMinWidth(220);
+        card.setMaxWidth(280);
 
-        HBox top = new HBox(12);
-        top.setAlignment(Pos.CENTER_LEFT);
+        HBox header = new HBox(12);
+        header.setAlignment(Pos.CENTER_LEFT);
 
-        Label emojiLbl = new Label(emoji);
-        emojiLbl.setStyle("-fx-font-size:26px;");
+        StackPane badge = new StackPane(AppTheme.createIcon(iconPath, 18));
+        badge.setMinSize(40, 40);
+        badge.setPrefSize(40, 40);
+        badge.setMaxSize(40, 40);
+        badge.setStyle("-fx-background-color:" + accentColor + "22; -fx-background-radius: 12px;");
 
-        VBox txt = new VBox(2);
-        Label valueLbl = new Label(value);
-        valueLbl.setStyle("-fx-font-size:24px; -fx-font-weight:800; -fx-text-fill:" + color + ";");
-        valueLbl.setWrapText(false);
-        Label nameLbl  = new Label(label);
-        nameLbl.setStyle("-fx-font-size:12px; -fx-font-weight:600; -fx-text-fill:#64748B;");
-        nameLbl.setWrapText(true);
-        txt.getChildren().addAll(valueLbl, nameLbl);
+        Label labelText = new Label(label);
+        labelText.setStyle("-fx-font-size: 13px; -fx-font-weight: 700; -fx-text-fill:" + textMuted() + ";");
+        labelText.setWrapText(true);
+        labelText.setMaxWidth(Double.MAX_VALUE);
+        HBox.setHgrow(labelText, Priority.ALWAYS);
 
-        top.getChildren().addAll(emojiLbl, txt);
-        card.getChildren().add(top);
+        header.getChildren().addAll(badge, labelText);
 
-        if (sub != null && !sub.isEmpty()) {
-            Label subLbl = new Label(sub);
-            subLbl.setStyle("-fx-font-size:11px; -fx-text-fill:#94A3B8;");
-            subLbl.setWrapText(true);
-            card.getChildren().add(subLbl);
-        }
+        Label valueText = new Label(value);
+        valueText.setStyle("-fx-font-size: 28px; -fx-font-weight: 800; -fx-text-fill:" + accentColor + ";");
+
+        Label subLabel = new Label(subText);
+        subLabel.setStyle("-fx-font-size: 12px; -fx-text-fill:" + textSoft() + ";");
+        subLabel.setWrapText(true);
+
+        card.getChildren().addAll(header, valueText, subLabel);
 
         if (onClick != null) {
-            card.setOnMouseClicked(e -> onClick.run());
-            Label hint = new Label("Click to view ->");
-            hint.setStyle("-fx-font-size:11px; -fx-text-fill:" + color + "; -fx-opacity:0.6;");
+            Label hint = new Label("Open details");
+            hint.setStyle("-fx-font-size: 11px; -fx-font-weight: 600; -fx-text-fill:" + accentColor + ";");
             card.getChildren().add(hint);
+            card.setOnMouseClicked(event -> onClick.run());
         }
 
         return card;
     }
-
-    // ─── Charts ───────────────────────────────────────────────────
 
     private void updateCategoryChart() {
         List<Book> books = BookService.getAllBooks();
@@ -307,122 +291,157 @@ public class AnalyticsDashboard extends BorderPane {
         counts.entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .limit(7)
-                .forEach(e -> data.add(new PieChart.Data(e.getKey() + " (" + e.getValue() + ")", e.getValue())));
+                .forEach(entry -> data.add(new PieChart.Data(
+                        entry.getKey() + " (" + entry.getValue() + ")", entry.getValue())));
 
         categoryChart.setData(data);
     }
 
     private void updateActivityChart() {
-        XYChart.Series<String, Number> issued = new XYChart.Series<>();
-        issued.setName("Issued");
-        XYChart.Series<String, Number> returned = new XYChart.Series<>();
-        returned.setName("Returned");
+        XYChart.Series<String, Number> issuedSeries = new XYChart.Series<>();
+        issuedSeries.setName("Issued");
 
-        // Real data from active records grouped by month
-        List<IssueRecord> all = BookService.getAllActiveIssueRecords();
-        DateTimeFormatter m = DateTimeFormatter.ofPattern("MMM");
-        Map<String, Long> issuedMap = all.stream()
-                .collect(Collectors.groupingBy(r -> r.getIssueDate().format(m), Collectors.counting()));
+        XYChart.Series<String, Number> returnedSeries = new XYChart.Series<>();
+        returnedSeries.setName("Returned");
 
-        String[] months = {"Jan","Feb","Mar","Apr","May","Jun"};
-        for (String mo : months) {
-            issued.getData().add(new XYChart.Data<>(mo, issuedMap.getOrDefault(mo, 0L)));
-            returned.getData().add(new XYChart.Data<>(mo, Math.max(0,
-                    issuedMap.getOrDefault(mo, 0L) - 1)));
+        List<IssueRecord> allRecords = BookService.getAllActiveIssueRecords();
+        DateTimeFormatter monthFormat = DateTimeFormatter.ofPattern("MMM");
+        Map<String, Long> issuedMap = allRecords.stream()
+                .collect(Collectors.groupingBy(record -> record.getIssueDate().format(monthFormat),
+                        Collectors.counting()));
+
+        String[] months = {"Jan", "Feb", "Mar", "Apr", "May", "Jun"};
+        for (String month : months) {
+            long issued = issuedMap.getOrDefault(month, 0L);
+            issuedSeries.getData().add(new XYChart.Data<>(month, issued));
+            returnedSeries.getData().add(new XYChart.Data<>(month, Math.max(0, issued - 1)));
         }
 
-        activityChart.getData().setAll(issued, returned);
+        activityChart.getData().setAll(issuedSeries, returnedSeries);
     }
-
-    // ─── Bottom panels ────────────────────────────────────────────
 
     private void updateRecentPanel() {
         clearPanel(recentPanel);
-        List<IssueRecord> list = isStaff
+        List<IssueRecord> records = isStaff
                 ? BookService.getAllActiveIssueRecords().stream()
-                  .sorted(Comparator.comparing(IssueRecord::getIssueDate).reversed())
-                  .limit(6).collect(Collectors.toList())
+                .sorted(Comparator.comparing(IssueRecord::getIssueDate).reversed())
+                .limit(6)
+                .collect(Collectors.toList())
                 : BookService.getUserActiveIssueRecords(currentUser);
 
-        if (list.isEmpty()) {
-            recentPanel.getChildren().add(emptyMsg("No active issues"));
+        if (records.isEmpty()) {
+            recentPanel.getChildren().add(emptyMessage(isStaff ? "No active circulation records" : "No active books"));
             return;
         }
-        list.forEach(r -> recentPanel.getChildren().add(
-                activityRow(r.getBookTitle(),
-                        isStaff ? "Issued to " + r.getUserId() : "Due " + r.getDueDate(),
-                        r.getIssueDate().format(DateTimeFormatter.ofPattern("MMM dd")),
-                        "#3B82F6")));
+
+        records.forEach(record -> recentPanel.getChildren().add(activityRow(
+                record.getBookTitle(),
+                isStaff ? "Issued to " + record.getUserId() : "Due " + record.getDueDate(),
+                record.getIssueDate().format(DateTimeFormatter.ofPattern("MMM dd")),
+                "#3B82F6"
+        )));
     }
 
     private void updateOverduePanel() {
         clearPanel(overduePanel);
-        List<IssueRecord> overdue = isStaff
+        List<IssueRecord> overdueRecords = isStaff
                 ? BookService.getAllOverdueBooks().stream()
-                  .sorted(Comparator.comparingLong(IssueRecord::getDaysOverdue).reversed())
-                  .limit(6).collect(Collectors.toList())
+                .sorted(Comparator.comparingLong(IssueRecord::getDaysOverdue).reversed())
+                .limit(6)
+                .collect(Collectors.toList())
                 : BookService.getUserOverdueBooks(currentUser);
 
-        if (overdue.isEmpty()) {
-            Label ok = new Label("No overdue books! 🎉");
-            ok.setStyle("-fx-font-size:14px; -fx-text-fill:#16A34A; -fx-font-style:italic;");
+        if (overdueRecords.isEmpty()) {
+            Label ok = new Label("No overdue books");
+            ok.setStyle("-fx-font-size: 14px; -fx-text-fill: #16A34A; -fx-font-style: italic;");
             overduePanel.getChildren().add(ok);
             return;
         }
-        overdue.forEach(r -> overduePanel.getChildren().add(
-                activityRow(r.getBookTitle(),
-                        r.getDaysOverdue() + " days overdue",
-                        "$" + String.format("%.2f", r.calculateFine()),
-                        "#DC2626")));
+
+        overdueRecords.forEach(record -> overduePanel.getChildren().add(activityRow(
+                record.getBookTitle(),
+                record.getDaysOverdue() + " day(s) overdue",
+                "$" + String.format("%.2f", record.calculateFine()),
+                "#DC2626"
+        )));
     }
 
-    private HBox activityRow(String title, String sub, String meta, String color) {
+    private HBox activityRow(String title, String subText, String meta, String accentColor) {
         HBox row = new HBox(12);
         row.setAlignment(Pos.CENTER_LEFT);
         row.setPadding(new Insets(10, 0, 10, 0));
-        row.setStyle("-fx-border-color:#F1F5F9; -fx-border-width:0 0 1 0;");
+        row.setStyle("-fx-border-color:" + dividerColor() + "; -fx-border-width: 0 0 1 0;");
 
-        VBox txt = new VBox(2);
-        HBox.setHgrow(txt, Priority.ALWAYS);
+        VBox textBlock = new VBox(3);
+        HBox.setHgrow(textBlock, Priority.ALWAYS);
 
-        Label t = new Label(title);
-        t.setStyle("-fx-font-size:14px; -fx-font-weight:600; -fx-text-fill:#1E293B;");
-        t.setMaxWidth(220); t.setEllipsisString("...");
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill:" + textPrimary() + ";");
+        titleLabel.setWrapText(true);
 
-        Label s = new Label(sub);
-        s.setStyle("-fx-font-size:12px; -fx-text-fill:" + color + ";");
-        txt.getChildren().addAll(t, s);
+        Label subLabel = new Label(subText);
+        subLabel.setStyle("-fx-font-size: 12px; -fx-text-fill:" + accentColor + ";");
+        subLabel.setWrapText(true);
 
-        Label m = new Label(meta);
-        m.setStyle("-fx-font-size:12px; -fx-text-fill:#94A3B8;");
+        textBlock.getChildren().addAll(titleLabel, subLabel);
 
-        row.getChildren().addAll(txt, m);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        Label metaLabel = new Label(meta);
+        metaLabel.setStyle("-fx-font-size: 12px; -fx-text-fill:" + textSoft() + ";");
+
+        row.getChildren().addAll(textBlock, spacer, metaLabel);
         return row;
     }
 
     private void clearPanel(VBox panel) {
-        if (!panel.getChildren().isEmpty()) {
+        if (panel != null && panel.getChildren().size() > 1) {
             panel.getChildren().subList(1, panel.getChildren().size()).clear();
         }
     }
 
-    private Label emptyMsg(String txt) {
-        Label l = new Label(txt);
-        l.setStyle("-fx-font-size:14px; -fx-text-fill:#94A3B8; -fx-font-style:italic; -fx-padding:20 0 0 0;");
-        return l;
+    private Label emptyMessage(String text) {
+        Label label = new Label(text);
+        label.setStyle("-fx-font-size: 14px; -fx-text-fill:" + textSoft() + "; -fx-font-style: italic;");
+        return label;
     }
-
-    // ─── Initial load ─────────────────────────────────────────────
 
     private void loadData() {
         Map<String, Object> stats = BookService.getLibraryStatistics();
-        long staffCount = UserService.getAllUsers().stream().filter(u -> u.isStaff()).count();
+        long staffCount = UserService.getAllUsers().stream().filter(user -> user.isStaff()).count();
         update(stats, UserService.getAllUsers().size(), (int) staffCount);
     }
 
-    // ─── Utils ───────────────────────────────────────────────────
+    private String pageBackground() {
+        return AppTheme.darkMode ? "#0F172A" : "#F1F5F9";
+    }
 
-    private static int    num(Map<String, Object> m, String k) { return ((Number) m.getOrDefault(k, 0)).intValue(); }
-    private static double dbl(Map<String, Object> m, String k) { return ((Number) m.getOrDefault(k, 0.0)).doubleValue(); }
-    private static String str(int v)                            { return String.valueOf(v); }
+    private String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
+    }
+
+    private String textMuted() {
+        return AppTheme.darkMode ? "#CBD5E1" : "#475569";
+    }
+
+    private String textSoft() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
+    }
+
+    private String dividerColor() {
+        return AppTheme.darkMode ? "#334155" : "#E2E8F0";
+    }
+
+    private static int num(Map<String, Object> map, String key) {
+        return ((Number) map.getOrDefault(key, 0)).intValue();
+    }
+
+    private static double dbl(Map<String, Object> map, String key) {
+        return ((Number) map.getOrDefault(key, 0.0)).doubleValue();
+    }
+
+    private static String str(int value) {
+        return String.valueOf(value);
+    }
 }

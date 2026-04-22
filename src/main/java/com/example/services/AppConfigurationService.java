@@ -17,6 +17,7 @@ public final class AppConfigurationService {
     }
 
     public static AppConfiguration getConfiguration() {
+        configuration.normalize();
         return configuration;
     }
 
@@ -24,6 +25,8 @@ public final class AppConfigurationService {
         if (updated == null) {
             throw new IllegalArgumentException("Configuration cannot be null");
         }
+        updated.normalize();
+        updated.rememberCurrentLibrary();
         configuration = updated;
         DataStorage.writeSerialized(CONFIG_FILE, configuration);
     }
@@ -31,10 +34,16 @@ public final class AppConfigurationService {
     private static AppConfiguration loadConfiguration() {
         try {
             AppConfiguration loaded = DataStorage.readSerialized(CONFIG_FILE, AppConfiguration.class);
-            return loaded != null ? loaded : new AppConfiguration();
+            AppConfiguration configuration = loaded != null ? loaded : new AppConfiguration();
+            configuration.normalize();
+            configuration.rememberCurrentLibrary();
+            return configuration;
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to load app configuration, using defaults", e);
-            return new AppConfiguration();
+            AppConfiguration configuration = new AppConfiguration();
+            configuration.normalize();
+            configuration.rememberCurrentLibrary();
+            return configuration;
         }
     }
 }

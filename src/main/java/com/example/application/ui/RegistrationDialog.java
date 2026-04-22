@@ -3,9 +3,9 @@ package com.example.application.ui;
 import com.example.entities.AppConfiguration;
 import com.example.entities.UserRole;
 import com.example.services.AppConfigurationService;
-import com.example.services.UserService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
@@ -21,6 +21,9 @@ import java.util.Optional;
  */
 public class RegistrationDialog {
 
+    private record PasswordRow(PasswordField hiddenField, TextField visibleField,
+                               Button toggleButton, HBox container) {}
+
     public static Optional<RegistrationRequest> show(Stage owner, boolean isFirstUser) {
         Dialog<RegistrationRequest> dialog = new Dialog<>();
         dialog.setTitle(isFirstUser ? "Create Administrator Account" : "Create Account");
@@ -29,9 +32,9 @@ public class RegistrationDialog {
 
         DialogPane pane = dialog.getDialogPane();
         AppTheme.applyTheme(pane);
-        pane.setPrefWidth(500);
-        pane.setMinWidth(460);
-        pane.setPrefHeight(640);
+        pane.setPrefWidth(540);
+        pane.setMinWidth(500);
+        pane.setPrefHeight(700);
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
 
@@ -44,13 +47,16 @@ public class RegistrationDialog {
         headerBox.setPadding(new Insets(28, 28, 20, 28));
         headerBox.setStyle("-fx-background-color: #0F172A;");
 
-        Label emoji = new Label(isFirstUser ? "🏛️" : "👤");
-        emoji.setStyle("-fx-font-size: 32px;");
+        StackPane iconBadge = new StackPane(AppTheme.createIcon(
+                isFirstUser ? AppTheme.ICON_LIBRARY : AppTheme.ICON_USER, 22));
+        iconBadge.setPrefSize(52, 52);
+        iconBadge.setMaxSize(52, 52);
+        iconBadge.setStyle("-fx-background-color: rgba(20, 184, 166, 0.18); -fx-background-radius: 26px;");
 
         Label titleLbl = new Label(isFirstUser ? "Welcome to Library OS" : "Create Account");
         titleLbl.setStyle("-fx-font-size: 22px; -fx-font-weight: 800; -fx-text-fill: white;");
 
-        Label libLbl = new Label(cfg.getLibraryName() + " . " + cfg.getBranchName());
+        Label libLbl = new Label(cfg.getCurrentLibraryDisplayName());
         libLbl.setStyle("-fx-font-size: 11px; -fx-text-fill: #14B8A6; -fx-font-weight: 700;");
 
         Label subLbl = new Label(isFirstUser
@@ -59,7 +65,7 @@ public class RegistrationDialog {
         subLbl.setStyle("-fx-font-size: 13px; -fx-text-fill: #94A3B8;");
         subLbl.setWrapText(true);
 
-        headerBox.getChildren().addAll(emoji, titleLbl, libLbl, subLbl);
+        headerBox.getChildren().addAll(iconBadge, titleLbl, libLbl, subLbl);
 
         // Form
         VBox formBox = new VBox(12);
@@ -74,30 +80,22 @@ public class RegistrationDialog {
 
         // Password
         Label pLbl = fieldLabel("Password");
-        PasswordField passField    = passField("At least 4 characters");
-        TextField     passVisible  = inputField("At least 4 characters");
-        passVisible.setVisible(false); passVisible.setManaged(false);
-        passVisible.textProperty().bindBidirectional(passField.textProperty());
-        Button showHidePass = new Button("👁");
-        showHidePass.setStyle("-fx-background-color: #F3F4F6; -fx-border-color: #D1D5DB; " +
-                "-fx-border-width: 0 0 0 1; -fx-cursor: hand; -fx-background-radius: 0 10 10 0; " +
-                "-fx-border-radius: 0; -fx-font-size: 14px; -fx-padding: 0 10;");
-        showHidePass.setOnAction(e -> togglePass(passField, passVisible, showHidePass));
-        StackPane passStack = new StackPane(passField, passVisible);
-        HBox.setHgrow(passStack, Priority.ALWAYS);
-        HBox passRow = new HBox(passStack, showHidePass);
-        passRow.setStyle("-fx-border-color: #D1D5DB; -fx-border-width: 1.5; " +
-                "-fx-border-radius: 10px; -fx-background-radius: 10px; -fx-background-color: #F9FAFB;");
+        PasswordRow passwordRow = createPasswordRow("At least 4 characters");
+        PasswordField passField = passwordRow.hiddenField();
 
         Label strengthLbl = new Label();
         strengthLbl.setStyle("-fx-font-size: 11px;");
-        passField.textProperty().addListener((o, old, v) -> updateStrength(strengthLbl, v));
 
         // Confirm password
         Label cLbl = fieldLabel("Confirm Password");
-        PasswordField confirmField = passField("Re-enter your password");
+        PasswordRow confirmPasswordRow = createPasswordRow("Re-enter your password");
+        PasswordField confirmField = confirmPasswordRow.hiddenField();
         Label confirmFeedback = new Label();
         confirmFeedback.setStyle("-fx-font-size: 11px;");
+        passField.textProperty().addListener((o, old, v) -> {
+            updateStrength(strengthLbl, v);
+            checkMatch(confirmFeedback, v, confirmField.getText());
+        });
         confirmField.textProperty().addListener((o, old, v) ->
                 checkMatch(confirmFeedback, passField.getText(), v));
 
@@ -112,17 +110,17 @@ public class RegistrationDialog {
             userRb.setToggleGroup(roleGroup);
             userRb.setUserData(UserRole.USER);
             userRb.setSelected(true);
-            userRb.setStyle("-fx-font-size: 14px;");
+            userRb.setStyle("-fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";");
 
             RadioButton libRb  = new RadioButton("Librarian  (requires admin approval)");
             libRb.setToggleGroup(roleGroup);
             libRb.setUserData(UserRole.LIBRARIAN);
-            libRb.setStyle("-fx-font-size: 14px;");
+            libRb.setStyle("-fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";");
 
-            HBox radioRow = new HBox(20, userRb, libRb);
+            VBox radioRow = new VBox(10, userRb, libRb);
             radioRow.setAlignment(Pos.CENTER_LEFT);
 
-            librarianNotice.setText("ℹ  Librarian accounts start as inactive. " +
+            librarianNotice.setText("Librarian accounts start as inactive. " +
                     "An admin must approve before you can log in.");
             librarianNotice.setStyle("-fx-font-size: 12px; -fx-text-fill: #92400E; " +
                     "-fx-background-color: #FEF3C7; -fx-background-radius: 8px; " +
@@ -148,22 +146,42 @@ public class RegistrationDialog {
 
         formBox.getChildren().addAll(
                 uLbl, usernameField, uFeedback,
-                pLbl, passRow, strengthLbl,
-                cLbl, confirmField, confirmFeedback
+                pLbl, passwordRow.container(), strengthLbl,
+                cLbl, confirmPasswordRow.container(), confirmFeedback
         );
         if (roleBox != null) formBox.getChildren().add(roleBox);
         formBox.getChildren().add(errorLbl);
 
         root.getChildren().addAll(headerBox, formBox);
-        pane.setContent(root);
+
+        // Wrap in ScrollPane so content never hides the button bar
+        ScrollPane scroll = new ScrollPane(root);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
+        pane.setContent(scroll);
 
         // Buttons
         ButtonType createBt = new ButtonType("Create Account", ButtonBar.ButtonData.OK_DONE);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, createBt);
         Button okBtn = (Button) pane.lookupButton(createBt);
-        okBtn.setStyle("-fx-background-color: #0D9488; -fx-text-fill: white; " +
-                "-fx-font-weight: 600; -fx-font-size: 14px; " +
-                "-fx-background-radius: 10px; -fx-padding: 10 24;");
+        Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
+        stylePrimaryButton(okBtn, "Create Account");
+        styleSecondaryButton(cancelBtn, "Cancel");
+
+        dialog.setOnShown(event -> {
+            if (pane.getScene() == null) {
+                return;
+            }
+            Scene scene = pane.getScene();
+            if (scene.getWindow() instanceof Stage stage) {
+                stage.setMinHeight(720);
+                stage.setMinWidth(520);
+                stage.sizeToScene();
+                stage.centerOnScreen();
+            }
+        });
 
         okBtn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
             String user = usernameField.getText().trim();
@@ -171,11 +189,11 @@ public class RegistrationDialog {
             String conf = confirmField.getText();
 
             if (user.isEmpty())        { err(errorLbl, "Username is required.");           ev.consume(); return; }
-            if (user.length() < 3)     { err(errorLbl, "Username needs ≥ 3 characters.");  ev.consume(); return; }
+            if (user.length() < 3)     { err(errorLbl, "Username needs >= 3 characters.");  ev.consume(); return; }
             if (!user.matches("^[a-zA-Z0-9._-]+$"))
             { err(errorLbl, "Username: letters/numbers/. _ - only."); ev.consume(); return; }
             if (pass.isEmpty())        { err(errorLbl, "Password is required.");           ev.consume(); return; }
-            if (pass.length() < 4)     { err(errorLbl, "Password needs ≥ 4 characters.");  ev.consume(); return; }
+            if (pass.length() < 4)     { err(errorLbl, "Password needs >= 4 characters.");  ev.consume(); return; }
             if (!pass.equals(conf))    { err(errorLbl, "Passwords do not match.");         ev.consume(); return; }
             errorLbl.setVisible(false);
         });
@@ -201,29 +219,65 @@ public class RegistrationDialog {
     // ─── Helpers
     private static Label fieldLabel(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+        l.setStyle("-fx-font-size: 13px; -fx-font-weight: 600; -fx-text-fill: " + textPrimary() + ";");
         return l;
     }
     private static TextField inputField(String prompt) {
         TextField f = new TextField();
         f.setPromptText(prompt);
-        f.setStyle("-fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB; " +
+        f.setStyle("-fx-background-color: " + inputSurface() + "; -fx-border-color: " + borderColor() + "; " +
                 "-fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px; " +
-                "-fx-padding: 10 14; -fx-font-size: 14px;");
+                "-fx-padding: 10 14; -fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";");
         return f;
     }
     private static PasswordField passField(String prompt) {
         PasswordField f = new PasswordField();
         f.setPromptText(prompt);
         f.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
-                "-fx-font-size: 14px; -fx-padding: 10 14;");
+                "-fx-font-size: 14px; -fx-padding: 10 14; -fx-text-fill: " + textPrimary() + ";");
         return f;
     }
-    private static void togglePass(PasswordField pf, TextField tf, Button btn) {
-        boolean shown = tf.isVisible();
-        pf.setVisible(shown); pf.setManaged(shown);
-        tf.setVisible(!shown); tf.setManaged(!shown);
-        btn.setText(shown ? "👁" : "🙈");
+
+    private static TextField visiblePassField(String prompt) {
+        TextField f = new TextField();
+        f.setPromptText(prompt);
+        f.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
+                "-fx-font-size: 14px; -fx-padding: 10 14; -fx-text-fill: " + textPrimary() + ";");
+        return f;
+    }
+
+    private static PasswordRow createPasswordRow(String prompt) {
+        PasswordField hiddenField = passField(prompt);
+        TextField visibleField = visiblePassField(prompt);
+        visibleField.setVisible(false);
+        visibleField.setManaged(false);
+        visibleField.textProperty().bindBidirectional(hiddenField.textProperty());
+
+        Button toggleButton = new Button();
+        toggleButton.setGraphic(AppTheme.createIcon(AppTheme.ICON_VISIBILITY, 16));
+        toggleButton.getStyleClass().addAll("app-button", "btn-ghost", "password-toggle", "auth-password-toggle");
+        toggleButton.setFocusTraversable(false);
+
+        StackPane fieldStack = new StackPane(hiddenField, visibleField);
+        HBox.setHgrow(fieldStack, Priority.ALWAYS);
+
+        HBox container = new HBox(fieldStack, toggleButton);
+        container.setAlignment(Pos.CENTER_LEFT);
+        container.getStyleClass().addAll("input-with-icon", "password-split-container");
+
+        PasswordRow row = new PasswordRow(hiddenField, visibleField, toggleButton, container);
+        toggleButton.setOnAction(e -> togglePass(row));
+        return row;
+    }
+
+    private static void togglePass(PasswordRow row) {
+        boolean shown = row.visibleField().isVisible();
+        row.hiddenField().setVisible(shown);
+        row.hiddenField().setManaged(shown);
+        row.visibleField().setVisible(!shown);
+        row.visibleField().setManaged(!shown);
+        row.toggleButton().setGraphic(AppTheme.createIcon(
+                shown ? AppTheme.ICON_VISIBILITY : AppTheme.ICON_VISIBILITY_OFF, 16));
     }
     private static void updateStrength(Label lbl, String p) {
         if (p == null || p.isEmpty()) { lbl.setText(""); return; }
@@ -241,25 +295,56 @@ public class RegistrationDialog {
     private static void checkUsername(Label lbl, String v) {
         if (v == null || v.length() < 3) { lbl.setText(""); return; }
         if (!v.matches("^[a-zA-Z0-9._-]+$")) {
-            lbl.setText("✕ Invalid characters");
+            lbl.setText("Invalid characters");
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
         } else {
-            lbl.setText("✓ Valid");
+            lbl.setText("Valid");
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
         }
     }
     private static void checkMatch(Label lbl, String pass, String confirm) {
         if (confirm == null || confirm.isEmpty()) { lbl.setText(""); return; }
         if (pass.equals(confirm)) {
-            lbl.setText("✓ Passwords match");
+            lbl.setText("Passwords match");
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
         } else {
-            lbl.setText("✕ Passwords do not match");
+            lbl.setText("Passwords do not match");
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
         }
     }
     private static void err(Label lbl, String msg) {
         lbl.setText(msg); lbl.setVisible(true);
+    }
+
+    private static String inputSurface() {
+        return AppTheme.darkMode ? "#1E293B" : "#F9FAFB";
+    }
+
+    private static String borderColor() {
+        return AppTheme.darkMode ? "#334155" : "#D1D5DB";
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#E2E8F0" : "#374151";
+    }
+
+    private static void stylePrimaryButton(Button button, String text) {
+        if (button == null) {
+            return;
+        }
+        button.setText(text);
+        button.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
+                "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 24;");
+    }
+
+    private static void styleSecondaryButton(Button button, String text) {
+        if (button == null) {
+            return;
+        }
+        button.setText(text);
+        button.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + "; " +
+                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
+                "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 22;");
     }
 
     public record RegistrationRequest(

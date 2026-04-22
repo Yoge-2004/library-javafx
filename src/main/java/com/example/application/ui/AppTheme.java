@@ -63,6 +63,10 @@ public final class AppTheme {
     public static final String ICON_SCHEDULE = "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z";
     public static final String ICON_NOTIFICATION = "M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z";
     public static final String ICON_HELP = "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z";
+    public static final String ICON_LOCK = "M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm6-8h-1V7a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2zm-6 8a4 4 0 0 1-1-7.87V7a1 1 0 1 1 2 0v2.13A4 4 0 0 1 12 17zm3-8H9V7a3 3 0 0 1 6 0v2z";
+    public static final String ICON_SUN = "M6.76 4.84 5.34 3.42 3.93 4.83l1.41 1.41 1.42-1.4zM1 13h3v-2H1v2zm10 9h2v-3h-2v3zm9-9h3v-2h-3v2zm-1.34 6.17 1.41 1.41 1.41-1.41-1.41-1.41-1.41 1.41zM17.24 4.84l1.41 1.41 1.41-1.42-1.41-1.41-1.41 1.42zM12 6a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0 10a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm-8.07 4.24 1.41 1.41 1.42-1.41-1.42-1.41-1.41 1.41zM11 1h2v3h-2V1z";
+    public static final String ICON_MOON = "M12.74 2a9 9 0 1 0 9.26 9.26A7 7 0 0 1 12.74 2zm-.74 18a7 7 0 0 1-6.95-7.86 9 9 0 0 0 9.81 9.81A6.96 6.96 0 0 1 12 20z";
+    public static final String ICON_CHEVRON_RIGHT = "M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z";
 
     // === BUTTON STYLES ===
     public enum ButtonStyle {
@@ -102,6 +106,8 @@ public final class AppTheme {
 
     private static final String THEME_PATH = "/theme.css";
     private static String cachedStylesheet;
+    /** Set by LibraryApp when dark mode toggles; used to apply dark-mode to dialogs. */
+    public static boolean darkMode = false;
 
     private AppTheme() {}
 
@@ -126,7 +132,13 @@ public final class AppTheme {
         if (!pane.getStylesheets().contains(stylesheet)) {
             pane.getStylesheets().add(stylesheet);
         }
-        pane.getStyleClass().add("dialog-pane-modern");
+        if (!pane.getStyleClass().contains("dialog-pane-modern"))
+            pane.getStyleClass().add("dialog-pane-modern");
+        // Apply dark mode so dialogs match the main window
+        if (darkMode && !pane.getStyleClass().contains("dark-mode"))
+            pane.getStyleClass().add("dark-mode");
+        else if (!darkMode)
+            pane.getStyleClass().remove("dark-mode");
     }
 
     private static String getStylesheetUrl() {
@@ -165,6 +177,9 @@ public final class AppTheme {
         svg.setContent(pathContent);
         svg.getStyleClass().add("icon-svg");
         svg.setFill(Color.web("#64748B"));
+        double scale = size <= 0 ? 1.0 : size / 24.0;
+        svg.setScaleX(scale);
+        svg.setScaleY(scale);
         return svg;
     }
 

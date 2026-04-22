@@ -47,16 +47,17 @@ public class CatalogView extends BorderPane {
     }
 
     private void initializeUI() {
-        setStyle("-fx-background-color: #F1F5F9;");
+        setStyle("-fx-background-color: " + pageBackground() + ";");
         setPadding(new Insets(0));
 
         ScrollPane scrollPane = new ScrollPane();
         scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scrollPane.setStyle("-fx-background: transparent; -fx-background-color: transparent;");
 
         VBox content = new VBox(20);
         content.setPadding(new Insets(24));
-        content.setStyle("-fx-background-color: #F1F5F9;");
+        content.setStyle("-fx-background-color: " + pageBackground() + ";");
 
         // Header section
         VBox header = createHeader();
@@ -80,11 +81,10 @@ public class CatalogView extends BorderPane {
         VBox header = new VBox(8);
 
         Label title = new Label("Book Catalog");
-        title.setStyle("-fx-font-family: 'Plus Jakarta Sans'; -fx-font-size: 28px; " +
-                "-fx-font-weight: 700; -fx-text-fill: #0F172A;");
+        title.getStyleClass().add("page-title");
 
         Label subtitle = new Label("Browse, search, and manage your library collection");
-        subtitle.setStyle("-fx-font-size: 15px; -fx-text-fill: #64748B;");
+        subtitle.getStyleClass().add("page-subtitle");
 
         header.getChildren().addAll(title, subtitle);
         return header;
@@ -93,15 +93,13 @@ public class CatalogView extends BorderPane {
     private HBox createFilterBar() {
         HBox bar = new HBox(12);
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
-                "-fx-border-radius: 12px; -fx-border-color: #E2E8F0; -fx-border-width: 1;");
+        bar.getStyleClass().add("filter-bar");
         bar.setPadding(new Insets(12, 16, 12, 16));
 
         // Search field
         searchField = new TextField();
-        searchField.setPromptText("🔍 Search books by title, author, or ISBN...");
-        searchField.setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
-                "-fx-font-size: 14px; -fx-prompt-text-fill: #94A3B8;");
+        searchField.setPromptText("Search books by title, author, or ISBN...");
+        searchField.getStyleClass().add("search-field");
         searchField.setPrefWidth(350);
         HBox.setHgrow(searchField, Priority.ALWAYS);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
@@ -110,7 +108,6 @@ public class CatalogView extends BorderPane {
         categoryFilter = new ComboBox<>();
         refreshCategoryFilter();
         categoryFilter.setValue("All Categories");
-        categoryFilter.setStyle("-fx-background-color: #F1F5F9; -fx-background-radius: 8px;");
         categoryFilter.valueProperty().addListener((obs, old, newVal) -> applyFilters());
 
         // Add book button (staff only)
@@ -240,8 +237,10 @@ public class CatalogView extends BorderPane {
         header.setStyle("-fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F766E, #14B8A6); " +
                 "-fx-background-radius: 12 12 0 0;");
 
-        Label iconLabel = new Label("📖");
-        iconLabel.setStyle("-fx-font-size: 48px;");
+        StackPane iconLabel = new StackPane(AppTheme.createIcon(AppTheme.ICON_BOOK, 26));
+        iconLabel.setPrefSize(72, 72);
+        iconLabel.setMaxSize(72, 72);
+        iconLabel.setStyle("-fx-background-color: rgba(255,255,255,0.16); -fx-background-radius: 36px;");
 
         Label categoryChip = new Label(book.getCategory());
         categoryChip.setStyle("-fx-background-color: rgba(255,255,255,0.2); -fx-background-radius: 20px; " +
@@ -252,18 +251,18 @@ public class CatalogView extends BorderPane {
         // Body
         VBox body = new VBox(8);
         body.setPadding(new Insets(20));
-        body.setStyle("-fx-background-color: white;");
+        body.setStyle("-fx-background-color: " + cardSurface() + ";");
 
         Label titleLabel = new Label(book.getTitle());
-        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: #1E293B;");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
         titleLabel.setWrapText(true);
         titleLabel.setMaxWidth(240);
 
         Label authorLabel = new Label("by " + book.getAuthor());
-        authorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748B;");
+        authorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textMuted() + ";");
 
         Label isbnLabel = new Label("ISBN: " + book.getFormattedIsbn());
-        isbnLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #94A3B8;");
+        isbnLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + textSoft() + ";");
 
         body.getChildren().addAll(titleLabel, authorLabel, isbnLabel);
 
@@ -271,17 +270,17 @@ public class CatalogView extends BorderPane {
         HBox footer = new HBox(12);
         footer.setAlignment(Pos.CENTER_LEFT);
         footer.setPadding(new Insets(12, 20, 16, 20));
-        footer.setStyle("-fx-background-color: white; -fx-background-radius: 0 0 12 12; " +
-                "-fx-border-color: #F1F5F9; -fx-border-width: 1 0 0 0;");
+        footer.setStyle("-fx-background-color: " + cardSurface() + "; -fx-background-radius: 0 0 12 12; " +
+                "-fx-border-color: " + dividerColor() + "; -fx-border-width: 1 0 0 0;");
 
         // Availability indicator
         boolean isAvailable = book.getQuantity() > 0;
-        Label availabilityLabel = new Label(isAvailable ? "✓ Available" : "✕ Out of Stock");
+        Label availabilityLabel = new Label(isAvailable ? "Available" : "Out of Stock");
         availabilityLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: 600; -fx-text-fill: " +
                 (isAvailable ? "#16A34A" : "#DC2626") + ";");
 
         Label quantityLabel = new Label(book.getQuantity() + " copies");
-        quantityLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #94A3B8;");
+        quantityLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textSoft() + ";");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -292,7 +291,8 @@ public class CatalogView extends BorderPane {
         if (isStaff) {
             HBox actions = new HBox(8);
             actions.setPadding(new Insets(0, 20, 16, 20));
-            actions.setStyle("-fx-background-color: white;");
+            actions.setAlignment(Pos.CENTER_LEFT);
+            actions.setStyle("-fx-background-color: " + cardSurface() + ";");
 
             Button editBtn = AppTheme.createIconButton(AppTheme.ICON_EDIT, "Edit", AppTheme.ButtonStyle.GHOST);
             editBtn.setOnAction(e -> showEditBookDialog(book));
@@ -307,7 +307,8 @@ public class CatalogView extends BorderPane {
             // Request button for regular users
             HBox actions = new HBox();
             actions.setPadding(new Insets(0, 20, 16, 20));
-            actions.setStyle("-fx-background-color: white;");
+            actions.setAlignment(Pos.CENTER);
+            actions.setStyle("-fx-background-color: " + cardSurface() + ";");
 
             Button requestBtn = AppTheme.createButton("Request Book", AppTheme.ButtonStyle.PRIMARY);
             requestBtn.setMaxWidth(Double.MAX_VALUE);
@@ -320,12 +321,12 @@ public class CatalogView extends BorderPane {
 
         // Hover effect
         card.setOnMouseEntered(e -> {
-            card.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
+            card.setStyle("-fx-background-color: " + cardSurface() + "; -fx-background-radius: 12px; " +
                     "-fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.15), 20, 0, 0, 8); " +
                     "-fx-translate-y: -4px;");
         });
         card.setOnMouseExited(e -> {
-            card.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
+            card.setStyle("-fx-background-color: " + cardSurface() + "; -fx-background-radius: 12px; " +
                     "-fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.06), 8, 0, 0, 2);");
         });
 
@@ -338,14 +339,14 @@ public class CatalogView extends BorderPane {
         empty.setPadding(new Insets(60));
         empty.setPrefWidth(600);
 
-        Label icon = new Label("📚");
-        icon.setStyle("-fx-font-size: 64px;");
+        Label icon = new Label("Books");
+        icon.setGraphic(AppTheme.createIcon(AppTheme.ICON_LIBRARY, 36));
 
         Label title = new Label("No books found");
-        title.setStyle("-fx-font-size: 20px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+        title.setStyle("-fx-font-size: 20px; -fx-font-weight: 600; -fx-text-fill: " + textPrimary() + ";");
 
         Label desc = new Label("Try adjusting your search or filters to find what you're looking for.");
-        desc.setStyle("-fx-font-size: 14px; -fx-text-fill: #6B7280;");
+        desc.setStyle("-fx-font-size: 14px; -fx-text-fill: " + textMuted() + ";");
         desc.setWrapText(true);
         desc.setTextAlignment(javafx.scene.text.TextAlignment.CENTER);
 
@@ -444,6 +445,30 @@ public class CatalogView extends BorderPane {
                 toastDisplay.showError("Failed to request book: " + e.getMessage());
             }
         }
+    }
+
+    private String pageBackground() {
+        return AppTheme.darkMode ? "#0F172A" : "#F1F5F9";
+    }
+
+    private String cardSurface() {
+        return AppTheme.darkMode ? "#1E293B" : "white";
+    }
+
+    private String dividerColor() {
+        return AppTheme.darkMode ? "#334155" : "#F1F5F9";
+    }
+
+    private String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#1E293B";
+    }
+
+    private String textMuted() {
+        return AppTheme.darkMode ? "#CBD5E1" : "#64748B";
+    }
+
+    private String textSoft() {
+        return AppTheme.darkMode ? "#94A3B8" : "#94A3B8";
     }
 }
 

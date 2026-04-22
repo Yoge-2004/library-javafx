@@ -1,6 +1,7 @@
 package com.example.application.ui;
 
 import com.example.entities.UserRole;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -40,7 +41,7 @@ public class SettingsDialog {
         VBox header = new VBox(6);
         header.setPadding(new Insets(28, 28, 20, 28));
         header.setStyle("-fx-background-color:#0F172A;");
-        Label titleLbl = new Label("⚙  Settings");
+        Label titleLbl = new Label("Settings");
         titleLbl.setStyle("-fx-font-size:22px; -fx-font-weight:800; -fx-text-fill:white;");
         Label subLbl = new Label("Account and system preferences");
         subLbl.setStyle("-fx-font-size:13px; -fx-text-fill:#94A3B8;");
@@ -54,13 +55,13 @@ public class SettingsDialog {
         content.getChildren().add(sectionLabel("ACCOUNT"));
 
         content.getChildren().addAll(
-                settingItem("👤", "Profile",
+                settingItem(AppTheme.ICON_USER, "Profile",
                         "Update your personal information and display name",
-                        "#0D9488", () -> { dialog.close(); actions.openProfile(); }),
+                        "#0D9488", () -> closeThenOpen(dialog, actions::openProfile)),
 
-                settingItem("🔒", "Password",
+                settingItem(AppTheme.ICON_LOCK, "Password",
                         "Change your account password",
-                        "#3B82F6", () -> { dialog.close(); actions.openPassword(); })
+                        "#3B82F6", () -> closeThenOpen(dialog, actions::openPassword))
         );
 
         // ── Administration section (staff only) ──────────────────
@@ -68,17 +69,17 @@ public class SettingsDialog {
             content.getChildren().add(sectionLabel("ADMINISTRATION"));
 
             content.getChildren().addAll(
-                    settingItem("👥", "User Management",
+                    settingItem(AppTheme.ICON_USER, "User Management",
                             "Add, remove or modify user accounts and roles",
-                            "#8B5CF6", () -> { dialog.close(); actions.openUserManagement(); }),
+                            "#8B5CF6", () -> closeThenOpen(dialog, actions::openUserManagement)),
 
-                    settingItem("📚", "Library Configuration",
+                    settingItem(AppTheme.ICON_LIBRARY, "Library Configuration",
                             "Borrowing rules, fine rates, loan periods, email SMTP",
-                            "#F59E0B", () -> { dialog.close(); actions.openLibraryConfiguration(); }),
+                            "#F59E0B", () -> closeThenOpen(dialog, actions::openLibraryConfiguration)),
 
-                    settingItem("💾", "Data Management",
+                    settingItem(AppTheme.ICON_SAVE, "Data Management",
                             "Backup data, import/export, view system statistics",
-                            "#16A34A", () -> { dialog.close(); actions.openDataManagement(); })
+                            "#16A34A", () -> closeThenOpen(dialog, actions::openDataManagement))
             );
         }
 
@@ -86,18 +87,16 @@ public class SettingsDialog {
         content.getChildren().add(sectionLabel("ABOUT"));
         HBox aboutCard = new HBox(16);
         aboutCard.setPadding(new Insets(14, 16, 14, 16));
-        aboutCard.setStyle("-fx-background-color:white; -fx-background-radius:12px; " +
-                "-fx-border-radius:12px; -fx-border-color:#E2E8F0; -fx-border-width:1;");
+        aboutCard.setStyle(itemStyle(false));
         aboutCard.setAlignment(Pos.CENTER_LEFT);
 
-        Label aboutIcon = new Label("ℹ");
-        aboutIcon.setStyle("-fx-font-size:22px;");
+        StackPane aboutIcon = createIconBubble(AppTheme.ICON_HELP, "#64748B");
 
         VBox aboutTxt = new VBox(2);
         Label aboutTitle = new Label("Library OS  v3.1");
-        aboutTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
+        aboutTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
         Label aboutSub = new Label("Modern library management . JavaFX 21 . Java 26");
-        aboutSub.setStyle("-fx-font-size:12px; -fx-text-fill:#64748B;");
+        aboutSub.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         aboutTxt.getChildren().addAll(aboutTitle, aboutSub);
         aboutCard.getChildren().addAll(aboutIcon, aboutTxt);
         content.getChildren().add(aboutCard);
@@ -110,6 +109,7 @@ public class SettingsDialog {
 
         pane.setContent(scroll);
         pane.getButtonTypes().add(ButtonType.CLOSE);
+        styleSecondaryButton((Button) pane.lookupButton(ButtonType.CLOSE), "Close");
 
         dialog.showAndWait();
     }
@@ -123,7 +123,7 @@ public class SettingsDialog {
         return l;
     }
 
-    private static HBox settingItem(String emoji, String title, String desc,
+    private static HBox settingItem(String iconPath, String title, String desc,
                                     String accentColor, Runnable action) {
         HBox item = new HBox(14);
         item.setAlignment(Pos.CENTER_LEFT);
@@ -131,23 +131,18 @@ public class SettingsDialog {
         item.setStyle(itemStyle(false));
         item.setCursor(javafx.scene.Cursor.HAND);
 
-        // Colored icon bubble
-        Label bubble = new Label(emoji);
-        bubble.setStyle("-fx-font-size:20px; -fx-background-color:" + accentColor + "22; " +
-                "-fx-background-radius:10px; -fx-padding:8;");
-        bubble.setMinWidth(44);
+        StackPane bubble = createIconBubble(iconPath, accentColor);
 
         VBox txt = new VBox(3);
         HBox.setHgrow(txt, Priority.ALWAYS);
         Label titleLbl = new Label(title);
-        titleLbl.setStyle("-fx-font-size:15px; -fx-font-weight:600; -fx-text-fill:#1E293B;");
+        titleLbl.setStyle("-fx-font-size:15px; -fx-font-weight:600; -fx-text-fill:" + textPrimary() + ";");
         Label descLbl = new Label(desc);
-        descLbl.setStyle("-fx-font-size:12px; -fx-text-fill:#64748B;");
+        descLbl.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         descLbl.setWrapText(true);
         txt.getChildren().addAll(titleLbl, descLbl);
 
-        Label arrow = new Label("›");
-        arrow.setStyle("-fx-font-size:22px; -fx-text-fill:#CBD5E1;");
+        StackPane arrow = new StackPane(AppTheme.createIcon(AppTheme.ICON_CHEVRON_RIGHT, 14));
 
         item.getChildren().addAll(bubble, txt, arrow);
 
@@ -159,10 +154,48 @@ public class SettingsDialog {
     }
 
     private static String itemStyle(boolean hovered) {
-        return "-fx-background-color:" + (hovered ? "#F8FAFC" : "white") + "; " +
+        String surface = AppTheme.darkMode
+                ? (hovered ? "#0F172A" : "#1E293B")
+                : (hovered ? "#F8FAFC" : "white");
+        String border = AppTheme.darkMode
+                ? (hovered ? "#475569" : "#334155")
+                : (hovered ? "#CBD5E1" : "#E2E8F0");
+        return "-fx-background-color:" + surface + "; " +
                 "-fx-background-radius:12px; -fx-border-radius:12px; " +
-                "-fx-border-color:" + (hovered ? "#CBD5E1" : "#E2E8F0") + "; " +
+                "-fx-border-color:" + border + "; " +
                 "-fx-border-width:1;" +
                 (hovered ? " -fx-effect:dropshadow(gaussian,rgba(15,23,42,0.06),8,0,0,2);" : "");
+    }
+
+    private static StackPane createIconBubble(String iconPath, String accentColor) {
+        StackPane bubble = new StackPane(AppTheme.createIcon(iconPath, 18));
+        bubble.setMinSize(44, 44);
+        bubble.setPrefSize(44, 44);
+        bubble.setMaxSize(44, 44);
+        bubble.setStyle("-fx-background-color:" + accentColor + "22; -fx-background-radius:10px;");
+        return bubble;
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#1E293B";
+    }
+
+    private static String textMuted() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
+    }
+
+    private static void closeThenOpen(Dialog<?> dialog, Runnable action) {
+        dialog.close();
+        Platform.runLater(action);
+    }
+
+    private static void styleSecondaryButton(Button button, String text) {
+        if (button == null) {
+            return;
+        }
+        button.setText(text);
+        button.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + ";" +
+                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + ";" +
+                "-fx-font-weight:600; -fx-font-size:13px; -fx-background-radius:10px; -fx-padding:9 18;");
     }
 }

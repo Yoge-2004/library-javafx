@@ -1,10 +1,13 @@
 package com.example.entities;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.UUID;
 
 public final class AppConfiguration implements Serializable {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 3L;
 
     // ── Library identity
     private String libraryId      = UUID.randomUUID().toString();
@@ -36,6 +39,9 @@ public final class AppConfiguration implements Serializable {
     // ── First-run flag
     private boolean initialSetupDone    = false;
 
+    // ── Library chooser support
+    private List<String> knownLibraries = new ArrayList<>();
+
     // ════════════════════════════════════════════════════════════════
     // Library identity
     // ════════════════════════════════════════════════════════════════
@@ -46,6 +52,10 @@ public final class AppConfiguration implements Serializable {
     public String getBranchId()                { return branchId; }
     public String getBranchName()              { return branchName; }
     public void   setBranchName(String v)      { branchName   = blankOr(v, "Main Branch"); }
+
+    public String getCurrentLibraryDisplayName() {
+        return getLibraryName() + " - " + getBranchName();
+    }
 
     // ════════════════════════════════════════════════════════════════
     // Data storage
@@ -112,6 +122,47 @@ public final class AppConfiguration implements Serializable {
     public boolean isInitialSetupDone()        { return initialSetupDone; }
     public void    markSetupDone()             { initialSetupDone = true; }
 
+    public List<String> getKnownLibraries() {
+        ensureKnownLibraries();
+        return List.copyOf(knownLibraries);
+    }
+
+    public void setKnownLibraries(List<String> libraries) {
+        knownLibraries = new ArrayList<>();
+        if (libraries != null) {
+            for (String library : libraries) {
+                if (library != null && !library.isBlank()) {
+                    knownLibraries.add(library.trim());
+                }
+            }
+        }
+        ensureKnownLibraries();
+    }
+
+    public void rememberCurrentLibrary() {
+        ensureKnownLibraries();
+        String current = getCurrentLibraryDisplayName();
+        knownLibraries.removeIf(value -> value.equalsIgnoreCase(current));
+        knownLibraries.add(0, current);
+    }
+
+    public void normalize() {
+        if (libraryId == null || libraryId.isBlank()) {
+            libraryId = UUID.randomUUID().toString();
+        }
+        if (branchId == null || branchId.isBlank()) {
+            branchId = UUID.randomUUID().toString();
+        }
+        setLibraryName(libraryName);
+        setBranchName(branchName);
+        setDataDirectory(dataDirectory);
+        setExportDirectory(exportDirectory);
+        setCurrencySymbol(currencySymbol);
+        setCurrencyCode(currencyCode);
+        setFinePerDay(finePerDay);
+        ensureKnownLibraries();
+    }
+
     // ════════════════════════════════════════════════════════════════
     // Helpers
     // ════════════════════════════════════════════════════════════════
@@ -120,5 +171,19 @@ public final class AppConfiguration implements Serializable {
     }
     private static String blankOr(String v, String fallback) {
         return (v == null || v.isBlank()) ? fallback : v.trim();
+    }
+
+    private void ensureKnownLibraries() {
+        if (knownLibraries == null) {
+            knownLibraries = new ArrayList<>();
+        }
+        knownLibraries.add(getCurrentLibraryDisplayName());
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (String value : knownLibraries) {
+            if (value != null && !value.isBlank()) {
+                unique.add(value.trim());
+            }
+        }
+        knownLibraries = new ArrayList<>(unique);
     }
 }

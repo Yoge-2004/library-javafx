@@ -16,6 +16,7 @@ import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
+import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -65,15 +66,16 @@ public class CirculationView extends BorderPane {
     // ═══════════════════════════════════════════════════════════════
 
     private void initUI() {
-        setStyle("-fx-background-color: #F1F5F9;");
+        setStyle("-fx-background-color: " + pageBackground() + ";");
 
         ScrollPane scroll = new ScrollPane();
         scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setStyle("-fx-background:transparent;-fx-background-color:transparent;");
 
         VBox content = new VBox(20);
         content.setPadding(new Insets(24));
-        content.setStyle("-fx-background-color:#F1F5F9;");
+        content.setStyle("-fx-background-color:" + pageBackground() + ";");
 
         content.getChildren().addAll(buildHeader(), buildTabs());
         scroll.setContent(content);
@@ -94,9 +96,9 @@ public class CirculationView extends BorderPane {
         tp.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tp.setStyle("-fx-background-color:transparent;");
 
-        tp.getTabs().add(new Tab("📚  Active Issues", issuesPanel()));
-        tp.getTabs().add(new Tab("📝  Borrow Requests", requestsPanel()));
-        if (isStaff) tp.getTabs().add(new Tab("⚠  Overdue", overduePanel()));
+        tp.getTabs().add(new Tab("Active Issues", issuesPanel()));
+        tp.getTabs().add(new Tab("Borrow Requests", requestsPanel()));
+        if (isStaff) tp.getTabs().add(new Tab("Overdue", overduePanel()));
 
         return tp;
     }
@@ -176,6 +178,7 @@ public class CirculationView extends BorderPane {
                 { setGraphic(null); return; }
                 IssueRecord r = getTableRow().getItem();
                 HBox box = new HBox(6);
+                box.setAlignment(Pos.CENTER);
                 if (isStaff || currentUser.equals(r.getUserId()))
                     box.getChildren().add(retBtn);
                 if (r.canRenew()) box.getChildren().add(renBtn);
@@ -240,17 +243,39 @@ public class CirculationView extends BorderPane {
             }
         });
 
-        // Note/rejection reason column - visible to users so they know why rejected
-        TableColumn<BorrowRequest, String> noteC = makeCol("Note / Reason",
-                r -> r.getNote() != null ? r.getNote() : "", 160);
+        // Note/rejection reason column with tooltip for long text
+        TableColumn<BorrowRequest, String> noteC = makeCol("Reason",
+                r -> r.getNote() != null ? r.getNote() : "", 220);
         noteC.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(String s, boolean empty) {
                 super.updateItem(s, empty);
-                if (empty || s == null || s.isEmpty()) { setText(null); setGraphic(null); return; }
-                Label l = new Label(s);
-                l.setStyle("-fx-text-fill:#DC2626; -fx-font-size:12px;");
-                l.setWrapText(true);
-                setGraphic(l); setText(null);
+                if (empty || s == null || s.isEmpty()) { setText(null); setGraphic(null); setTooltip(null); return; }
+
+                String display = s.length() > 72 ? s.substring(0, 69) + "..." : s;
+                Label preview = new Label(display);
+                preview.setStyle("-fx-text-fill:#DC2626; -fx-font-size:12px;");
+                preview.setWrapText(true);
+                preview.setMaxWidth(160);
+
+                Tooltip tip = new Tooltip(s);
+                tip.setWrapText(true);
+                tip.setMaxWidth(300);
+                tip.setStyle("-fx-font-size:13px;");
+                Tooltip.install(preview, tip);
+
+                HBox box = new HBox(8);
+                box.setAlignment(Pos.CENTER_LEFT);
+                box.getChildren().add(preview);
+
+                if (s.length() > 72) {
+                    Button viewBtn = AppTheme.createIconButton(
+                            AppTheme.ICON_VISIBILITY, "View full reason", AppTheme.ButtonStyle.GHOST);
+                    viewBtn.setOnAction(event -> showLongTextDialog("Request Reason", s));
+                    box.getChildren().add(viewBtn);
+                }
+
+                setGraphic(box);
+                setText(null);
             }
         });
 
@@ -260,7 +285,7 @@ public class CirculationView extends BorderPane {
             TableColumn<BorrowRequest, Void> actC = new TableColumn<>("Actions");
             actC.setPrefWidth(110);
             actC.setCellFactory(c -> new TableCell<>() {
-                final Button appr = actionBtn("✓", "#16A34A");
+                final Button appr = actionBtn("v", "#16A34A");
                 final Button rej  = actionBtn("✕", "#DC2626");
                 {
                     appr.setOnAction(e -> approveRequest(getTableView().getItems().get(getIndex())));
@@ -271,7 +296,13 @@ public class CirculationView extends BorderPane {
                     if (empty || getTableRow() == null || getTableRow().getItem() == null)
                     { setGraphic(null); return; }
                     BorrowRequest req = getTableRow().getItem();
-                    setGraphic(req.isPending() ? new HBox(6, appr, rej) : null);
+                    if (req.isPending()) {
+                        HBox box = new HBox(6, appr, rej);
+                        box.setAlignment(Pos.CENTER);
+                        setGraphic(box);
+                    } else {
+                        setGraphic(null);
+                    }
                 }
             });
             t.getColumns().add(actC);
@@ -292,7 +323,7 @@ public class CirculationView extends BorderPane {
                 "-fx-border-radius:12px; -fx-border-color:#FECACA; -fx-border-width:1;");
         banner.setPadding(new Insets(16));
         banner.setAlignment(Pos.CENTER_LEFT);
-        Label icon = new Label("⚠");
+        Label icon = new Label("!");
         icon.setStyle("-fx-font-size:28px;");
         VBox txt = new VBox(2,
                 styledLabel("Overdue Books Alert", 16, "#991B1B", true),
@@ -340,12 +371,13 @@ public class CirculationView extends BorderPane {
         DialogPane dp = dlg.getDialogPane();
         AppTheme.applyTheme(dp);
         dp.setPrefWidth(520);
+        dp.setPrefHeight(660);
 
         VBox root = new VBox(20);
         root.setPadding(new Insets(24));
 
-        Label heading = new Label("📤  Issue Book to User");
-        heading.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:#0F172A;");
+        Label heading = new Label("Issue Book to User");
+        heading.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
 
         // ── Book picker ──────────────────────────────────────────
         Label bookLbl = fieldLabel("Select Book");
@@ -383,7 +415,7 @@ public class CirculationView extends BorderPane {
         bookSearch.textProperty().addListener((o, old, v) -> refreshBooks.run());
         bookList.getSelectionModel().selectedItemProperty().addListener((o, old, b) -> {
             if (b != null) {
-                bookAvail.setText("✓  " + b.getQuantity() + " cop" +
+                bookAvail.setText(b.getQuantity() + " cop" +
                         (b.getQuantity() == 1 ? "y" : "ies") + " available");
                 bookAvail.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A; -fx-font-weight:600;");
             }
@@ -425,6 +457,20 @@ public class CirculationView extends BorderPane {
         qtySpin.setEditable(true);
         qtySpin.setPrefWidth(90);
 
+        Label issueDateLbl = fieldLabel("Issue Date");
+        DatePicker issueDatePicker = new DatePicker(LocalDate.now());
+        issueDatePicker.setEditable(false);
+        issueDatePicker.setStyle(inputStyle());
+
+        Label loanDaysLbl = fieldLabel("Loan Period");
+        Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, BookService.getLoanPeriodDays());
+        loanDaysSpin.setEditable(true);
+        loanDaysSpin.setPrefWidth(110);
+
+        Label testingHint = new Label("Use an earlier issue date to create overdue records from the UI.");
+        testingHint.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
+        testingHint.setWrapText(true);
+
         // ── Error feedback ────────────────────────────────────────
         Label errLbl = new Label();
         errLbl.setStyle("-fx-font-size:13px; -fx-text-fill:#DC2626;");
@@ -434,10 +480,18 @@ public class CirculationView extends BorderPane {
                 heading,
                 bookLbl, bookSearch, bookList, bookAvail,
                 userLbl, userSearch, userListView,
-                new HBox(12, qtyLbl, qtySpin),
+                new HBox(12,
+                        new VBox(6, qtyLbl, qtySpin),
+                        new VBox(6, issueDateLbl, issueDatePicker),
+                        new VBox(6, loanDaysLbl, loanDaysSpin)),
+                testingHint,
                 errLbl
         );
-        dp.setContent(root);
+        ScrollPane formScroll = new ScrollPane(root);
+        formScroll.setFitToWidth(true);
+        formScroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        formScroll.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
+        dp.setContent(formScroll);
 
         ButtonType issueType = new ButtonType("Issue", ButtonBar.ButtonData.OK_DONE);
         dp.getButtonTypes().addAll(ButtonType.CANCEL, issueType);
@@ -456,9 +510,13 @@ public class CirculationView extends BorderPane {
             if (book.getQuantity() < qty) {
                 showErr(errLbl, "Only " + book.getQuantity() + " copies available."); ev.consume(); return;
             }
+            if (issueDatePicker.getValue() == null) {
+                showErr(errLbl, "Please choose an issue date."); ev.consume(); return;
+            }
             errLbl.setVisible(false);
             try {
-                BookService.issueBookToUser(book.getIsbn(), user.getUserId(), qty);
+                BookService.issueBookToUser(
+                        book.getIsbn(), user.getUserId(), qty, issueDatePicker.getValue(), loanDaysSpin.getValue());
                 if (toast != null) toast.showSuccess("Issued: " + book.getTitle() + " to " + user.getUserId());
                 if (onRefresh != null) onRefresh.run();
             } catch (Exception ex) {
@@ -481,6 +539,7 @@ public class CirculationView extends BorderPane {
         double fine = r.calculateFine();
         a.setContentText("Borrower: " + r.getUserId() + "\nQty: " + r.getQuantity()
                 + (fine > 0 ? "\nFine outstanding: $" + String.format("%.2f", fine) : ""));
+        AppTheme.applyTheme(a.getDialogPane());
         a.showAndWait().filter(bt -> bt == ButtonType.OK).ifPresent(bt -> {
             try {
                 BookService.returnBookFromUser(r.getIsbn(), r.getUserId(), r.getQuantity());
@@ -514,11 +573,21 @@ public class CirculationView extends BorderPane {
     }
 
     private void rejectRequest(BorrowRequest req) {
-        TextInputDialog td = new TextInputDialog();
-        td.setTitle("Reject Request");
-        td.setHeaderText("Reject request for: " + req.getBookTitle());
-        td.setContentText("Reason (optional):");
-        td.showAndWait().ifPresent(reason -> {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("Reject Request");
+        dialog.setHeaderText("Reject request for: " + req.getBookTitle());
+        AppTheme.applyTheme(dialog.getDialogPane());
+
+        TextArea reasonArea = new TextArea();
+        reasonArea.setPromptText("Enter a rejection reason (optional)");
+        reasonArea.setWrapText(true);
+        reasonArea.setPrefRowCount(6);
+
+        dialog.getDialogPane().setContent(reasonArea);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
+        dialog.setResultConverter(button -> button == ButtonType.OK ? reasonArea.getText() : null);
+
+        dialog.showAndWait().ifPresent(reason -> {
             try {
                 BookService.rejectBorrowRequest(req.getRequestId(), currentUser, reason);
                 if (toast != null) toast.showSuccess("Request rejected.");
@@ -579,7 +648,8 @@ public class CirculationView extends BorderPane {
     }
     private static Label fieldLabel(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:#374151;");
+        l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:" +
+                (AppTheme.darkMode ? "#CBD5E1" : "#374151") + ";");
         return l;
     }
     private static Label styledLabel(String t, int size, String color, boolean bold) {
@@ -590,9 +660,41 @@ public class CirculationView extends BorderPane {
         return l;
     }
     private static String inputStyle() {
+        if (AppTheme.darkMode) {
+            return "-fx-background-color:#1E293B; -fx-border-color:#334155; " +
+                    "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
+                    "-fx-padding:10 14; -fx-font-size:14px; -fx-text-fill:#E2E8F0;";
+        }
         return "-fx-background-color:#F9FAFB; -fx-border-color:#D1D5DB; " +
                 "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
                 "-fx-padding:10 14; -fx-font-size:14px;";
     }
     private static void showErr(Label lbl, String msg) { lbl.setText(msg); lbl.setVisible(true); }
+
+    private void showLongTextDialog(String title, String value) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(title);
+        AppTheme.applyTheme(alert.getDialogPane());
+
+        TextArea textArea = new TextArea(value);
+        textArea.setEditable(false);
+        textArea.setWrapText(true);
+        textArea.setPrefRowCount(10);
+        textArea.setPrefColumnCount(38);
+        alert.getDialogPane().setContent(textArea);
+        alert.showAndWait();
+    }
+
+    private static String pageBackground() {
+        return AppTheme.darkMode ? "#0F172A" : "#F1F5F9";
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
+    }
+
+    private static String textMuted() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
+    }
 }

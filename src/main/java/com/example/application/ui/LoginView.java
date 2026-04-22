@@ -1,21 +1,23 @@
 package com.example.application.ui;
 
-import com.example.entities.UserRole;
+import com.example.entities.AppConfiguration;
+import com.example.services.AppConfigurationService;
 import com.example.services.UserService;
 import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.paint.LinearGradient;
-import javafx.scene.paint.Stop;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Consumer;
 
 /**
@@ -36,6 +38,8 @@ public class LoginView extends StackPane {
     private Button loginButton;
     private ProgressIndicator loadingIndicator;
     private VBox loginForm;
+    private ComboBox<String> librarySelector;
+    private final List<String> availableLibraries = new ArrayList<>();
 
     public LoginView(Consumer<String> onLoginSuccess, Runnable onRegisterRequested) {
         this.onLoginSuccess = onLoginSuccess;
@@ -114,19 +118,22 @@ public class LoginView extends StackPane {
         HBox item = new HBox(12);
         item.setAlignment(Pos.CENTER_LEFT);
 
-        Label icon = new Label("✓");
-        icon.setStyle("-fx-font-size: 16px; -fx-text-fill: #14B8A6; -fx-font-weight: bold;");
+        StackPane iconBadge = new StackPane(AppTheme.createIcon(iconPath, 16));
+        iconBadge.setMinSize(28, 28);
+        iconBadge.setPrefSize(28, 28);
+        iconBadge.setMaxSize(28, 28);
+        iconBadge.setStyle("-fx-background-color: rgba(20, 184, 166, 0.15); -fx-background-radius: 14px;");
 
         Label label = new Label(text);
         label.setStyle("-fx-font-size: 15px; -fx-text-fill: #CBD5E1;");
 
-        item.getChildren().addAll(icon, label);
+        item.getChildren().addAll(iconBadge, label);
         return item;
     }
 
     private VBox createLoginCard() {
         loginForm = new VBox(24);
-        loginForm.setAlignment(Pos.CENTER);
+        loginForm.setAlignment(Pos.TOP_CENTER);
         loginForm.setPadding(new Insets(48));
         loginForm.setMaxWidth(420);
         loginForm.setStyle("-fx-background-color: white; -fx-background-radius: 24px;");
@@ -154,6 +161,8 @@ public class LoginView extends StackPane {
         // Form fields
         VBox formFields = new VBox(20);
         formFields.setFillWidth(true);
+
+        VBox libraryBox = createLibraryBox();
 
         // Username field
         VBox usernameBox = new VBox(6);
@@ -183,7 +192,7 @@ public class LoginView extends StackPane {
         errorLabel.setVisible(false);
         errorLabel.setWrapText(true);
 
-        formFields.getChildren().addAll(usernameBox, passwordBox, errorLabel);
+        formFields.getChildren().addAll(libraryBox, usernameBox, passwordBox, errorLabel);
 
         // Login button
         loginButton = new Button("Sign In");
@@ -221,6 +230,7 @@ public class LoginView extends StackPane {
         registerBox.getChildren().addAll(noAccountLabel, registerLink);
 
         // Add enter key handler
+        librarySelector.setOnAction(e -> usernameField.requestFocus());
         usernameField.setOnAction(e -> passwordField.requestFocus());
         passwordField.setOnAction(e -> handleLogin());
         visiblePasswordField.setOnAction(e -> handleLogin());
@@ -233,12 +243,16 @@ public class LoginView extends StackPane {
     private HBox createPasswordContainer() {
         passwordField = new PasswordField();
         passwordField.setPromptText("Enter your password");
-        passwordField.setStyle(getInputStyle() + "-fx-background-radius: 12 0 0 12;");
+        passwordField.setStyle("-fx-background-color:transparent; -fx-border-color:transparent; " +
+                "-fx-font-size:15px; -fx-text-fill:#111827; -fx-prompt-text-fill:#9CA3AF; " +
+                "-fx-padding:10 14; -fx-font-family:'Noto Sans','Liberation Sans','DejaVu Sans',sans-serif;");
         passwordField.setPrefHeight(48);
 
         visiblePasswordField = new TextField();
         visiblePasswordField.setPromptText("Enter your password");
-        visiblePasswordField.setStyle(getInputStyle() + "-fx-background-radius: 12 0 0 12;");
+        visiblePasswordField.setStyle("-fx-background-color:transparent; -fx-border-color:transparent; " +
+                "-fx-font-size:15px; -fx-text-fill:#111827; -fx-prompt-text-fill:#9CA3AF; " +
+                "-fx-padding:10 14; -fx-font-family:'Noto Sans','Liberation Sans','DejaVu Sans',sans-serif;");
         visiblePasswordField.setPrefHeight(48);
         visiblePasswordField.setVisible(false);
         visiblePasswordField.setManaged(false);
@@ -248,12 +262,12 @@ public class LoginView extends StackPane {
         passwordProperty.bind(passwordField.textProperty());
 
         // Toggle button
-        togglePasswordBtn = new Button("👁");
-        togglePasswordBtn.setStyle("-fx-background-color: #F3F4F6; -fx-background-radius: 0 12 12 0; " +
-                "-fx-border-color: #D1D5DB; -fx-border-width: 1 1 1 0; -fx-border-radius: 0 12 12 0; " +
-                "-fx-cursor: hand; -fx-font-size: 14px;");
+        togglePasswordBtn = new Button();
         togglePasswordBtn.setPrefHeight(48);
         togglePasswordBtn.setPrefWidth(48);
+        togglePasswordBtn.setGraphic(AppTheme.createIcon(AppTheme.ICON_VISIBILITY, 16));
+        togglePasswordBtn.getStyleClass().addAll("app-button", "btn-ghost", "password-toggle", "auth-password-toggle");
+        togglePasswordBtn.setFocusTraversable(false);
 
         togglePasswordBtn.setOnAction(e -> togglePasswordVisibility());
 
@@ -262,7 +276,49 @@ public class LoginView extends StackPane {
 
         HBox container = new HBox(fieldStack, togglePasswordBtn);
         container.setAlignment(Pos.CENTER_LEFT);
+        container.getStyleClass().add("input-with-icon");
         return container;
+    }
+
+    private VBox createLibraryBox() {
+        AppConfiguration configuration = AppConfigurationService.getConfiguration();
+        availableLibraries.clear();
+        availableLibraries.addAll(configuration.getKnownLibraries());
+        if (availableLibraries.isEmpty()) {
+            availableLibraries.add(configuration.getCurrentLibraryDisplayName());
+        }
+
+        VBox libraryBox = new VBox(6);
+        Label libraryLabel = new Label("Library");
+        libraryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+
+        librarySelector = new ComboBox<>(FXCollections.observableArrayList(availableLibraries));
+        librarySelector.setEditable(true);
+        librarySelector.setMaxWidth(Double.MAX_VALUE);
+        librarySelector.setPrefHeight(48);
+        librarySelector.setVisibleRowCount(Math.min(6, availableLibraries.size()));
+        librarySelector.setPromptText("Select your library");
+        librarySelector.setValue(configuration.getCurrentLibraryDisplayName());
+        librarySelector.getEditor().setText(configuration.getCurrentLibraryDisplayName());
+        librarySelector.getStyleClass().add("auth-combo-box");
+        librarySelector.setStyle("-fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB; " +
+                "-fx-border-width: 1.5; -fx-border-radius: 12px; -fx-background-radius: 12px;");
+        librarySelector.getEditor().setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
+                "-fx-font-size: 15px; -fx-text-fill: #111827; -fx-prompt-text-fill: #9CA3AF; " +
+                "-fx-padding: 11 6 11 14;");
+        librarySelector.getEditor().textProperty().addListener((obs, oldValue, newValue) -> filterLibraries(newValue));
+        librarySelector.valueProperty().addListener((obs, oldValue, newValue) -> {
+            if (newValue != null) {
+                librarySelector.getEditor().setText(newValue);
+            }
+        });
+
+        Label helper = new Label("Start typing to filter the available libraries.");
+        helper.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+        helper.setWrapText(true);
+
+        libraryBox.getChildren().addAll(libraryLabel, librarySelector, helper);
+        return libraryBox;
     }
 
     private String getInputStyle() {
@@ -279,14 +335,22 @@ public class LoginView extends StackPane {
         passwordField.setManaged(!isHidden);
         visiblePasswordField.setVisible(isHidden);
         visiblePasswordField.setManaged(isHidden);
-        togglePasswordBtn.setText(isHidden ? "🙈" : "👁");
+        togglePasswordBtn.setGraphic(AppTheme.createIcon(
+                isHidden ? AppTheme.ICON_VISIBILITY_OFF : AppTheme.ICON_VISIBILITY, 16));
     }
 
     private void handleLogin() {
+        String selectedLibrary = resolveSelectedLibrary();
         String username = usernameField.getText().trim();
         String password = passwordProperty.getValue();
 
         // Validation
+        if (selectedLibrary == null) {
+            showError("Select a library from the list before signing in");
+            shakeForm();
+            return;
+        }
+
         if (username.isEmpty()) {
             showError("Please enter your username");
             shakeForm();
@@ -342,6 +406,38 @@ public class LoginView extends StackPane {
         errorLabel.setText(message);
         errorLabel.setVisible(true);
         errorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #DC2626; -fx-padding: 8 0 0 0;");
+    }
+
+    private void filterLibraries(String query) {
+        if (librarySelector == null) {
+            return;
+        }
+
+        String normalized = query == null ? "" : query.trim().toLowerCase();
+        List<String> filtered = availableLibraries.stream()
+                .filter(value -> normalized.isEmpty() || value.toLowerCase().contains(normalized))
+                .toList();
+
+        librarySelector.setItems(FXCollections.observableArrayList(
+                filtered.isEmpty() ? availableLibraries : filtered));
+    }
+
+    private String resolveSelectedLibrary() {
+        if (librarySelector == null) {
+            return null;
+        }
+
+        String typedValue = librarySelector.getEditor().getText() != null
+                ? librarySelector.getEditor().getText().trim()
+                : "";
+        if (typedValue.isEmpty()) {
+            return null;
+        }
+
+        return availableLibraries.stream()
+                .filter(value -> value.equalsIgnoreCase(typedValue))
+                .findFirst()
+                .orElse(null);
     }
 
     private void shakeForm() {

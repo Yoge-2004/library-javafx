@@ -11,6 +11,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -66,13 +67,10 @@ public class LibraryApp extends Application implements ToastDisplay {
         stage.setScene(scene);
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
+        initializeLibrarySelection(cfg);
+        AppTheme.darkMode = cfg.isDarkMode();
         if (cfg.isDarkMode()) applyDarkMode(true);
-
-        if (!cfg.isInitialSetupDone()) {
-            showSetupWizard();
-        } else {
-            showLoginScreen();
-        }
+        showLoginScreen();
 
         stage.show();
         stage.centerOnScreen();
@@ -83,7 +81,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private void showSetupWizard() {
         Dialog<Boolean> dlg = new Dialog<>();
-        dlg.setTitle("Library OS — First-time Setup");
+        dlg.setTitle("Library OS - Administrator Setup");
         dlg.initOwner(primaryStage);
         dlg.initModality(Modality.APPLICATION_MODAL);
 
@@ -128,7 +126,7 @@ public class LibraryApp extends Application implements ToastDisplay {
         root.getChildren().addAll(hero, form);
         dp.setContent(root);
 
-        ButtonType doneBt = new ButtonType("Continue \u2192", ButtonBar.ButtonData.OK_DONE);
+        ButtonType doneBt = new ButtonType("Save & Continue", ButtonBar.ButtonData.OK_DONE);
         dp.getButtonTypes().add(doneBt);
         Button ok = (Button) dp.lookupButton(doneBt);
         ok.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
@@ -177,6 +175,23 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     // --- Login ---
+
+    private void initializeLibrarySelection(AppConfiguration cfg) {
+        boolean shouldPersist = false;
+        cfg.normalize();
+        cfg.rememberCurrentLibrary();
+        if (!cfg.isInitialSetupDone()) {
+            cfg.markSetupDone();
+            shouldPersist = true;
+        }
+        if (shouldPersist) {
+            try {
+                AppConfigurationService.updateConfiguration(cfg);
+            } catch (IOException ex) {
+                LOG.warning("Could not persist default library metadata: " + ex.getMessage());
+            }
+        }
+    }
 
     private void showLoginScreen() {
         stopAutoRefresh();
@@ -252,18 +267,33 @@ public class LibraryApp extends Application implements ToastDisplay {
         logoBox.getChildren().addAll(lib, os);
 
         Label navHdr = new Label("NAVIGATION"); navHdr.getStyleClass().add("sidebar-section-label");
-        Button dash = navBtn("\uD83D\uDCCA  Dashboard",   AppTheme.ICON_DASHBOARD, this::navigateToDashboard);
-        Button cat  = navBtn("\uD83D\uDCDA  Catalog",     AppTheme.ICON_LIBRARY,   this::navigateToCatalog);
-        Button circ = navBtn("\uD83D\uDD04  Circulation", AppTheme.ICON_SYNC,      this::navigateToCirculation);
+        Button dash = navBtn("Dashboard", AppTheme.ICON_DASHBOARD, true, this::navigateToDashboard);
+        Button cat  = navBtn("Catalog", AppTheme.ICON_LIBRARY, true, this::navigateToCatalog);
+        Button circ = navBtn("Circulation", AppTheme.ICON_SYNC, true, this::navigateToCirculation);
         VBox nav = new VBox(4, navHdr, dash, cat, circ);
 
         VBox mgmt = new VBox(4);
         if (currentUserRole.isStaff()) {
             Label mgmtHdr = new Label("MANAGEMENT"); mgmtHdr.getStyleClass().add("sidebar-section-label");
-            Button users = navBtn("\uD83D\uDC65  Users",    AppTheme.ICON_USER,     this::showUserManagement);
-            Button sett  = navBtn("\u2699  Settings", AppTheme.ICON_SETTINGS, this::showSettings);
+            Button users = navBtn("Users", AppTheme.ICON_USER, false, this::showUserManagement);
+            Button sett  = navBtn("Settings", AppTheme.ICON_SETTINGS, false, this::showSettings);
             mgmt.getChildren().addAll(mgmtHdr, users, sett);
         }
+
+        // Account quick-access (all users)
+        Label accountHdr = new Label("ACCOUNT"); accountHdr.getStyleClass().add("sidebar-section-label");
+        Button profileBtn = navBtn("My Profile", AppTheme.ICON_USER, false, () -> {
+            if (UserAccountDialogs.showProfileEditor(primaryStage, currentUser)) {
+                showSuccess("Profile updated.");
+                User updated = UserService.getUserById(currentUser);
+                if (updated != null && userNameLabel != null) userNameLabel.setText(updated.getFullName());
+            }
+        });
+        Button passBtn = navBtn("Change Password", AppTheme.ICON_LOCK, false, () -> {
+            if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
+                showSuccess("Password changed.");
+        });
+        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn);
 
         Region spacer = new Region(); VBox.setVgrow(spacer, Priority.ALWAYS);
 
@@ -275,17 +305,26 @@ public class LibraryApp extends Application implements ToastDisplay {
         VBox profile = new VBox(3, userNameLabel, userRoleLabel);
         profile.getStyleClass().add("sidebar-profile");
 
-        sb.getChildren().addAll(logoBox, nav, mgmt, spacer, profile);
+        sb.getChildren().addAll(logoBox, nav, mgmt, accountSection, spacer, profile);
         return sb;
     }
 
-    private Button navBtn(String text, String icon, Runnable action) {
+    private Button navBtn(String text, String iconPath, boolean activatesNav, Runnable action) {
         Button b = new Button(text);
+        if (iconPath != null && !iconPath.isBlank()) {
+            b.setGraphic(AppTheme.createIcon(iconPath, 18));
+        }
         b.getStyleClass().add("sidebar-btn");
         b.setMaxWidth(Double.MAX_VALUE);
-        b.setOnAction(e -> { setActiveNav(b); action.run(); });
+        b.setOnAction(e -> {
+            if (activatesNav) {
+                setActiveNav(b);
+            }
+            action.run();
+        });
         return b;
     }
+
     private void setActiveNav(Button btn) {
         if (activeNavBtn != null) activeNavBtn.getStyleClass().remove("active");
         activeNavBtn = btn;
@@ -312,14 +351,17 @@ public class LibraryApp extends Application implements ToastDisplay {
         });
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
-        Button themeBtn = new Button(cfg.isDarkMode() ? "\uD83C\uDF19" : "\u2600");
+        Button themeBtn = AppTheme.createIconButton(
+                cfg.isDarkMode() ? AppTheme.ICON_MOON : AppTheme.ICON_SUN,
+                cfg.isDarkMode() ? "Dark theme enabled" : "Light theme enabled",
+                AppTheme.ButtonStyle.GHOST);
         themeBtn.getStyleClass().add("theme-toggle-btn");
-        // Inline fallback style - CSS theme-toggle-btn handles dark mode visibility
-        themeBtn.setStyle("-fx-font-size:16px; -fx-cursor:hand;");
         themeBtn.setOnAction(e -> {
             cfg.toggleDarkMode();
             applyDarkMode(cfg.isDarkMode());
-            themeBtn.setText(cfg.isDarkMode() ? "\uD83C\uDF19" : "\u2600");
+            themeBtn.setGraphic(AppTheme.createIcon(
+                    cfg.isDarkMode() ? AppTheme.ICON_MOON : AppTheme.ICON_SUN, 18));
+            themeBtn.setTooltip(new Tooltip(cfg.isDarkMode() ? "Dark theme enabled" : "Light theme enabled"));
             try { AppConfigurationService.updateConfiguration(cfg); } catch (IOException ignored) {}
         });
 
@@ -328,6 +370,7 @@ public class LibraryApp extends Application implements ToastDisplay {
             Alert a = new Alert(Alert.AlertType.CONFIRMATION,
                     "Sign out of Library OS?", ButtonType.YES, ButtonType.NO);
             a.setTitle("Sign Out"); a.initOwner(primaryStage);
+            AppTheme.applyTheme(a.getDialogPane());
             a.showAndWait().filter(bt -> bt == ButtonType.YES)
                     .ifPresent(bt -> showLoginScreen());
         });
@@ -540,10 +583,42 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- Dark mode ---
 
     private void applyDarkMode(boolean dark) {
+        AppTheme.darkMode = dark;  // propagate to all future dialogs
         Scene s = primaryStage != null ? primaryStage.getScene() : null;
         if (s == null) return;
         if (dark) { if (!s.getRoot().getStyleClass().contains("dark-mode")) s.getRoot().getStyleClass().add("dark-mode"); }
         else        s.getRoot().getStyleClass().remove("dark-mode");
+        rebuildCurrentViewForTheme();
+    }
+
+    private void rebuildCurrentViewForTheme() {
+        if (contentArea == null || contentArea.getChildren().isEmpty()) {
+            return;
+        }
+
+        Node currentView = contentArea.getChildren().getFirst();
+        analyticsDashboard = null;
+        catalogView = null;
+        circulationView = null;
+
+        if (currentView instanceof AnalyticsDashboard) {
+            navigateToDashboard();
+        } else if (currentView instanceof CatalogView) {
+            navigateToCatalog();
+        } else if (currentView instanceof CirculationView) {
+            navigateToCirculation();
+        }
+    }
+
+    /** Apply dark mode to a DialogPane so dialogs respect the current theme. */
+    public static void applyDialogTheme(DialogPane pane) {
+        AppTheme.applyTheme(pane);
+        AppConfiguration cfg = AppConfigurationService.getConfiguration();
+        if (cfg.isDarkMode()) {
+            if (!pane.getStyleClass().contains("dark-mode")) {
+                pane.getStyleClass().add("dark-mode");
+            }
+        }
     }
 
     // --- Lifecycle ---

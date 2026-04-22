@@ -1,6 +1,5 @@
 package com.example.application.ui;
 
-import com.example.entities.BooksDB;
 import com.example.services.BookService;
 import com.example.services.ReportExportService;
 import com.example.services.UserService;
@@ -38,39 +37,44 @@ public class DataManagementDialog {
         // Header
         Label title = new Label("Data Management");
         title.setStyle("-fx-font-family: 'Plus Jakarta Sans'; -fx-font-size: 24px; " +
-                "-fx-font-weight: 700; -fx-text-fill: #0F172A;");
+                "-fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
 
         // Statistics cards
         GridPane statsGrid = new GridPane();
         statsGrid.setHgap(16);
         statsGrid.setVgap(16);
 
-        statsGrid.add(createStatCard("📚", "Books", String.valueOf(snapshot.totalBooks())), 0, 0);
-        statsGrid.add(createStatCard("📖", "Total Copies", String.valueOf(snapshot.totalCopies())), 1, 0);
-        statsGrid.add(createStatCard("✓", "Available", String.valueOf(snapshot.availableCopies())), 2, 0);
-        statsGrid.add(createStatCard("🔄", "Issued", String.valueOf(snapshot.issuedCopies())), 0, 1);
-        statsGrid.add(createStatCard("👥", "Users", String.valueOf(snapshot.totalUsers())), 1, 1);
-        statsGrid.add(createStatCard("⚠", "Overdue", String.valueOf(snapshot.overdueBooks())), 2, 1);
+        statsGrid.add(createStatCard(AppTheme.ICON_BOOK, "#0D9488",
+                "Books", String.valueOf(snapshot.totalBooks())), 0, 0);
+        statsGrid.add(createStatCard(AppTheme.ICON_LIBRARY, "#3B82F6",
+                "Total Copies", String.valueOf(snapshot.totalCopies())), 1, 0);
+        statsGrid.add(createStatCard(AppTheme.ICON_CHECK, "#16A34A",
+                "Available", String.valueOf(snapshot.availableCopies())), 2, 0);
+        statsGrid.add(createStatCard(AppTheme.ICON_SYNC, "#0EA5E9",
+                "Issued", String.valueOf(snapshot.issuedCopies())), 0, 1);
+        statsGrid.add(createStatCard(AppTheme.ICON_USER, "#8B5CF6",
+                "Users", String.valueOf(snapshot.totalUsers())), 1, 1);
+        statsGrid.add(createStatCard(AppTheme.ICON_WARNING, "#D97706",
+                "Overdue", String.valueOf(snapshot.overdueBooks())), 2, 1);
 
         // Actions section
         Label actionsLabel = new Label("Actions");
-        actionsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: #374151;");
+        actionsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: " + textSecondary() + ";");
 
         VBox actionsBox = new VBox(12);
-        actionsBox.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
-                "-fx-border-radius: 12px; -fx-border-color: #E2E8F0; -fx-border-width: 1;");
+        actionsBox.setStyle(cardStyle());
         actionsBox.setPadding(new Insets(20));
 
         // Export reports button
-        Button exportBtn = createActionButton("📊", "Export Reports",
+        Button exportBtn = createActionButton(AppTheme.ICON_DASHBOARD, "#0D9488", "Export Reports",
                 "Generate overdue, issued books & requests as CSV", () -> exportReports(snapshot));
 
         // Backup button
-        Button backupBtn = createActionButton("💾", "Create Backup",
+        Button backupBtn = createActionButton(AppTheme.ICON_SAVE, "#3B82F6", "Create Backup",
                 "Snapshot all data files to a timestamped backup", () -> createBackup(owner));
 
         // Restore button
-        Button restoreBtn = createActionButton("🔄", "Restore from Backup",
+        Button restoreBtn = createActionButton(AppTheme.ICON_SYNC, "#F59E0B", "Restore from Backup",
                 "Load a previously saved backup file", () -> restoreBackup(owner));
 
         actionsBox.getChildren().addAll(exportBtn, new Separator(), backupBtn, new Separator(), restoreBtn);
@@ -78,16 +82,17 @@ public class DataManagementDialog {
         // Email configuration status
         HBox emailStatus = new HBox(12);
         emailStatus.setAlignment(Pos.CENTER_LEFT);
-        emailStatus.setStyle("-fx-background-color: " + (snapshot.emailConfigured() ? "#F0FDF4" : "#FEF3C7") + "; " +
+        emailStatus.setStyle("-fx-background-color: " + (snapshot.emailConfigured() ? surfaceTint("#16A34A") : surfaceTint("#D97706")) + "; " +
                 "-fx-background-radius: 8px; -fx-padding: 12 16;");
 
-        Label emailIcon = new Label(snapshot.emailConfigured() ? "✓" : "⚠");
-        emailIcon.setStyle("-fx-font-size: 18px; -fx-text-fill: " + (snapshot.emailConfigured() ? "#16A34A" : "#D97706") + ";");
+        StackPane emailIcon = createIconBubble(
+                snapshot.emailConfigured() ? AppTheme.ICON_CHECK : AppTheme.ICON_WARNING,
+                snapshot.emailConfigured() ? "#16A34A" : "#D97706");
 
         Label emailText = new Label(snapshot.emailConfigured()
                 ? "Email notifications are configured"
                 : "Email notifications are not configured");
-        emailText.setStyle("-fx-font-size: 13px; -fx-text-fill: " + (snapshot.emailConfigured() ? "#166534" : "#92400E") + ";");
+        emailText.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textSecondary() + ";");
 
         emailStatus.getChildren().addAll(emailIcon, emailText);
 
@@ -99,32 +104,32 @@ public class DataManagementDialog {
 
         dialogPane.setContent(scrollPane);
         dialogPane.getButtonTypes().add(ButtonType.CLOSE);
+        styleSecondaryButton((Button) dialogPane.lookupButton(ButtonType.CLOSE), "Close");
 
         dialog.showAndWait();
     }
 
-    private static VBox createStatCard(String icon, String label, String value) {
+    private static VBox createStatCard(String iconPath, String accentColor, String label, String value) {
         VBox card = new VBox(8);
         card.setAlignment(Pos.CENTER);
         card.setPadding(new Insets(16));
-        card.setStyle("-fx-background-color: white; -fx-background-radius: 12px; " +
-                "-fx-border-radius: 12px; -fx-border-color: #E2E8F0; -fx-border-width: 1;");
+        card.setStyle(cardStyle());
 
-        Label iconLabel = new Label(icon);
-        iconLabel.setStyle("-fx-font-size: 24px;");
+        StackPane iconBubble = createIconBubble(iconPath, accentColor);
 
         Label valueLabel = new Label(value);
         valueLabel.setStyle("-fx-font-family: 'Plus Jakarta Sans'; -fx-font-size: 24px; " +
-                "-fx-font-weight: 700; -fx-text-fill: #0F172A;");
+                "-fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
 
         Label labelLabel = new Label(label);
-        labelLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+        labelLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textMuted() + ";");
 
-        card.getChildren().addAll(iconLabel, valueLabel, labelLabel);
+        card.getChildren().addAll(iconBubble, valueLabel, labelLabel);
         return card;
     }
 
-    private static Button createActionButton(String icon, String title, String description, Runnable action) {
+    private static Button createActionButton(String iconPath, String accentColor,
+                                             String title, String description, Runnable action) {
         Button btn = new Button();
         btn.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
         btn.setMaxWidth(Double.MAX_VALUE);
@@ -133,24 +138,22 @@ public class DataManagementDialog {
         HBox content = new HBox(16);
         content.setAlignment(Pos.CENTER_LEFT);
 
-        Label iconLabel = new Label(icon);
-        iconLabel.setStyle("-fx-font-size: 24px;");
+        StackPane iconBubble = createIconBubble(iconPath, accentColor);
 
         VBox textBox = new VBox(4);
         HBox.setHgrow(textBox, Priority.ALWAYS);
 
         Label titleLabel = new Label(title);
-        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 600; -fx-text-fill: #1E293B;");
+        titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 600; -fx-text-fill: " + textPrimary() + ";");
 
         Label descLabel = new Label(description);
-        descLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748B;");
+        descLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textMuted() + ";");
 
         textBox.getChildren().addAll(titleLabel, descLabel);
 
-        Label arrowLabel = new Label("›");
-        arrowLabel.setStyle("-fx-font-size: 24px; -fx-text-fill: #94A3B8;");
+        StackPane arrowLabel = new StackPane(AppTheme.createIcon(AppTheme.ICON_CHEVRON_RIGHT, 14));
 
-        content.getChildren().addAll(iconLabel, textBox, arrowLabel);
+        content.getChildren().addAll(iconBubble, textBox, arrowLabel);
         btn.setGraphic(content);
 
         btn.setOnAction(e -> action.run());
@@ -165,6 +168,7 @@ public class DataManagementDialog {
             Path requestsPath = ReportExportService.exportBorrowRequestsCsv(BookService.getAllBorrowRequests());
 
             Alert a = new Alert(Alert.AlertType.INFORMATION);
+            AppTheme.applyTheme(a.getDialogPane());
             a.setTitle("Export Complete");
             a.setHeaderText("Reports exported successfully");
             a.setContentText("Saved to: " + snapshot.exportDirectory() +
@@ -201,6 +205,7 @@ public class DataManagementDialog {
             UserService.persistDatabase();
 
             Alert a = new Alert(Alert.AlertType.INFORMATION);
+            AppTheme.applyTheme(a.getDialogPane());
             a.setTitle("Backup Complete");
             a.setHeaderText("Backup created successfully");
             a.setContentText("Location: " + backupDir.toAbsolutePath());
@@ -218,6 +223,7 @@ public class DataManagementDialog {
         if (chosen == null) return;
 
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        AppTheme.applyTheme(confirm.getDialogPane());
         confirm.setTitle("Restore Backup");
         confirm.setHeaderText("Restore from: " + chosen.getParentFile().getName() + "?");
         confirm.setContentText("This will overwrite current data. The app should be restarted after restore.");
@@ -236,6 +242,7 @@ public class DataManagementDialog {
                             });
                 }
                 Alert done = new Alert(Alert.AlertType.INFORMATION);
+                AppTheme.applyTheme(done.getDialogPane());
                 done.setTitle("Restore Complete");
                 done.setHeaderText("Data restored from backup.");
                 done.setContentText("Please restart Library OS for changes to take effect.");
@@ -248,8 +255,49 @@ public class DataManagementDialog {
 
     private static void error(String title, String msg) {
         Alert a = new Alert(Alert.AlertType.ERROR);
+        AppTheme.applyTheme(a.getDialogPane());
         a.setTitle(title); a.setHeaderText(title); a.setContentText(msg);
         a.showAndWait();
+    }
+
+    private static StackPane createIconBubble(String iconPath, String accentColor) {
+        StackPane bubble = new StackPane(AppTheme.createIcon(iconPath, 18));
+        bubble.setMinSize(40, 40);
+        bubble.setPrefSize(40, 40);
+        bubble.setStyle("-fx-background-color:" + surfaceTint(accentColor) + "; -fx-background-radius:12px;");
+        return bubble;
+    }
+
+    private static void styleSecondaryButton(Button button, String text) {
+        if (button == null) {
+            return;
+        }
+        button.setText(text);
+        button.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + ";" +
+                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + ";" +
+                "-fx-font-weight:600; -fx-font-size:13px; -fx-background-radius:10px; -fx-padding:9 18;");
+    }
+
+    private static String cardStyle() {
+        return "-fx-background-color:" + (AppTheme.darkMode ? "#1E293B" : "white") + "; " +
+                "-fx-background-radius: 12px; -fx-border-radius: 12px; " +
+                "-fx-border-color: " + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; -fx-border-width: 1;";
+    }
+
+    private static String surfaceTint(String color) {
+        return color + "22";
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
+    }
+
+    private static String textSecondary() {
+        return AppTheme.darkMode ? "#E2E8F0" : "#374151";
+    }
+
+    private static String textMuted() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
     }
 
     public record Snapshot(int totalBooks, int totalCopies, int availableCopies,

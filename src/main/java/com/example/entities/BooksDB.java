@@ -467,6 +467,11 @@ public final class BooksDB implements Serializable {
      * @throws BooksException if validation fails or operation cannot be completed
      */
     public void issueBook(String isbn, User user, int quantity) throws BooksException {
+        issueBook(isbn, user, quantity, LocalDate.now(), defaultLoanDays);
+    }
+
+    public void issueBook(String isbn, User user, int quantity, LocalDate issueDate, int loanDays)
+            throws BooksException {
         if (isbn == null || isbn.trim().isEmpty()) {
             throw new BooksException("ISBN cannot be empty");
         }
@@ -478,6 +483,9 @@ public final class BooksDB implements Serializable {
         if (quantity <= 0) {
             throw new BooksException("Quantity must be positive");
         }
+
+        LocalDate effectiveIssueDate = issueDate != null ? issueDate : LocalDate.now();
+        int effectiveLoanDays = Math.max(1, loanDays);
 
         String trimmedIsbn = isbn.trim();
         String userId = user.getUserId();
@@ -502,7 +510,7 @@ public final class BooksDB implements Serializable {
 
             // FIXED: Create record first before modifying inventory to ensure tracking exists
             IssueRecord record = new IssueRecord(trimmedIsbn, book.getTitle(), userId,
-                    LocalDate.now(), quantity, defaultLoanDays, finePerDay);
+                    effectiveIssueDate, quantity, effectiveLoanDays, finePerDay);
 
             // Now modify state atomically
             book.setQuantity(book.getQuantity() - quantity);

@@ -203,6 +203,12 @@ public final class BookService {
      */
     public static void issueBookToUser(String isbn, String userId, int quantity)
             throws BooksException, UserException {
+        issueBookToUser(isbn, userId, quantity, LocalDate.now(), getLoanPeriodDays());
+    }
+
+    public static void issueBookToUser(String isbn, String userId, int quantity,
+                                       LocalDate issueDate, int loanDays)
+            throws BooksException, UserException {
 
         validateIssueParameters(isbn, userId, quantity);
 
@@ -228,7 +234,8 @@ public final class BookService {
         }
 
         try {
-            booksDB.issueBook(isbn.trim(), user, quantity);
+            booksDB.issueBook(isbn.trim(), user, quantity,
+                    issueDate != null ? issueDate : LocalDate.now(), Math.max(1, loanDays));
             LOGGER.log(Level.INFO, "Issued {0} copies of book {1} to user {2}",
                     new Object[]{quantity, isbn, userId});
         } catch (Exception e) {

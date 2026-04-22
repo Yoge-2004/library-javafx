@@ -3,15 +3,8 @@
    ═══════════════════════════════════════════════════════════════ */
 
 /* ─── GLOBAL BASE ─────────────────────────────────────────────── */
-.root {
-    -fx-font-family: 'Plus Jakarta Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-    -fx-font-size: 14px;
-    -fx-background-color: #F1F5F9;
-}
-.dark-mode .root,
-.dark-mode {
-    -fx-background-color: #0F172A;
-}
+/* .root is intentionally NOT set here to avoid affecting Dialog scenes.
+   Background and font are set on the app root StackPane via LibraryApp inline styles. */
 
 /* ─── SCROLLPANE ──────────────────────────────────────────────── */
 .scroll-pane,
@@ -159,18 +152,18 @@
 /* ─── CARDS ───────────────────────────────────────────────────── */
 .metric-card {
     -fx-background-color: white;
-    -fx-background-radius: 14px; -fx-border-radius: 14px;
-    -fx-border-color: #E2E8F0; -fx-border-width: 1;
-    -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.06), 8, 0, 0, 2);
+    -fx-background-radius: 14px;
+    -fx-border-radius: 14px;
+    -fx-border-color: #E2E8F0;
+    -fx-border-width: 1;
+    -fx-padding: 16 14;
     -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.06), 8, 0, 0, 2);
 }
 .metric-card:hover {
     -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0, 0, 6);
 }
-.dark-mode .metric-card {
-    -fx-background-color: #1E293B; -fx-border-color: #334155;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 8, 0, 0, 2);
-}
+.dark-mode .metric-card { -fx-background-color: #1E293B; -fx-border-color: #334155; }
 .dark-mode .metric-card:hover {
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.5), 18, 0, 0, 6);
 }
@@ -268,9 +261,24 @@
     -fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB;
     -fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px;
 }
+.combo-box > .arrow-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0 12 0 8;
+    -fx-alignment: CENTER;
+    -fx-background-radius: 0 10 10 0;
+}
+.combo-box > .arrow-button > .arrow {
+    -fx-background-color: #64748B;
+}
+.combo-box:editable > .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 10 6 10 14;
+}
 .dark-mode .combo-box {
     -fx-background-color: #1E293B; -fx-border-color: #334155;
 }
+.dark-mode .combo-box > .arrow-button > .arrow { -fx-background-color: #94A3B8; }
 .combo-box .list-cell { -fx-font-size: 14px; -fx-text-fill: #1E293B; -fx-padding: 8 12; }
 .dark-mode .combo-box .list-cell { -fx-text-fill: #E2E8F0; }
 .combo-box-popup .list-view {
@@ -304,9 +312,17 @@
 .check-box:selected .mark { -fx-background-color: white; }
 .dark-mode .check-box .box { -fx-background-color: #1E293B; -fx-border-color: #475569; }
 
+.radio-button {
+    -fx-text-fill: #374151;
+}
+.radio-button .text {
+    -fx-fill: #374151;
+}
 .radio-button .radio { -fx-border-color: #D1D5DB; -fx-border-width: 1.5; }
 .radio-button:selected .radio { -fx-border-color: #0D9488; }
 .radio-button:selected .dot { -fx-background-color: #0D9488; }
+.dark-mode .radio-button { -fx-text-fill: #E2E8F0; }
+.dark-mode .radio-button .text { -fx-fill: #E2E8F0; }
 .dark-mode .radio-button .radio { -fx-border-color: #475569; }
 
 .input-with-icon {
@@ -314,6 +330,42 @@
     -fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px;
 }
 .dark-mode .input-with-icon { -fx-background-color: #1E293B; -fx-border-color: #334155; }
+.password-toggle {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent transparent transparent #D1D5DB;
+    -fx-border-width: 0 0 0 1.5;
+    -fx-background-radius: 0 10 10 0;
+    -fx-border-radius: 0 10 10 0;
+    -fx-padding: 0 12;
+    -fx-min-width: 46px;
+    -fx-pref-width: 46px;
+    -fx-max-width: 46px;
+}
+.password-toggle:hover {
+    -fx-background-color: rgba(148, 163, 184, 0.12);
+}
+.password-toggle .icon-svg {
+    -fx-fill: #64748B;
+}
+.dark-mode .password-toggle {
+    -fx-border-color: transparent transparent transparent #334155;
+}
+.dark-mode .password-toggle .icon-svg {
+    -fx-fill: #94A3B8;
+}
+.auth-password-toggle {
+    -fx-min-height: 46px;
+    -fx-pref-height: 46px;
+    -fx-max-height: 46px;
+}
+.auth-combo-box {
+    -fx-min-height: 48px;
+    -fx-pref-height: 48px;
+}
+.auth-combo-box > .arrow-button {
+    -fx-min-width: 42px;
+    -fx-pref-width: 42px;
+}
 
 /* ─── TABLE VIEW ──────────────────────────────────────────────── */
 .table-view {
@@ -636,4 +688,26 @@
 .metric-card .label {
     -fx-wrap-text: true;
     -fx-text-overrun: clip;
+}
+
+/* ─── PASSWORD CONTAINER INNER FIELDS ───────────────────────── */
+.input-with-icon .text-field,
+.input-with-icon .password-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-radius: 10px;
+    -fx-padding: 10 14;
+}
+.input-with-icon .text-field:focused,
+.input-with-icon .password-field:focused {
+    -fx-border-color: transparent;
+    -fx-background-color: transparent;
+}
+
+/* Fix for split password field - no internal borders */
+.password-split-container > .text-field,
+.password-split-container > .password-field {
+    -fx-border-color: transparent;
+    -fx-background-color: transparent;
 }

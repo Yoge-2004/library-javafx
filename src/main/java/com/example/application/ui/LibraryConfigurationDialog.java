@@ -36,7 +36,7 @@ public class LibraryConfigurationDialog {
         // ─── Tab 1: Borrowing Rules ──────────────────────────────
         VBox rulesPanel = panelContainer();
 
-        Label rulesTitle = panelTitle("📚  Borrowing Rules");
+        Label rulesTitle = panelTitle("Borrowing Rules");
         Label rulesDesc  = panelDesc("Configure how many books users can borrow and for how long.");
 
         GridPane rulesGrid = grid();
@@ -56,8 +56,8 @@ public class LibraryConfigurationDialog {
 
         // ─── Fine / Currency sub-section ────────────────────────
         Separator sep = new Separator();
-        Label fineTitle = new Label("💰  Fine & Currency Settings");
-        fineTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
+        Label fineTitle = new Label("Fine and Currency Settings");
+        fineTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
 
         GridPane fineGrid = grid();
 
@@ -88,7 +88,7 @@ public class LibraryConfigurationDialog {
         // ─── Tab 2: Email ────────────────────────────────────────
         VBox emailPanel = panelContainer();
         emailPanel.getChildren().addAll(
-                panelTitle("📧  Email / SMTP"),
+                panelTitle("Email / SMTP"),
                 panelDesc("Configure outgoing email for overdue reminders."));
 
         GridPane emailGrid = grid();
@@ -126,7 +126,7 @@ public class LibraryConfigurationDialog {
         // ─── Tab 3: Storage & Export ─────────────────────────────
         VBox storagePanel = panelContainer();
         storagePanel.getChildren().addAll(
-                panelTitle("💾  Storage & Export"),
+                panelTitle("Storage and Export"),
                 panelDesc("Set where Library OS stores data and exports reports."));
 
         GridPane storageGrid = grid();
@@ -141,8 +141,8 @@ public class LibraryConfigurationDialog {
 
         // Library / Branch identity
         Separator sep2 = new Separator();
-        Label idTitle = new Label("🏛️  Library Identity");
-        idTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:#1E293B;");
+        Label idTitle = new Label("Library Identity");
+        idTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
 
         TextField libNameField   = inputTF("libraryName",  config.getLibraryName(),  "My Library");
         TextField branchNameField = inputTF("branchName", config.getBranchName(), "Main Branch");
@@ -155,9 +155,9 @@ public class LibraryConfigurationDialog {
 
         // ─── Assemble tabs ───────────────────────────────────────
         tabs.getTabs().addAll(
-                new Tab("📚  Borrowing", rulesPanel),
-                new Tab("📧  Email",     emailPanel),
-                new Tab("💾  Storage",   storagePanel)
+                new Tab("Borrowing", rulesPanel),
+                new Tab("Email", emailPanel),
+                new Tab("Storage", storagePanel)
         );
         pane.setContent(tabs);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
@@ -201,12 +201,12 @@ public class LibraryConfigurationDialog {
     }
     private static Label panelTitle(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:#0F172A;");
+        l.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
         return l;
     }
     private static Label panelDesc(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px; -fx-text-fill:#64748B;");
+        l.setStyle("-fx-font-size:13px; -fx-text-fill:" + textMuted() + ";");
         l.setWrapText(true);
         return l;
     }
@@ -221,7 +221,7 @@ public class LibraryConfigurationDialog {
     }
     private static Label gridLabel(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:#374151;");
+        l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:" + textPrimary() + ";");
         return l;
     }
     private static TextField inputTF(String id, String val, String prompt) {
@@ -231,6 +231,11 @@ public class LibraryConfigurationDialog {
         return f;
     }
     private static String inputStyle() {
+        if (AppTheme.darkMode) {
+            return "-fx-background-color:#1E293B; -fx-border-color:#334155; " +
+                    "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
+                    "-fx-padding:9 12; -fx-font-size:14px; -fx-text-fill:#E2E8F0;";
+        }
         return "-fx-background-color:#F9FAFB; -fx-border-color:#D1D5DB; " +
                 "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
                 "-fx-padding:9 12; -fx-font-size:14px;";
@@ -246,6 +251,14 @@ public class LibraryConfigurationDialog {
             if (dir != null) target.setText(dir.getAbsolutePath());
         });
         return b;
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
+    }
+
+    private static String textMuted() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
     }
 
     // ─── Record ──────────────────────────────────────────────────

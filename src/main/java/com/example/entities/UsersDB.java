@@ -172,6 +172,9 @@ public final class UsersDB implements Serializable {
 
         lock.writeLock().lock();
         try {
+            if (users.containsKey(userId.trim())) {
+                throw new UserException("User already exists: " + userId.trim());
+            }
             users.put(userId.trim(), user);
 
             // FIXED: Only auto-promote on very first user
