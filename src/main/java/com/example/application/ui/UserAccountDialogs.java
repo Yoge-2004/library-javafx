@@ -199,7 +199,7 @@ public class UserAccountDialogs {
         });
 
         TableColumn<User, Void> aCol = new TableColumn<>("Actions");
-        aCol.setMinWidth(156); aCol.setPrefWidth(156);
+        aCol.setMinWidth(108); aCol.setPrefWidth(108); aCol.setMaxWidth(108);
         aCol.setCellFactory(c -> new TableCell<>() {
             final Button apprBtn = actionIconBtn(AppTheme.ICON_CHECK, "Approve account", "#16A34A");
             final Button editBtn = actionIconBtn(AppTheme.ICON_EDIT, "Edit user", "#3B82F6");
@@ -236,7 +236,7 @@ public class UserAccountDialogs {
                 if (empty || getTableRow() == null || getTableRow().getItem() == null)
                 { setGraphic(null); return; }
                 User u = getTableRow().getItem();
-                HBox box = new HBox(4);
+                HBox box = new HBox(2);
                 if (!u.isActive()) box.getChildren().add(apprBtn);
                 box.getChildren().add(editBtn);
                 if (!u.getUserId().equals(currentUserId)
@@ -367,7 +367,8 @@ public class UserAccountDialogs {
         b.setGraphic(icon);
         b.setTooltip(new Tooltip(tooltip));
         b.setStyle("-fx-background-color:" + color + "; -fx-text-fill:white; -fx-cursor:hand;" +
-                "-fx-background-radius:8px; -fx-padding:6; -fx-min-width:30px; -fx-min-height:30px;");
+                "-fx-background-radius:8px; -fx-padding:5; -fx-min-width:26px; -fx-pref-width:26px; " +
+                "-fx-max-width:26px; -fx-min-height:26px; -fx-pref-height:26px; -fx-max-height:26px;");
         return b;
     }
 

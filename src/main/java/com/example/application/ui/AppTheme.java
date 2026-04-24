@@ -1,18 +1,28 @@
 package com.example.application.ui;
 
+import com.example.entities.AppConfiguration;
+import com.example.services.AppConfigurationService;
 import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.SnapshotParameters;
 import javafx.scene.CacheHint;
 import javafx.scene.Node;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
+import javafx.scene.image.Image;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.shape.SVGPath;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -106,6 +116,10 @@ public final class AppTheme {
 
     private static final String THEME_PATH = "/theme.css";
     private static String cachedStylesheet;
+    private static Image cachedLargeIcon;
+    private static Image cachedMediumIcon;
+    private static Image cachedSmallIcon;
+    private static Image cachedTinyIcon;
     /** Set by LibraryApp when dark mode toggles; used to apply dark-mode to dialogs. */
     public static boolean darkMode = false;
 
@@ -139,6 +153,14 @@ public final class AppTheme {
             pane.getStyleClass().add("dark-mode");
         else if (!darkMode)
             pane.getStyleClass().remove("dark-mode");
+        pane.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null && newScene.getWindow() instanceof Stage stage) {
+                applyWindowIcon(stage);
+            }
+        });
+        if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage stage) {
+            applyWindowIcon(stage);
+        }
     }
 
     private static String getStylesheetUrl() {
@@ -164,6 +186,7 @@ public final class AppTheme {
         stage.setTitle(title);
         stage.setMinWidth(minWidth);
         stage.setMinHeight(minHeight);
+        applyWindowIcon(stage);
         return stage;
     }
 
@@ -187,6 +210,19 @@ public final class AppTheme {
         SVGPath svg = createIcon(pathContent);
         svg.setFill(color);
         return svg;
+    }
+
+    public static void applyWindowIcon(Stage stage) {
+        if (stage == null) {
+            return;
+        }
+        if (cachedLargeIcon == null) {
+            cachedLargeIcon = createAppIcon(256);
+            cachedMediumIcon = createAppIcon(128);
+            cachedSmallIcon = createAppIcon(64);
+            cachedTinyIcon = createAppIcon(32);
+        }
+        stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
     }
 
     // === BUTTON CREATION ===
@@ -463,7 +499,12 @@ public final class AppTheme {
     }
 
     public static String formatCurrency(double amount) {
-        return String.format("$%,.2f", amount);
+        try {
+            AppConfiguration configuration = AppConfigurationService.getConfiguration();
+            return configuration.formatAmount(amount);
+        } catch (Exception ignored) {
+            return String.format("$%,.2f", amount);
+        }
     }
 
     public static void showTemporaryMessage(Label label, String message, String styleClass, double durationSeconds) {
@@ -477,5 +518,46 @@ public final class AppTheme {
             label.setText("");
         });
         delay.play();
+    }
+
+    private static Image createAppIcon(int size) {
+        Canvas canvas = new Canvas(size, size);
+        GraphicsContext graphics = canvas.getGraphicsContext2D();
+
+        double arc = size * 0.28;
+        graphics.setFill(new LinearGradient(
+                0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
+                new Stop(0, Color.web("#0F172A")),
+                new Stop(0.55, Color.web("#134E4A")),
+                new Stop(1, Color.web("#14B8A6"))));
+        graphics.fillRoundRect(0, 0, size, size, arc, arc);
+
+        graphics.setFill(Color.web("#FFFFFF", 0.12));
+        graphics.fillOval(size * 0.10, size * 0.08, size * 0.66, size * 0.66);
+
+        graphics.setFill(Color.WHITE);
+        double bookX = size * 0.26;
+        double bookY = size * 0.18;
+        double bookW = size * 0.48;
+        double bookH = size * 0.58;
+        graphics.fillRoundRect(bookX, bookY, bookW, bookH, size * 0.08, size * 0.08);
+
+        graphics.setFill(Color.web("#CCFBF1"));
+        graphics.fillRoundRect(bookX + bookW * 0.10, bookY + bookH * 0.14,
+                bookW * 0.18, bookH * 0.72, size * 0.04, size * 0.04);
+
+        graphics.setStroke(Color.web("#0F766E", 0.85));
+        graphics.setLineWidth(Math.max(2.0, size * 0.03));
+        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.26, bookX + bookW * 0.78, bookY + bookH * 0.26);
+        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.48, bookX + bookW * 0.78, bookY + bookH * 0.48);
+        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.70, bookX + bookW * 0.66, bookY + bookH * 0.70);
+
+        graphics.setFill(Color.web("#99F6E4"));
+        graphics.fillRoundRect(size * 0.30, size * 0.74, size * 0.40, size * 0.08,
+                size * 0.03, size * 0.03);
+
+        WritableImage image = new WritableImage(size, size);
+        canvas.snapshot(new SnapshotParameters(), image);
+        return image;
     }
 }

@@ -2,6 +2,7 @@ package com.example.entities;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.UUID;
@@ -72,13 +73,18 @@ public final class AppConfiguration implements Serializable {
     public double getFinePerDay()              { return finePerDay; }
     public void   setFinePerDay(double v)      { finePerDay = Math.max(0.0, v); }
 
-    public String getCurrencySymbol()          { return currencySymbol != null ? currencySymbol : "$"; }
-    public void   setCurrencySymbol(String v)  { currencySymbol  = blankOr(v, "$"); }
+    public String getCurrencySymbol() {
+        if (currencySymbol != null && !currencySymbol.isBlank()) {
+            return currencySymbol.trim();
+        }
+        return inferCurrencySymbol(getCurrencyCode());
+    }
+    public void   setCurrencySymbol(String v)  { currencySymbol  = blankToNull(v); }
 
     public String getCurrencyCode()            { return currencyCode != null ? currencyCode : "USD"; }
     public void   setCurrencyCode(String v)    { currencyCode    = blankOr(v, "USD"); }
 
-    public String formatAmount(double amount)  { return getCurrencySymbol() + String.format("%.2f", amount); }
+    public String formatAmount(double amount)  { return getCurrencySymbol() + String.format("%,.2f", amount); }
 
     // ════════════════════════════════════════════════════════════════
     // SMTP
@@ -171,6 +177,14 @@ public final class AppConfiguration implements Serializable {
     }
     private static String blankOr(String v, String fallback) {
         return (v == null || v.isBlank()) ? fallback : v.trim();
+    }
+
+    private static String inferCurrencySymbol(String code) {
+        try {
+            return Currency.getInstance(blankOr(code, "USD")).getSymbol();
+        } catch (Exception ignored) {
+            return "$";
+        }
     }
 
     private void ensureKnownLibraries() {

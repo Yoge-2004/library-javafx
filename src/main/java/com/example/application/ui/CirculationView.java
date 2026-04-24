@@ -13,6 +13,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 
@@ -83,11 +84,24 @@ public class CirculationView extends BorderPane {
     }
 
     private VBox buildHeader() {
+        HBox titleRow = new HBox(12);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        StackPane badge = new StackPane(AppTheme.createIcon(AppTheme.ICON_SYNC, 18));
+        badge.setMinSize(40, 40);
+        badge.setPrefSize(40, 40);
+        badge.setStyle("-fx-background-color:#0D948822; -fx-background-radius:12px;");
+
+        VBox textBlock = new VBox(4);
         Label title = new Label("Circulation");
         title.getStyleClass().add("page-title");
         Label sub = new Label("Manage book issues, returns, renewals and borrow requests");
         sub.getStyleClass().add("page-subtitle");
-        VBox h = new VBox(4, title, sub);
+        textBlock.getChildren().addAll(title, sub);
+
+        titleRow.getChildren().addAll(badge, textBlock);
+
+        VBox h = new VBox(titleRow);
         return h;
     }
 
@@ -96,9 +110,9 @@ public class CirculationView extends BorderPane {
         tp.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tp.setStyle("-fx-background-color:transparent;");
 
-        tp.getTabs().add(new Tab("Active Issues", issuesPanel()));
-        tp.getTabs().add(new Tab("Borrow Requests", requestsPanel()));
-        if (isStaff) tp.getTabs().add(new Tab("Overdue", overduePanel()));
+        tp.getTabs().add(tab("Active Issues", AppTheme.ICON_LIBRARY, issuesPanel()));
+        tp.getTabs().add(tab("Borrow Requests", AppTheme.ICON_NOTIFICATION, requestsPanel()));
+        if (isStaff) tp.getTabs().add(tab("Overdue", AppTheme.ICON_WARNING, overduePanel()));
 
         return tp;
     }
@@ -161,10 +175,10 @@ public class CirculationView extends BorderPane {
 
         // Actions
         TableColumn<IssueRecord, Void> actC = new TableColumn<>("Actions");
-        actC.setPrefWidth(160);
+        actC.setPrefWidth(112);
         actC.setCellFactory(c -> new TableCell<>() {
-            final Button retBtn  = actionBtn("Return", "#0D9488");
-            final Button renBtn  = actionBtn("Renew",  "#3B82F6");
+            final Button retBtn  = actionIconBtn(AppTheme.ICON_RETURN, "Return book", "#0D9488");
+            final Button renBtn  = actionIconBtn(AppTheme.ICON_REFRESH,  "Renew loan", "#3B82F6");
             {
                 retBtn.setOnAction(e -> returnBook(getRow()));
                 renBtn.setOnAction(e -> renewBook(getRow()));
@@ -177,7 +191,7 @@ public class CirculationView extends BorderPane {
                 if (empty || getTableRow() == null || getTableRow().getItem() == null)
                 { setGraphic(null); return; }
                 IssueRecord r = getTableRow().getItem();
-                HBox box = new HBox(6);
+                HBox box = new HBox(4);
                 box.setAlignment(Pos.CENTER);
                 if (isStaff || currentUser.equals(r.getUserId()))
                     box.getChildren().add(retBtn);
@@ -283,10 +297,10 @@ public class CirculationView extends BorderPane {
 
         if (isStaff) {
             TableColumn<BorrowRequest, Void> actC = new TableColumn<>("Actions");
-            actC.setPrefWidth(110);
+            actC.setPrefWidth(82);
             actC.setCellFactory(c -> new TableCell<>() {
-                final Button appr = actionBtn("v", "#16A34A");
-                final Button rej  = actionBtn("✕", "#DC2626");
+                final Button appr = actionIconBtn(AppTheme.ICON_CHECK, "Approve request", "#16A34A");
+                final Button rej  = actionIconBtn(AppTheme.ICON_CLOSE, "Reject request", "#DC2626");
                 {
                     appr.setOnAction(e -> approveRequest(getTableView().getItems().get(getIndex())));
                     rej .setOnAction(e -> rejectRequest (getTableView().getItems().get(getIndex())));
@@ -297,7 +311,7 @@ public class CirculationView extends BorderPane {
                     { setGraphic(null); return; }
                     BorrowRequest req = getTableRow().getItem();
                     if (req.isPending()) {
-                        HBox box = new HBox(6, appr, rej);
+                        HBox box = new HBox(4, appr, rej);
                         box.setAlignment(Pos.CENTER);
                         setGraphic(box);
                     } else {
@@ -323,8 +337,10 @@ public class CirculationView extends BorderPane {
                 "-fx-border-radius:12px; -fx-border-color:#FECACA; -fx-border-width:1;");
         banner.setPadding(new Insets(16));
         banner.setAlignment(Pos.CENTER_LEFT);
-        Label icon = new Label("!");
-        icon.setStyle("-fx-font-size:28px;");
+        StackPane icon = new StackPane(AppTheme.createIcon(AppTheme.ICON_WARNING, 18));
+        icon.setMinSize(40, 40);
+        icon.setPrefSize(40, 40);
+        icon.setStyle("-fx-background-color:#FCA5A522; -fx-background-radius:12px;");
         VBox txt = new VBox(2,
                 styledLabel("Overdue Books Alert", 16, "#991B1B", true),
                 styledLabel("These records have exceeded their due date.", 13, "#B91C1C", false));
@@ -340,7 +356,7 @@ public class CirculationView extends BorderPane {
                 colIR("Borrower",      r -> r.getUserId(), 120),
                 colIR("Due Date",      r -> r.getDueDate().format(DATE_FMT), 110),
                 colIR("Days Overdue",  r -> String.valueOf(r.getDaysOverdue()), 100),
-                colIR("Fine",          r -> "$" + String.format("%.2f", r.calculateFine()), 90)
+                colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110)
         );
 
         ObservableList<IssueRecord> overdueData =
@@ -538,7 +554,7 @@ public class CirculationView extends BorderPane {
         a.setHeaderText("Return: " + r.getBookTitle());
         double fine = r.calculateFine();
         a.setContentText("Borrower: " + r.getUserId() + "\nQty: " + r.getQuantity()
-                + (fine > 0 ? "\nFine outstanding: $" + String.format("%.2f", fine) : ""));
+                + (fine > 0 ? "\nFine outstanding: " + AppTheme.formatCurrency(fine) : ""));
         AppTheme.applyTheme(a.getDialogPane());
         a.showAndWait().filter(bt -> bt == ButtonType.OK).ifPresent(bt -> {
             try {
@@ -639,12 +655,22 @@ public class CirculationView extends BorderPane {
     // Style helpers
     // ═══════════════════════════════════════════════════════════════
 
-    private static Button actionBtn(String text, String color) {
-        Button b = new Button(text);
-        b.setStyle("-fx-background-color:" + color + "; -fx-text-fill:white; " +
-                "-fx-font-size:12px; -fx-background-radius:6px; -fx-padding:4 10; " +
-                "-fx-cursor:hand;");
+    private static Button actionIconBtn(String iconPath, String tooltip, String color) {
+        Button b = new Button();
+        var icon = AppTheme.createIcon(iconPath, 14);
+        icon.setStyle("-fx-fill:white;");
+        b.setGraphic(icon);
+        b.setTooltip(new Tooltip(tooltip));
+        b.setStyle("-fx-background-color:" + color + "; -fx-background-radius:8px; " +
+                "-fx-cursor:hand; -fx-padding:5; -fx-min-width:28px; -fx-pref-width:28px; " +
+                "-fx-max-width:28px; -fx-min-height:28px; -fx-pref-height:28px; -fx-max-height:28px;");
         return b;
+    }
+
+    private static Tab tab(String title, String iconPath, Node content) {
+        Tab tab = new Tab(title, content);
+        tab.setGraphic(AppTheme.createIcon(iconPath, 14));
+        return tab;
     }
     private static Label fieldLabel(String t) {
         Label l = new Label(t);

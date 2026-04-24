@@ -99,11 +99,11 @@ public final class ReminderService {
         message.setFrom(new InternetAddress(config.getFromAddress()));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(user.getEmail()));
         message.setSubject("Library overdue reminder");
-        message.setText(buildBody(user, records));
+        message.setText(buildBody(config, user, records));
         Transport.send(message);
     }
 
-    private static String buildBody(User user, List<IssueRecord> records) {
+    private static String buildBody(AppConfiguration config, User user, List<IssueRecord> records) {
         StringBuilder builder = new StringBuilder();
         builder.append("Hello ").append(user.getFullName()).append(",\n\n");
         builder.append("The following library items are overdue:\n\n");
@@ -114,10 +114,10 @@ public final class ReminderService {
             builder.append("- ").append(record.getBookTitle())
                     .append(" | Due: ").append(record.getDueDate().format(DATE_FORMATTER))
                     .append(" | Days overdue: ").append(record.getDaysOverdue())
-                    .append(" | Fine: $").append(String.format("%.2f", fine))
+                    .append(" | Fine: ").append(config.formatAmount(fine))
                     .append('\n');
         }
-        builder.append("\nTotal outstanding fine: $").append(String.format("%.2f", totalFine)).append('\n');
+        builder.append("\nTotal outstanding fine: ").append(config.formatAmount(totalFine)).append('\n');
         builder.append("Please return the item(s) or contact the library administrator.\n");
         return builder.toString();
     }

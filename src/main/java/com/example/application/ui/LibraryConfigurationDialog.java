@@ -28,7 +28,7 @@ public class LibraryConfigurationDialog {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(580);
         pane.setMinWidth(520);
-        pane.setPrefHeight(520);
+        pane.setPrefHeight(620);
 
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -155,17 +155,23 @@ public class LibraryConfigurationDialog {
 
         // ─── Assemble tabs ───────────────────────────────────────
         tabs.getTabs().addAll(
-                new Tab("Borrowing", rulesPanel),
-                new Tab("Email", emailPanel),
-                new Tab("Storage", storagePanel)
+                tab("Borrowing", AppTheme.ICON_LIBRARY, rulesPanel),
+                tab("Email", AppTheme.ICON_MAIL, emailPanel),
+                tab("Storage", AppTheme.ICON_SAVE, storagePanel)
         );
         pane.setContent(tabs);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
 
         Button okBtn = (Button) pane.lookupButton(ButtonType.OK);
+        Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
         okBtn.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
                 "-fx-font-weight:600; -fx-font-size:14px; " +
                 "-fx-background-radius:10px; -fx-padding:10 24;");
+        if (cancelBtn != null) {
+            cancelBtn.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + "; " +
+                    "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
+                    "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 20;");
+        }
 
         // ─── Result converter ────────────────────────────────────
         dialog.setResultConverter(bt -> {
@@ -251,6 +257,21 @@ public class LibraryConfigurationDialog {
             if (dir != null) target.setText(dir.getAbsolutePath());
         });
         return b;
+    }
+
+    private static Tab tab(String title, String iconPath, VBox panel) {
+        Tab tab = new Tab(title, wrap(panel));
+        tab.setGraphic(AppTheme.createIcon(iconPath, 14));
+        return tab;
+    }
+
+    private static ScrollPane wrap(VBox panel) {
+        ScrollPane scrollPane = new ScrollPane(panel);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scrollPane.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
+        return scrollPane;
     }
 
     private static String textPrimary() {

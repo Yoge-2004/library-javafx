@@ -1,6 +1,7 @@
 package com.example.application;
 
 import com.example.entities.BooksDB.IssueRecord;
+import com.example.services.AppConfigurationService;
 
 import java.util.List;
 import java.util.Objects;
@@ -26,17 +27,18 @@ public final class OverdueReportFormatter {
             double fine = record.calculateFine();
             totalFines += fine;
             report.append(String.format(
-                    "Book: %s%sUser: %s%sDue Date: %s%sDays Overdue: %d%sFine: $%.2f%s%s",
+                    "Book: %s%sUser: %s%sDue Date: %s%sDays Overdue: %d%sFine: %s%s%s",
                     record.getBookTitle(), LINE_SEP,
                     record.getUserId(), LINE_SEP,
                     record.getDueDate(), LINE_SEP,
                     record.getDaysOverdue(), LINE_SEP,
-                    fine, LINE_SEP,
+                    AppConfigurationService.getConfiguration().formatAmount(fine), LINE_SEP,
                     LINE_SEP
             ));
         }
 
-        report.append(String.format("Total Outstanding Fines: $%.2f", totalFines));
+        report.append("Total Outstanding Fines: ")
+                .append(AppConfigurationService.getConfiguration().formatAmount(totalFines));
         return report.toString();
     }
 }

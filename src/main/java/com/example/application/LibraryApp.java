@@ -65,6 +65,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         Scene scene = AppTheme.createScene(rootStack, w, h);
         stage.setScene(scene);
+        AppTheme.applyWindowIcon(stage);
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
         initializeLibrarySelection(cfg);
@@ -466,6 +467,7 @@ public class LibraryApp extends Application implements ToastDisplay {
                             BookService.updateLibraryConfiguration(
                                     data.maxBorrowLimit(), data.loanDays(), data.finePerDay());
                             cfg.setExportDirectory(data.exportDirectory());
+                            cfg.setFinePerDay(data.finePerDay());
                             cfg.setCurrencySymbol(data.currencySymbol());
                             cfg.setCurrencyCode(data.currencyCode());
                             cfg.setSmtpHost(data.smtpHost()); cfg.setSmtpPort(data.smtpPort());

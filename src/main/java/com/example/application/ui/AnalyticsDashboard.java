@@ -209,7 +209,7 @@ public class AnalyticsDashboard extends BorderPane {
                             String.format("%.1f%% collection utilisation", utilization), "#3B82F6", onNavigateToCirculation),
                     statCard(AppTheme.ICON_WARNING, "Overdue Returns", str(overdue),
                             "Requires staff follow-up", "#DC2626", onNavigateToCirculation),
-                    statCard(AppTheme.ICON_SAVE, "Outstanding Fines", "$" + String.format("%.2f", fines),
+                    statCard(AppTheme.ICON_SAVE, "Outstanding Fines", AppTheme.formatCurrency(fines),
                             "Calculated from active overdue loans", "#F59E0B", onNavigateToCirculation),
                     statCard(AppTheme.ICON_NOTIFICATION, "Pending Requests", str(pending),
                             "Awaiting staff action", "#8B5CF6", onNavigateToCirculation),
@@ -229,7 +229,7 @@ public class AnalyticsDashboard extends BorderPane {
                             "Books currently issued to you", "#0D9488", onNavigateToCirculation),
                     statCard(AppTheme.ICON_WARNING, "Need to Return", str(myOverdue),
                             "Overdue items that need attention", "#DC2626", onNavigateToCirculation),
-                    statCard(AppTheme.ICON_SAVE, "Outstanding Fine", "$" + String.format("%.2f", myFine),
+                    statCard(AppTheme.ICON_SAVE, "Outstanding Fine", AppTheme.formatCurrency(myFine),
                             "Fine total on active overdue books", "#F59E0B", onNavigateToCirculation),
                     statCard(AppTheme.ICON_NOTIFICATION, "Pending Requests", str(myPending),
                             "Requests waiting for approval", "#8B5CF6", onNavigateToCirculation)
@@ -361,7 +361,7 @@ public class AnalyticsDashboard extends BorderPane {
         overdueRecords.forEach(record -> overduePanel.getChildren().add(activityRow(
                 record.getBookTitle(),
                 record.getDaysOverdue() + " day(s) overdue",
-                "$" + String.format("%.2f", record.calculateFine()),
+                AppTheme.formatCurrency(record.calculateFine()),
                 "#DC2626"
         )));
     }
