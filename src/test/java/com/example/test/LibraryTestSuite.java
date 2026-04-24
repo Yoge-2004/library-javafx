@@ -286,7 +286,12 @@ public class LibraryTestSuite {
             db.addBook(book("9780000000009"));
             assertEquals(baseline + 2, db.searchBooks("").size());
         }
-        @Test @DisplayName("searchBooks filters by title") void srchTitle() throws BooksException { db.addBook(new Book("9780000000010","Java Guide","A","T",3)); db.addBook(new Book("9780000000011","Python Tips","A","T",3)); assertEquals(1, db.searchBooks("java").size()); }
+        @Test @DisplayName("searchBooks filters by title") void srchTitle() throws BooksException {
+            int baseline = db.searchBooks("java").size();
+            db.addBook(new Book("9780000000010","Java Guide","A","T",3));
+            db.addBook(new Book("9780000000011","Python Tips","A","T",3));
+            assertEquals(baseline + 1, db.searchBooks("java").size());
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -367,9 +372,15 @@ public class LibraryTestSuite {
         IssueRecord overdue(String isbn, int daysOver) {
             return new IssueRecord(isbn, "Book"+isbn, "user", LocalDate.now().minusDays(14+daysOver),1,14,2.0);
         }
-        @Test void emptyList() { assertTrue(OverdueReportFormatter.format(List.of()).contains("$0.00")); }
+        @Test void emptyList() {
+            assertTrue(OverdueReportFormatter.format(List.of())
+                    .contains(AppConfigurationService.getConfiguration().formatAmount(0.0)));
+        }
         @Test void containsTitle() { assertTrue(OverdueReportFormatter.format(List.of(overdue("X",5))).contains("BookX")); }
-        @Test void totalFines() { String r = OverdueReportFormatter.format(List.of(overdue("A",5), overdue("B",10))); assertTrue(r.contains("$30.00")); }
+        @Test void totalFines() {
+            String r = OverdueReportFormatter.format(List.of(overdue("A",5), overdue("B",10)));
+            assertTrue(r.contains(AppConfigurationService.getConfiguration().formatAmount(30.0)));
+        }
         @Test void nullThrows() { assertThrows(NullPointerException.class, () -> OverdueReportFormatter.format(null)); }
     }
 
