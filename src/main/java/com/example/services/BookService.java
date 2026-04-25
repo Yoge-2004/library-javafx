@@ -331,6 +331,15 @@ public final class BookService {
         }
     }
 
+    public static List<IssueRecord> getAllIssueRecords() {
+        try {
+            return booksDB.getAllIssueRecords();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to retrieve issue history", e);
+            return Collections.emptyList();
+        }
+    }
+
     /**
      * Retrieves active issue records for a specific user.
      *

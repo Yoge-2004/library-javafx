@@ -208,7 +208,18 @@ public class LibraryTestSuite {
         @Test @DisplayName("Blank export falls back") void blank() { AppConfiguration c = new AppConfiguration(); c.setExportDirectory("  "); assertEquals("exports", c.getExportDirectory()); }
         @Test @DisplayName("Email not configured by default") void noEmail() { assertFalse(new AppConfiguration().isEmailConfigured()); }
         @Test @DisplayName("Email configured without auth") void emailNoAuth() { AppConfiguration c = new AppConfiguration(); c.setSmtpHost("s"); c.setFromAddress("a@b.c"); c.setSmtpAuth(false); assertTrue(c.isEmailConfigured()); }
+        @Test @DisplayName("Email auth requires username and password") void emailAuthNeedsPassword() {
+            AppConfiguration c = new AppConfiguration();
+            c.setSmtpHost("smtp.example.com");
+            c.setFromAddress("admin@example.com");
+            c.setSmtpAuth(true);
+            c.setSmtpUsername("mailer@example.com");
+            assertFalse(c.isEmailConfigured());
+            c.setSmtpPassword("secret");
+            assertTrue(c.isEmailConfigured());
+        }
         @Test @DisplayName("Port clamped to 1") void portClamp() { AppConfiguration c = new AppConfiguration(); c.setSmtpPort(-1); assertEquals(1, c.getSmtpPort()); }
+        @Test @DisplayName("Custom SMTP port is preserved in choices") void customPortPreserved() { AppConfiguration c = new AppConfiguration(); c.setSmtpPort(1025); assertTrue(c.getCommonSmtpPorts().contains(1025)); }
         @Test @DisplayName("formatAmount") void format() { AppConfiguration c = new AppConfiguration(); c.setCurrencySymbol("Rs."); assertEquals("Rs.10.00", c.formatAmount(10.0)); }
     }
 

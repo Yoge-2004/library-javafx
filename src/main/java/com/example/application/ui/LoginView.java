@@ -1,7 +1,9 @@
 package com.example.application.ui;
 
 import com.example.entities.AppConfiguration;
+import com.example.entities.User;
 import com.example.services.AppConfigurationService;
+import com.example.services.ReminderService;
 import com.example.services.UserService;
 import javafx.animation.*;
 import javafx.application.Platform;
@@ -40,6 +42,7 @@ public class LoginView extends StackPane {
     private VBox loginForm;
     private ComboBox<String> librarySelector;
     private final List<String> availableLibraries = new ArrayList<>();
+    private boolean syncingLibraryItems;
 
     public LoginView(Consumer<String> onLoginSuccess, Runnable onRegisterRequested) {
         this.onLoginSuccess = onLoginSuccess;
@@ -206,10 +209,12 @@ public class LoginView extends StackPane {
         // Loading indicator
         loadingIndicator = new ProgressIndicator();
         loadingIndicator.setVisible(false);
+        loadingIndicator.setManaged(false);
         loadingIndicator.setMaxSize(24, 24);
 
         HBox buttonContainer = new HBox(12);
         buttonContainer.setAlignment(Pos.CENTER);
+        buttonContainer.setMaxWidth(Double.MAX_VALUE);
         buttonContainer.getChildren().addAll(loginButton, loadingIndicator);
 
         // Register link
@@ -229,13 +234,21 @@ public class LoginView extends StackPane {
 
         registerBox.getChildren().addAll(noAccountLabel, registerLink);
 
+        // Forgot password link
+        Hyperlink forgotPassLink = new Hyperlink("Forgot password?");
+        forgotPassLink.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+        forgotPassLink.setOnAction(e -> showForgotPasswordDialog());
+
+        VBox footerBox = new VBox(8, registerBox, forgotPassLink);
+        footerBox.setAlignment(Pos.CENTER);
+
         // Add enter key handler
         librarySelector.setOnAction(e -> usernameField.requestFocus());
         usernameField.setOnAction(e -> passwordField.requestFocus());
         passwordField.setOnAction(e -> handleLogin());
         visiblePasswordField.setOnAction(e -> handleLogin());
 
-        loginForm.getChildren().addAll(header, formFields, buttonContainer, registerBox);
+        loginForm.getChildren().addAll(header, formFields, buttonContainer, footerBox);
 
         return loginForm;
     }
@@ -306,9 +319,15 @@ public class LoginView extends StackPane {
         librarySelector.getEditor().setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
                 "-fx-font-size: 15px; -fx-text-fill: #111827; -fx-prompt-text-fill: #9CA3AF; " +
                 "-fx-padding: 11 6 11 14;");
-        librarySelector.getEditor().textProperty().addListener((obs, oldValue, newValue) -> filterLibraries(newValue));
+        librarySelector.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
+            if (syncingLibraryItems) {
+                return;
+            }
+            filterLibraries(newValue);
+        });
+        librarySelector.setOnShowing(event -> filterLibraries(librarySelector.getEditor().getText()));
         librarySelector.valueProperty().addListener((obs, oldValue, newValue) -> {
-            if (newValue != null) {
+            if (!syncingLibraryItems && newValue != null) {
                 librarySelector.getEditor().setText(newValue);
             }
         });
@@ -396,10 +415,12 @@ public class LoginView extends StackPane {
     private void setLoading(boolean loading) {
         loginButton.setVisible(!loading);
         loadingIndicator.setVisible(loading);
+        loadingIndicator.setManaged(loading);
         usernameField.setDisable(loading);
         passwordField.setDisable(loading);
         visiblePasswordField.setDisable(loading);
         togglePasswordBtn.setDisable(loading);
+        librarySelector.setDisable(loading);
     }
 
     private void showError(String message) {
@@ -413,13 +434,28 @@ public class LoginView extends StackPane {
             return;
         }
 
+        String currentText = query == null ? "" : query;
+        int caretPosition = librarySelector.getEditor().getCaretPosition();
         String normalized = query == null ? "" : query.trim().toLowerCase();
         List<String> filtered = availableLibraries.stream()
                 .filter(value -> normalized.isEmpty() || value.toLowerCase().contains(normalized))
                 .toList();
 
-        librarySelector.setItems(FXCollections.observableArrayList(
-                filtered.isEmpty() ? availableLibraries : filtered));
+        syncingLibraryItems = true;
+        try {
+            librarySelector.setItems(FXCollections.observableArrayList(filtered));
+            librarySelector.setVisibleRowCount(Math.max(1, Math.min(6, filtered.size())));
+            librarySelector.getEditor().setText(currentText);
+        } finally {
+            syncingLibraryItems = false;
+        }
+
+        Platform.runLater(() -> {
+            librarySelector.getEditor().positionCaret(Math.min(caretPosition, currentText.length()));
+            if ((librarySelector.isFocused() || librarySelector.getEditor().isFocused()) && !librarySelector.isShowing()) {
+                librarySelector.show();
+            }
+        });
     }
 
     private String resolveSelectedLibrary() {
@@ -480,5 +516,102 @@ public class LoginView extends StackPane {
             entrance.setDelay(Duration.millis(200));
             entrance.play();
         });
+    }
+
+    private void showForgotPasswordDialog() {
+        Dialog<String> dlg = new Dialog<>();
+        dlg.setTitle("Forgot Password");
+        dlg.setHeaderText("Reset Your Password");
+
+        DialogPane pane = dlg.getDialogPane();
+        AppTheme.applyTheme(pane);
+
+        VBox content = new VBox(12);
+        content.setPadding(new Insets(20));
+
+        Label info = new Label("Enter your username and Library OS will email a temporary password to the address saved on your account.");
+        info.setWrapText(true);
+        info.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748B;");
+
+        TextField usernameResetField = new TextField();
+        usernameResetField.setPromptText("Enter your username");
+        usernameResetField.setStyle(getInputStyle());
+        usernameResetField.setPrefHeight(40);
+
+        Label statusLabel = new Label();
+        statusLabel.setVisible(false);
+        statusLabel.setWrapText(true);
+        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #DC2626;");
+
+        content.getChildren().addAll(info, new Label("Username:"), usernameResetField, statusLabel);
+        pane.setContent(content);
+
+        ButtonType sendType = new ButtonType("Send Email", ButtonBar.ButtonData.OK_DONE);
+        pane.getButtonTypes().addAll(ButtonType.CANCEL, sendType);
+        Button okBtn = (Button) pane.lookupButton(sendType);
+        okBtn.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; -fx-font-weight:600;");
+
+        okBtn.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            String username = usernameResetField.getText().trim();
+            if (username.isEmpty()) {
+                statusLabel.setText("Enter your username first.");
+                statusLabel.setVisible(true);
+                event.consume();
+                return;
+            }
+            if (!UserService.userExists(username)) {
+                statusLabel.setText("No account was found for that username.");
+                statusLabel.setVisible(true);
+                event.consume();
+                return;
+            }
+            statusLabel.setVisible(false);
+        });
+
+        dlg.setResultConverter(bt -> bt == sendType ? usernameResetField.getText().trim() : null);
+        dlg.showAndWait().ifPresent(this::dispatchForgotPasswordEmail);
+    }
+
+    private void dispatchForgotPasswordEmail(String username) {
+        new Thread(() -> {
+            try {
+                User user = UserService.getUserById(username);
+                if (user.getEmail() == null || user.getEmail().isBlank()) {
+                    throw new IllegalStateException("This account does not have an email address on file.");
+                }
+
+                String originalPassword = user.getPassword();
+                String temporaryPassword = buildTemporaryPassword();
+
+                user.setPassword(temporaryPassword);
+                UserService.updateUser(user);
+                UserService.persistDatabase();
+
+                try {
+                    ReminderService.sendTemporaryPassword(user, temporaryPassword);
+                } catch (Exception mailError) {
+                    user.setPassword(originalPassword);
+                    UserService.updateUser(user);
+                    UserService.persistDatabase();
+                    throw mailError;
+                }
+
+                Platform.runLater(() -> {
+                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                    AppTheme.applyTheme(alert.getDialogPane());
+                    alert.setTitle("Password Reset Email Sent");
+                    alert.setHeaderText("Temporary password sent");
+                    alert.setContentText("A temporary password was emailed to " + user.getEmail() + ".");
+                    alert.showAndWait();
+                });
+            } catch (Exception ex) {
+                Platform.runLater(() -> showError("Forgot password failed: " + ex.getMessage()));
+            }
+        }, "forgot-password-email").start();
+    }
+
+    private String buildTemporaryPassword() {
+        String seed = java.util.UUID.randomUUID().toString().replace("-", "").toUpperCase();
+        return "LIB" + seed.substring(0, 8);
     }
 }

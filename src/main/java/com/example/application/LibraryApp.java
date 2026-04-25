@@ -71,11 +71,18 @@ public class LibraryApp extends Application implements ToastDisplay {
         initializeLibrarySelection(cfg);
         AppTheme.darkMode = cfg.isDarkMode();
         if (cfg.isDarkMode()) applyDarkMode(true);
-        showLoginScreen();
+        if (cfg.isInitialSetupDone()) {
+            showLoginScreen();
+        } else {
+            rootStack.getChildren().setAll(new StackPane());
+        }
 
         stage.show();
         stage.centerOnScreen();
         stage.setOnCloseRequest(e -> shutdown());
+        if (!cfg.isInitialSetupDone()) {
+            Platform.runLater(this::showSetupWizard);
+        }
     }
 
     // --- First-run wizard ---
@@ -133,20 +140,36 @@ public class LibraryApp extends Application implements ToastDisplay {
         ok.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
                 "-fx-font-weight:700; -fx-font-size:14px; " +
                 "-fx-background-radius:10px; -fx-padding:10 24;");
-
-        dlg.setResultConverter(bt -> bt == doneBt);
-        dlg.showAndWait().ifPresent(ok2 -> {
-            if (ok2) {
-                cfg.setLibraryName(libNameField.getText());
-                cfg.setBranchName(branchField.getText());
-                cfg.setDataDirectory(dataDirField.getText());
-                cfg.setExportDirectory(exportField.getText());
-                cfg.markSetupDone();
-                try { AppConfigurationService.updateConfiguration(cfg); }
-                catch (IOException ex) { LOG.warning("Config save: " + ex.getMessage()); }
+        ok.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            if (libNameField.getText().trim().isEmpty()) {
+                showError("Library name is required.");
+                event.consume();
+                return;
+            }
+            if (branchField.getText().trim().isEmpty()) {
+                showError("Branch name is required.");
+                event.consume();
             }
         });
-        showLoginScreen();
+
+        dlg.setResultConverter(bt -> bt == doneBt);
+        Optional<Boolean> setupResult = dlg.showAndWait();
+        if (setupResult.orElse(false)) {
+            cfg.setLibraryName(libNameField.getText());
+            cfg.setBranchName(branchField.getText());
+            cfg.setDataDirectory(dataDirField.getText());
+            cfg.setExportDirectory(exportField.getText());
+            cfg.markSetupDone();
+            try {
+                AppConfigurationService.updateConfiguration(cfg);
+                showLoginScreen();
+            } catch (IOException ex) {
+                LOG.warning("Config save: " + ex.getMessage());
+                showError("Could not save the initial library configuration: " + ex.getMessage());
+            }
+        } else {
+            Platform.exit();
+        }
     }
 
     private TextField wField(String val, String prompt) {
@@ -178,14 +201,10 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- Login ---
 
     private void initializeLibrarySelection(AppConfiguration cfg) {
-        boolean shouldPersist = false;
+        List<String> knownLibraries = cfg.getKnownLibraries();
         cfg.normalize();
         cfg.rememberCurrentLibrary();
-        if (!cfg.isInitialSetupDone()) {
-            cfg.markSetupDone();
-            shouldPersist = true;
-        }
-        if (shouldPersist) {
+        if (cfg.isInitialSetupDone() && !knownLibraries.equals(cfg.getKnownLibraries())) {
             try {
                 AppConfigurationService.updateConfiguration(cfg);
             } catch (IOException ex) {
@@ -213,10 +232,12 @@ public class LibraryApp extends Application implements ToastDisplay {
                             return;
                         }
                         UserService.createUser(req.username(), req.password(), req.role());
+                        User created = UserService.getUserById(req.username());
+                        created.setEmail(req.email());
+                        created.setContactNumber(req.phoneNumber());
+                        created.setActive(!req.pendingApproval());
+                        UserService.updateUser(created);
                         if (req.pendingApproval()) {
-                            User created = UserService.getUserById(req.username());
-                            created.setActive(false);
-                            UserService.updateUser(created);
                             showSuccess("Librarian request submitted. An admin must approve it before you can log in.");
                         } else {
                             showSuccess("Account created! Please sign in.");

@@ -25,13 +25,87 @@
 .scroll-pane .increment-arrow,
 .scroll-pane .decrement-arrow  { -fx-shape: ""; -fx-padding: 0; }
 
-/* ─── SIDEBAR ─────────────────────────────────────────────────── */
+/* ─── CHECKBOX ────────────────────────────────────────────────── */
+.check-box {
+    -fx-font-size: 13px;
+    -fx-text-fill: #374151;
+    -fx-padding: 4 0;
+}
+.check-box .text {
+    -fx-fill: #374151;
+}
+.dark-mode .check-box {
+    -fx-text-fill: #E2E8F0;
+}
+.dark-mode .check-box .text {
+    -fx-fill: #E2E8F0;
+}
+.check-box:selected {
+    -fx-text-fill: #0D9488;
+}
+.dark-mode .check-box:selected {
+    -fx-text-fill: #14B8A6;
+}
+.check-box .box {
+    -fx-border-color: #D1D5DB;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 4px;
+    -fx-padding: 3px;
+}
+.dark-mode .check-box .box {
+    -fx-border-color: #475569;
+}
+.check-box:selected .box {
+    -fx-background-color: #0D9488;
+    -fx-border-color: #0D9488;
+}
+.dark-mode .check-box:selected .box {
+    -fx-background-color: #14B8A6;
+    -fx-border-color: #14B8A6;
+}
+.check-box .mark {
+    -fx-text-fill: white;
+}
+
+/* ─── RADIO BUTTON ────────────────────────────────────────────── */
+.radio-button {
+    -fx-font-size: 13px;
+    -fx-text-fill: #374151;
+    -fx-padding: 4 0;
+}
+.dark-mode .radio-button {
+    -fx-text-fill: #E2E8F0;
+}
+.radio-button:selected {
+    -fx-text-fill: #0D9488;
+}
+.dark-mode .radio-button:selected {
+    -fx-text-fill: #14B8A6;
+}
+.radio-button .radio {
+    -fx-border-color: #D1D5DB;
+    -fx-border-width: 1.5;
+    -fx-padding: 2px;
+}
+.dark-mode .radio-button .radio {
+    -fx-border-color: #475569;
+}
+.radio-button:selected .radio {
+    -fx-background-color: #0D9488;
+    -fx-border-color: #0D9488;
+}
+.dark-mode .radio-button:selected .radio {
+    -fx-background-color: #14B8A6;
+    -fx-border-color: #14B8A6;
+}
 .sidebar {
-    -fx-background-color: #0F172A;
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F172A, #1A2942);
     -fx-padding: 24 12 16 12;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 10, 0, 2, 0);
 }
-.dark-mode .sidebar { -fx-background-color: #020617; }
+.dark-mode .sidebar { 
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #020617, #0F172A);
+}
 
 .sidebar-logo {
     -fx-font-size: 20px; -fx-font-weight: 800; -fx-text-fill: #F8FAFC;
@@ -66,10 +140,13 @@
 
 /* ─── HEADER ──────────────────────────────────────────────────── */
 .app-header {
-    -fx-background-color: white;
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 0%, #FFFFFF, #F8FAFC);
     -fx-border-color: #E2E8F0; -fx-border-width: 0 0 1 0;
 }
-.dark-mode .app-header { -fx-background-color: #1E293B; -fx-border-color: #334155; }
+.dark-mode .app-header { 
+    -fx-background-color: linear-gradient(from 0% 0% to 100% 0%, #1E293B, #0F172A);
+    -fx-border-color: #334155; 
+}
 
 .header-title {
     -fx-font-size: 20px; -fx-font-weight: 700; -fx-text-fill: #0F172A;
@@ -301,8 +378,16 @@
 .spinner .decrement-arrow-button {
     -fx-background-color: #F1F5F9; -fx-border-color: #D1D5DB; -fx-cursor: hand;
 }
+.spinner .increment-arrow,
+.spinner .decrement-arrow {
+    -fx-background-color: #334155;
+}
 .dark-mode .spinner .increment-arrow-button,
 .dark-mode .spinner .decrement-arrow-button { -fx-background-color: #334155; -fx-border-color: #475569; }
+.dark-mode .spinner .increment-arrow,
+.dark-mode .spinner .decrement-arrow {
+    -fx-background-color: #E2E8F0;
+}
 
 .check-box .box {
     -fx-background-color: white; -fx-border-color: #D1D5DB;
@@ -365,6 +450,38 @@
 .auth-combo-box > .arrow-button {
     -fx-min-width: 42px;
     -fx-pref-width: 42px;
+}
+
+.list-view {
+    -fx-background-color: white;
+    -fx-border-color: #E2E8F0;
+    -fx-background-radius: 10px;
+    -fx-border-radius: 10px;
+}
+.list-view .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: #1E293B;
+}
+.list-view .list-cell:filled:hover {
+    -fx-background-color: #F8FAFC;
+}
+.list-view .list-cell:filled:selected {
+    -fx-background-color: rgba(13,148,136,0.14);
+    -fx-text-fill: #0F172A;
+}
+.dark-mode .list-view {
+    -fx-background-color: #1E293B;
+    -fx-border-color: #334155;
+}
+.dark-mode .list-view .list-cell {
+    -fx-text-fill: #E2E8F0;
+}
+.dark-mode .list-view .list-cell:filled:hover {
+    -fx-background-color: #0F172A;
+}
+.dark-mode .list-view .list-cell:filled:selected {
+    -fx-background-color: rgba(20,184,166,0.18);
+    -fx-text-fill: #F8FAFC;
 }
 
 /* ─── TABLE VIEW ──────────────────────────────────────────────── */

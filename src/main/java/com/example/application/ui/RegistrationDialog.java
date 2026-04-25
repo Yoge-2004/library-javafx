@@ -1,6 +1,7 @@
 package com.example.application.ui;
 
 import com.example.entities.AppConfiguration;
+import com.example.entities.User;
 import com.example.entities.UserRole;
 import com.example.services.AppConfigurationService;
 import javafx.geometry.Insets;
@@ -99,6 +100,20 @@ public class RegistrationDialog {
         confirmField.textProperty().addListener((o, old, v) ->
                 checkMatch(confirmFeedback, passField.getText(), v));
 
+        // Email
+        Label eLbl = fieldLabel("Email Address");
+        TextField emailField = inputField("your.email@example.com");
+        Label emailFeedback = new Label();
+        emailFeedback.setStyle("-fx-font-size: 11px;");
+        emailField.textProperty().addListener((o, old, v) -> checkEmail(emailFeedback, v));
+
+        // Phone Number
+        Label phLbl = fieldLabel("Phone Number");
+        TextField phoneField = inputField("+1 (555) 000-0000");
+        Label phoneFeedback = new Label();
+        phoneFeedback.setStyle("-fx-font-size: 11px;");
+        phoneField.textProperty().addListener((o, old, v) -> checkPhone(phoneFeedback, v));
+
         // Role
         ToggleGroup roleGroup = new ToggleGroup();
         VBox roleBox = null;
@@ -106,18 +121,26 @@ public class RegistrationDialog {
 
         if (!isFirstUser) {
             Label rLbl = fieldLabel("Account Type");
-            RadioButton userRb = new RadioButton("Library User");
+            RadioButton userRb = new RadioButton();
             userRb.setToggleGroup(roleGroup);
             userRb.setUserData(UserRole.USER);
             userRb.setSelected(true);
-            userRb.setStyle("-fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";");
+            VBox userOption = roleOption(
+                    userRb,
+                    "Library User",
+                    "Borrow books, track due dates, and manage your requests.",
+                    false);
 
-            RadioButton libRb  = new RadioButton("Librarian  (requires admin approval)");
+            RadioButton libRb  = new RadioButton();
             libRb.setToggleGroup(roleGroup);
             libRb.setUserData(UserRole.LIBRARIAN);
-            libRb.setStyle("-fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";");
+            VBox librarianOption = roleOption(
+                    libRb,
+                    "Librarian",
+                    "Manage circulation and catalog tasks after administrator approval.",
+                    false);
 
-            VBox radioRow = new VBox(10, userRb, libRb);
+            VBox radioRow = new VBox(10, userOption, librarianOption);
             radioRow.setAlignment(Pos.CENTER_LEFT);
 
             librarianNotice.setText("Librarian accounts start as inactive. " +
@@ -133,7 +156,11 @@ public class RegistrationDialog {
                 boolean lib = nw != null && nw.getUserData() == UserRole.LIBRARIAN;
                 librarianNotice.setVisible(lib);
                 librarianNotice.setManaged(lib);
+                userOption.setStyle(roleOptionStyle(userRb.isSelected()));
+                librarianOption.setStyle(roleOptionStyle(libRb.isSelected()));
             });
+            userOption.setStyle(roleOptionStyle(true));
+            librarianOption.setStyle(roleOptionStyle(false));
 
             roleBox = new VBox(8, rLbl, radioRow, librarianNotice);
         }
@@ -147,7 +174,9 @@ public class RegistrationDialog {
         formBox.getChildren().addAll(
                 uLbl, usernameField, uFeedback,
                 pLbl, passwordRow.container(), strengthLbl,
-                cLbl, confirmPasswordRow.container(), confirmFeedback
+                cLbl, confirmPasswordRow.container(), confirmFeedback,
+                eLbl, emailField, emailFeedback,
+                phLbl, phoneField, phoneFeedback
         );
         if (roleBox != null) formBox.getChildren().add(roleBox);
         formBox.getChildren().add(errorLbl);
@@ -195,6 +224,18 @@ public class RegistrationDialog {
             if (pass.isEmpty())        { err(errorLbl, "Password is required.");           ev.consume(); return; }
             if (pass.length() < 4)     { err(errorLbl, "Password needs >= 4 characters.");  ev.consume(); return; }
             if (!pass.equals(conf))    { err(errorLbl, "Passwords do not match.");         ev.consume(); return; }
+            if (emailField.getText().trim().isEmpty()) {
+                err(errorLbl, "Email address is required."); ev.consume(); return;
+            }
+            if (!User.isValidEmail(emailField.getText())) {
+                err(errorLbl, "Enter a valid email address."); ev.consume(); return;
+            }
+            if (phoneField.getText().trim().isEmpty()) {
+                err(errorLbl, "Mobile number is required."); ev.consume(); return;
+            }
+            if (!User.isValidContactNumber(phoneField.getText())) {
+                err(errorLbl, "Enter a valid mobile number (10-15 digits)."); ev.consume(); return;
+            }
             errorLbl.setVisible(false);
         });
 
@@ -207,7 +248,9 @@ public class RegistrationDialog {
                         usernameField.getText().trim(),
                         passField.getText(),
                         role,
-                        role == UserRole.LIBRARIAN
+                        role == UserRole.LIBRARIAN,
+                        emailField.getText().trim(),
+                        phoneField.getText().trim()
                 );
             }
             return null;
@@ -302,15 +345,70 @@ public class RegistrationDialog {
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
         }
     }
-    private static void checkMatch(Label lbl, String pass, String confirm) {
-        if (confirm == null || confirm.isEmpty()) { lbl.setText(""); return; }
-        if (pass.equals(confirm)) {
-            lbl.setText("Passwords match");
-            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
-        } else {
-            lbl.setText("Passwords do not match");
-            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
-        }
+     private static void checkMatch(Label lbl, String pass, String confirm) {
+         if (confirm == null || confirm.isEmpty()) { lbl.setText(""); return; }
+         if (pass.equals(confirm)) {
+             lbl.setText("Passwords match");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+         } else {
+             lbl.setText("Passwords do not match");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+         }
+     }
+     private static void checkEmail(Label lbl, String email) {
+         if (email == null || email.isEmpty()) { lbl.setText(""); return; }
+         if (User.isValidEmail(email)) {
+             lbl.setText("Valid email");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+         } else {
+             lbl.setText("Invalid email format");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+         }
+     }
+     private static void checkPhone(Label lbl, String phone) {
+         if (phone == null || phone.isEmpty()) { lbl.setText(""); return; }
+         if (User.isValidContactNumber(phone)) {
+             lbl.setText("Valid phone number");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+         } else {
+             lbl.setText("Invalid phone format (10-15 digits)");
+             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+         }
+     }
+
+    private static VBox roleOption(RadioButton radioButton, String title, String description, boolean selected) {
+        radioButton.setStyle("-fx-padding: 2 0 0 0;");
+
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
+
+        Label descLabel = new Label(description);
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textMuted() + ";");
+
+        VBox textBox = new VBox(4, titleLabel, descLabel);
+        HBox.setHgrow(textBox, Priority.ALWAYS);
+
+        HBox row = new HBox(12, radioButton, textBox);
+        row.setAlignment(Pos.TOP_LEFT);
+
+        VBox wrapper = new VBox(row);
+        wrapper.setPadding(new Insets(14));
+        wrapper.setStyle(roleOptionStyle(selected));
+        wrapper.setOnMouseClicked(event -> radioButton.setSelected(true));
+        return wrapper;
+    }
+
+    private static String roleOptionStyle(boolean selected) {
+        String border = selected
+                ? (AppTheme.darkMode ? "#14B8A6" : "#0D9488")
+                : borderColor();
+        String background = selected
+                ? (AppTheme.darkMode ? "rgba(20,184,166,0.10)" : "rgba(13,148,136,0.08)")
+                : inputSurface();
+        return "-fx-background-color: " + background + "; " +
+                "-fx-background-radius: 12px; -fx-border-radius: 12px; " +
+                "-fx-border-color: " + border + "; -fx-border-width: 1.5;";
     }
     private static void err(Label lbl, String msg) {
         lbl.setText(msg); lbl.setVisible(true);
@@ -326,6 +424,10 @@ public class RegistrationDialog {
 
     private static String textPrimary() {
         return AppTheme.darkMode ? "#E2E8F0" : "#374151";
+    }
+
+    private static String textMuted() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
     }
 
     private static void stylePrimaryButton(Button button, String text) {
@@ -348,10 +450,11 @@ public class RegistrationDialog {
     }
 
     public record RegistrationRequest(
-            String username, String password, UserRole role, boolean pendingApproval) {
+            String username, String password, UserRole role, boolean pendingApproval,
+            String email, String phoneNumber) {
         /** Convenience factory - not pending approval */
         public static RegistrationRequest of(String username, String password, UserRole role) {
-            return new RegistrationRequest(username, password, role, false);
+            return new RegistrationRequest(username, password, role, false, null, null);
         }
     }
 }

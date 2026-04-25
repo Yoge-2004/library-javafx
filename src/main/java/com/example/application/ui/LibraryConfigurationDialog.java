@@ -1,6 +1,7 @@
 package com.example.application.ui;
 
 import com.example.entities.AppConfiguration;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -95,8 +96,12 @@ public class LibraryConfigurationDialog {
 
         TextField smtpHostField = inputTF("smtpHost",
                 config.getSmtpHost() != null ? config.getSmtpHost() : "", "smtp.example.com");
-        Spinner<Integer> smtpPortSpin = new Spinner<>(1, 65535, config.getSmtpPort());
-        smtpPortSpin.setEditable(true); smtpPortSpin.setId("smtpPort");
+        ComboBox<String> smtpPortCombo = new ComboBox<>(FXCollections.observableArrayList(
+                config.getCommonSmtpPorts().stream().map(LibraryConfigurationDialog::smtpPortLabel).toList()));
+        smtpPortCombo.setId("smtpPort");
+        smtpPortCombo.setMaxWidth(Double.MAX_VALUE);
+        smtpPortCombo.setStyle(inputStyle());
+        smtpPortCombo.setValue(smtpPortLabel(config.getSmtpPort()));
 
         TextField smtpUserField = inputTF("smtpUsername",
                 config.getSmtpUsername() != null ? config.getSmtpUsername() : "", "user@example.com");
@@ -114,7 +119,7 @@ public class LibraryConfigurationDialog {
         tlsCheck.setSelected(config.isStartTlsEnabled()); tlsCheck.setId("startTls");
 
         emailGrid.addRow(0, gridLabel("SMTP Host:"),     smtpHostField);
-        emailGrid.addRow(1, gridLabel("SMTP Port:"),     smtpPortSpin);
+        emailGrid.addRow(1, gridLabel("SMTP Port:"),     smtpPortCombo);
         emailGrid.addRow(2, gridLabel("Username:"),      smtpUserField);
         emailGrid.addRow(3, gridLabel("Password:"),      smtpPassField);
         emailGrid.addRow(4, gridLabel("From Address:"),  fromField);
@@ -184,7 +189,7 @@ public class LibraryConfigurationDialog {
                     currSymbolField.getText().trim(),
                     currCodeField.getText().trim(),
                     smtpHostField.getText().trim(),
-                    smtpPortSpin.getValue(),
+                    smtpPortValue(smtpPortCombo.getValue()),
                     smtpUserField.getText().trim(),
                     smtpPassField.getText(),
                     fromField.getText().trim(),
@@ -257,6 +262,24 @@ public class LibraryConfigurationDialog {
             if (dir != null) target.setText(dir.getAbsolutePath());
         });
         return b;
+    }
+
+    private static String smtpPortLabel(int port) {
+        return switch (port) {
+            case 25 -> "25 (Plain SMTP)";
+            case 465 -> "465 (SSL/TLS)";
+            case 587 -> "587 (STARTTLS)";
+            case 2525 -> "2525 (Alternative SMTP)";
+            default -> port + " (Custom)";
+        };
+    }
+
+    private static int smtpPortValue(String label) {
+        if (label == null || label.isBlank()) {
+            return 587;
+        }
+        String numeric = label.split(" ", 2)[0].trim();
+        return Integer.parseInt(numeric);
     }
 
     private static Tab tab(String title, String iconPath, VBox panel) {

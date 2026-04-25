@@ -34,16 +34,13 @@ public final class ReminderService {
 
     public static ReminderDispatchResult sendOverdueReminders(List<IssueRecord> overdueBooks) throws MessagingException {
         AppConfiguration config = AppConfigurationService.getConfiguration();
-        if (!config.isEmailConfigured()) {
-            throw new MessagingException("SMTP is not configured. Update Library Configuration first.");
-        }
+        validateConfiguration(config);
 
         Map<String, List<IssueRecord>> recordsByUser = new LinkedHashMap<>();
         for (IssueRecord record : overdueBooks) {
             recordsByUser.computeIfAbsent(record.getUserId(), key -> new ArrayList<>()).add(record);
         }
 
-        Session session = createSession(config);
         ReminderDispatchResult result = new ReminderDispatchResult();
         for (Map.Entry<String, List<IssueRecord>> entry : recordsByUser.entrySet()) {
             User user = UserService.getUserById(entry.getKey());
@@ -52,7 +49,7 @@ public final class ReminderService {
                 continue;
             }
             try {
-                sendReminder(session, config, user, entry.getValue());
+                sendOverdueReminder(user, entry.getValue());
                 result.incrementSent();
             } catch (MessagingException ex) {
                 LOGGER.log(Level.WARNING, "Failed to send reminder to " + user.getUserId(), ex);
@@ -60,6 +57,42 @@ public final class ReminderService {
             }
         }
         return result;
+    }
+
+    public static void sendOverdueReminder(User user, List<IssueRecord> records) throws MessagingException {
+        if (user == null) {
+            throw new MessagingException("User information is required to send a reminder.");
+        }
+        if (records == null || records.isEmpty()) {
+            throw new MessagingException("No overdue items were provided for the reminder.");
+        }
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new MessagingException("The selected user does not have an email address on file.");
+        }
+
+        AppConfiguration config = AppConfigurationService.getConfiguration();
+        validateConfiguration(config);
+        Session session = createSession(config);
+        sendMessage(session, config, user.getEmail(), "Library overdue reminder",
+                buildOverdueBody(config, user, records));
+    }
+
+    public static void sendTemporaryPassword(User user, String temporaryPassword) throws MessagingException {
+        if (user == null) {
+            throw new MessagingException("User information is required to send a password reset email.");
+        }
+        if (temporaryPassword == null || temporaryPassword.isBlank()) {
+            throw new MessagingException("Temporary password cannot be blank.");
+        }
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new MessagingException("The selected user does not have an email address on file.");
+        }
+
+        AppConfiguration config = AppConfigurationService.getConfiguration();
+        validateConfiguration(config);
+        Session session = createSession(config);
+        sendMessage(session, config, user.getEmail(), "Library OS password reset",
+                buildTemporaryPasswordBody(config, user, temporaryPassword));
     }
 
     /**
@@ -93,17 +126,17 @@ public final class ReminderService {
         return Session.getInstance(properties);
     }
 
-    private static void sendReminder(Session session, AppConfiguration config, User user,
-                                     List<IssueRecord> records) throws MessagingException {
+    private static void sendMessage(Session session, AppConfiguration config, String toAddress,
+                                    String subject, String body) throws MessagingException {
         Message message = new MimeMessage(session);
         message.setFrom(new InternetAddress(config.getFromAddress()));
-        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(user.getEmail()));
-        message.setSubject("Library overdue reminder");
-        message.setText(buildBody(config, user, records));
+        message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(toAddress));
+        message.setSubject(subject);
+        message.setText(body);
         Transport.send(message);
     }
 
-    private static String buildBody(AppConfiguration config, User user, List<IssueRecord> records) {
+    private static String buildOverdueBody(AppConfiguration config, User user, List<IssueRecord> records) {
         StringBuilder builder = new StringBuilder();
         builder.append("Hello ").append(user.getFullName()).append(",\n\n");
         builder.append("The following library items are overdue:\n\n");
@@ -120,6 +153,21 @@ public final class ReminderService {
         builder.append("\nTotal outstanding fine: ").append(config.formatAmount(totalFine)).append('\n');
         builder.append("Please return the item(s) or contact the library administrator.\n");
         return builder.toString();
+    }
+
+    private static String buildTemporaryPasswordBody(AppConfiguration config, User user, String temporaryPassword) {
+        String libraryName = config.getCurrentLibraryDisplayName();
+        return "Hello " + user.getFullName() + ",\n\n" +
+                "A password reset was requested for your Library OS account at " + libraryName + ".\n\n" +
+                "Temporary password: " + temporaryPassword + "\n\n" +
+                "Sign in with this password and change it immediately from Settings > Change Password.\n" +
+                "If you did not request this change, contact the library administrator.\n";
+    }
+
+    private static void validateConfiguration(AppConfiguration config) throws MessagingException {
+        if (config == null || !config.isEmailConfigured()) {
+            throw new MessagingException("Email is not configured. Update Library Configuration first.");
+        }
     }
 
     public static final class ReminderDispatchResult {

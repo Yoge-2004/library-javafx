@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public final class AppConfiguration implements Serializable {
     private static final long serialVersionUID = 3L;
+    private static final List<Integer> COMMON_SMTP_PORTS = List.of(25, 465, 587, 2525);
 
     // ── Library identity
     private String libraryId      = UUID.randomUUID().toString();
@@ -112,7 +113,17 @@ public final class AppConfiguration implements Serializable {
 
     public boolean isEmailConfigured() {
         return smtpHost != null && fromAddress != null
-                && (!smtpAuth || smtpUsername != null);
+                && (!smtpAuth || (smtpUsername != null && smtpPassword != null));
+    }
+
+    public List<Integer> getCommonSmtpPorts() {
+        if (COMMON_SMTP_PORTS.contains(smtpPort)) {
+            return COMMON_SMTP_PORTS;
+        }
+        List<Integer> ports = new ArrayList<>(COMMON_SMTP_PORTS);
+        ports.add(smtpPort);
+        ports.sort(Integer::compareTo);
+        return List.copyOf(ports);
     }
 
     // ════════════════════════════════════════════════════════════════

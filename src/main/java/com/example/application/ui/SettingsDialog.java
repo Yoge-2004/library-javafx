@@ -57,11 +57,11 @@ public class SettingsDialog {
         content.getChildren().addAll(
                 settingItem(AppTheme.ICON_USER, "Profile",
                         "Update your personal information and display name",
-                        "#0D9488", () -> closeThenOpen(dialog, actions::openProfile)),
+                        "#0D9488", () -> openFromSettings(actions::openProfile)),
 
                 settingItem(AppTheme.ICON_LOCK, "Password",
                         "Change your account password",
-                        "#3B82F6", () -> closeThenOpen(dialog, actions::openPassword))
+                        "#3B82F6", () -> openFromSettings(actions::openPassword))
         );
 
         // ── Administration section (staff only) ──────────────────
@@ -71,15 +71,15 @@ public class SettingsDialog {
             content.getChildren().addAll(
                     settingItem(AppTheme.ICON_USER, "User Management",
                             "Add, remove or modify user accounts and roles",
-                            "#8B5CF6", () -> closeThenOpen(dialog, actions::openUserManagement)),
+                            "#8B5CF6", () -> openFromSettings(actions::openUserManagement)),
 
                     settingItem(AppTheme.ICON_LIBRARY, "Library Configuration",
                             "Borrowing rules, fine rates, loan periods, email SMTP",
-                            "#F59E0B", () -> closeThenOpen(dialog, actions::openLibraryConfiguration)),
+                            "#F59E0B", () -> openFromSettings(actions::openLibraryConfiguration)),
 
                     settingItem(AppTheme.ICON_SAVE, "Data Management",
                             "Backup data, import/export, view system statistics",
-                            "#16A34A", () -> closeThenOpen(dialog, actions::openDataManagement))
+                            "#16A34A", () -> openFromSettings(actions::openDataManagement))
             );
         }
 
@@ -184,8 +184,7 @@ public class SettingsDialog {
         return AppTheme.darkMode ? "#94A3B8" : "#64748B";
     }
 
-    private static void closeThenOpen(Dialog<?> dialog, Runnable action) {
-        dialog.close();
+    private static void openFromSettings(Runnable action) {
         Platform.runLater(action);
     }
 

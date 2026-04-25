@@ -7,6 +7,7 @@ import com.example.entities.BooksDB;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.entities.User;
 import com.example.services.BookService;
+import com.example.services.ReminderService;
 import com.example.services.UserService;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -333,17 +334,17 @@ public class CirculationView extends BorderPane {
         p.setFillWidth(true);
 
         HBox banner = new HBox(12);
-        banner.setStyle("-fx-background-color:#FEF2F2; -fx-background-radius:12px; " +
-                "-fx-border-radius:12px; -fx-border-color:#FECACA; -fx-border-width:1;");
+        banner.setStyle("-fx-background-color:" + overdueBannerBackground() + "; -fx-background-radius:12px; " +
+                "-fx-border-radius:12px; -fx-border-color:" + overdueBannerBorder() + "; -fx-border-width:1;");
         banner.setPadding(new Insets(16));
         banner.setAlignment(Pos.CENTER_LEFT);
         StackPane icon = new StackPane(AppTheme.createIcon(AppTheme.ICON_WARNING, 18));
         icon.setMinSize(40, 40);
         icon.setPrefSize(40, 40);
-        icon.setStyle("-fx-background-color:#FCA5A522; -fx-background-radius:12px;");
+        icon.setStyle("-fx-background-color:" + overdueIconSurface() + "; -fx-background-radius:12px;");
         VBox txt = new VBox(2,
-                styledLabel("Overdue Books Alert", 16, "#991B1B", true),
-                styledLabel("These records have exceeded their due date.", 13, "#B91C1C", false));
+                styledLabel("Overdue Books Alert", 16, overdueBannerTitle(), true),
+                styledLabel("These records have exceeded their due date.", 13, overdueBannerText(), false));
         banner.getChildren().addAll(icon, txt);
 
         TableView<IssueRecord> ot = new TableView<>();
@@ -356,7 +357,8 @@ public class CirculationView extends BorderPane {
                 colIR("Borrower",      r -> r.getUserId(), 120),
                 colIR("Due Date",      r -> r.getDueDate().format(DATE_FMT), 110),
                 colIR("Days Overdue",  r -> String.valueOf(r.getDaysOverdue()), 100),
-                colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110)
+                colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110),
+                overdueActionColumn()
         );
 
         ObservableList<IssueRecord> overdueData =
@@ -403,8 +405,7 @@ public class CirculationView extends BorderPane {
 
         ListView<Book> bookList = new ListView<>();
         bookList.setPrefHeight(130);
-        bookList.setStyle("-fx-background-color:white; -fx-border-color:#E2E8F0; " +
-                "-fx-border-radius:8px; -fx-background-radius:8px;");
+        bookList.setStyle(listSurfaceStyle());
         bookList.setCellFactory(lv -> new ListCell<>() {
             @Override protected void updateItem(Book b, boolean empty) {
                 super.updateItem(b, empty);
@@ -445,8 +446,7 @@ public class CirculationView extends BorderPane {
 
         ListView<User> userListView = new ListView<>();
         userListView.setPrefHeight(120);
-        userListView.setStyle("-fx-background-color:white; -fx-border-color:#E2E8F0; " +
-                "-fx-border-radius:8px; -fx-background-radius:8px;");
+        userListView.setStyle(listSurfaceStyle());
         userListView.setCellFactory(lv -> new ListCell<>() {
             @Override protected void updateItem(User u, boolean empty) {
                 super.updateItem(u, empty);
@@ -624,6 +624,78 @@ public class CirculationView extends BorderPane {
         }
     }
 
+    private TableColumn<IssueRecord, Void> overdueActionColumn() {
+        TableColumn<IssueRecord, Void> actionColumn = new TableColumn<>("Actions");
+        actionColumn.setPrefWidth(116);
+        actionColumn.setCellFactory(col -> new TableCell<>() {
+            final Button emailBtn = actionIconBtn(AppTheme.ICON_MAIL, "Send overdue reminder", "#0D9488");
+            final Button contactBtn = actionIconBtn(AppTheme.ICON_USER, "View borrower contact", "#64748B");
+            final HBox box = new HBox(4, emailBtn, contactBtn);
+
+            {
+                box.setAlignment(Pos.CENTER);
+                emailBtn.setOnAction(event -> sendOverdueReminder(getTableView().getItems().get(getIndex())));
+                contactBtn.setOnAction(event -> showBorrowerContact(getTableView().getItems().get(getIndex())));
+            }
+
+            @Override protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setGraphic(null);
+                    return;
+                }
+
+                IssueRecord record = getTableRow().getItem();
+                User borrower = UserService.getUserById(record.getUserId());
+                boolean canEmail = borrower != null && borrower.getEmail() != null && !borrower.getEmail().isBlank();
+                emailBtn.setDisable(!canEmail);
+                setGraphic(box);
+            }
+        });
+        return actionColumn;
+    }
+
+    private void sendOverdueReminder(IssueRecord record) {
+        new Thread(() -> {
+            try {
+                User user = UserService.getUserById(record.getUserId());
+                if (user.getEmail() == null || user.getEmail().isBlank()) {
+                    throw new IllegalStateException("Borrower does not have an email address on file.");
+                }
+
+                ReminderService.sendOverdueReminder(user, List.of(record));
+                Platform.runLater(() -> {
+                    if (toast != null) {
+                        toast.showSuccess("Reminder sent to " + user.getEmail());
+                    }
+                });
+            } catch (Exception ex) {
+                Platform.runLater(() -> {
+                    if (toast != null) {
+                        toast.showError("Reminder failed: " + ex.getMessage());
+                    }
+                });
+            }
+        }, "overdue-reminder").start();
+    }
+
+    private void showBorrowerContact(IssueRecord record) {
+        try {
+            User user = UserService.getUserById(record.getUserId());
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("Borrower Contact");
+            alert.setHeaderText(user.getDisplayName());
+            alert.setContentText("Email: " + valueOrPlaceholder(user.getEmail()) +
+                    "\nMobile: " + valueOrPlaceholder(user.getContactNumber()));
+            AppTheme.applyTheme(alert.getDialogPane());
+            alert.showAndWait();
+        } catch (Exception ex) {
+            if (toast != null) {
+                toast.showError("Could not load borrower contact: " + ex.getMessage());
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // Binding
     // ═══════════════════════════════════════════════════════════════
@@ -697,6 +769,12 @@ public class CirculationView extends BorderPane {
     }
     private static void showErr(Label lbl, String msg) { lbl.setText(msg); lbl.setVisible(true); }
 
+    private static String listSurfaceStyle() {
+        return "-fx-background-color:" + (AppTheme.darkMode ? "#1E293B" : "white") + "; " +
+                "-fx-border-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; " +
+                "-fx-border-radius:8px; -fx-background-radius:8px;";
+    }
+
     private void showLongTextDialog(String title, String value) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
@@ -722,5 +800,29 @@ public class CirculationView extends BorderPane {
 
     private static String textMuted() {
         return AppTheme.darkMode ? "#94A3B8" : "#64748B";
+    }
+
+    private static String overdueBannerBackground() {
+        return AppTheme.darkMode ? "rgba(127,29,29,0.28)" : "#FEF2F2";
+    }
+
+    private static String overdueBannerBorder() {
+        return AppTheme.darkMode ? "#7F1D1D" : "#FECACA";
+    }
+
+    private static String overdueIconSurface() {
+        return AppTheme.darkMode ? "rgba(248,113,113,0.16)" : "#FCA5A522";
+    }
+
+    private static String overdueBannerTitle() {
+        return AppTheme.darkMode ? "#FECACA" : "#991B1B";
+    }
+
+    private static String overdueBannerText() {
+        return AppTheme.darkMode ? "#FCA5A5" : "#B91C1C";
+    }
+
+    private static String valueOrPlaceholder(String value) {
+        return value == null || value.isBlank() ? "(not provided)" : value;
     }
 }
