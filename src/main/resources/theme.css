@@ -69,9 +69,9 @@
 
 /* ─── RADIO BUTTON ────────────────────────────────────────────── */
 .radio-button {
-    -fx-font-size: 13px;
+    -fx-font-size: 14px;
     -fx-text-fill: #374151;
-    -fx-padding: 4 0;
+    -fx-padding: 6 0;
 }
 .dark-mode .radio-button {
     -fx-text-fill: #E2E8F0;
@@ -83,12 +83,16 @@
     -fx-text-fill: #14B8A6;
 }
 .radio-button .radio {
-    -fx-border-color: #D1D5DB;
-    -fx-border-width: 1.5;
-    -fx-padding: 2px;
+    -fx-border-color: #0D9488;
+    -fx-border-width: 2;
+    -fx-padding: 0px;
+    -fx-background-color: white;
+    -fx-background-radius: 50%;
+    -fx-border-radius: 50%;
 }
 .dark-mode .radio-button .radio {
-    -fx-border-color: #475569;
+    -fx-border-color: #14B8A6;
+    -fx-background-color: #0F172A;
 }
 .radio-button:selected .radio {
     -fx-background-color: #0D9488;
@@ -97,6 +101,9 @@
 .dark-mode .radio-button:selected .radio {
     -fx-background-color: #14B8A6;
     -fx-border-color: #14B8A6;
+}
+.radio-button:selected .dot {
+    -fx-background-color: white;
 }
 .sidebar {
     -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F172A, #1A2942);
@@ -266,6 +273,14 @@
     -fx-background-color: #1E293B; -fx-border-color: #334155;
 }
 
+/* ─── GENERIC LABEL (for dialog content) ──────────────────────── */
+.label {
+    -fx-text-fill: #374151;
+}
+.dark-mode .label {
+    -fx-text-fill: #E2E8F0;
+}
+
 /* ─── TYPOGRAPHY ──────────────────────────────────────────────── */
 .label-tiny {
     -fx-font-size: 11px; -fx-font-weight: 700;
@@ -356,6 +371,10 @@
     -fx-background-color: #1E293B; -fx-border-color: #334155;
 }
 .dark-mode .combo-box > .arrow-button > .arrow { -fx-background-color: #94A3B8; }
+.dark-mode .combo-box > .text-field {
+    -fx-background-color: #1E293B; -fx-border-color: #334155;
+    -fx-text-fill: #E2E8F0;
+}
 .combo-box .list-cell { -fx-font-size: 14px; -fx-text-fill: #1E293B; -fx-padding: 8 12; }
 .dark-mode .combo-box .list-cell { -fx-text-fill: #E2E8F0; }
 .combo-box-popup .list-view {
@@ -370,33 +389,44 @@
 .spinner .text-field {
     -fx-background-color: white; -fx-border-color: #D1D5DB;
     -fx-border-radius: 8 0 0 8; -fx-background-radius: 8 0 0 8;
+    -fx-text-fill: #1F2937; -fx-font-size: 14px;
 }
 .dark-mode .spinner .text-field {
     -fx-background-color: #1E293B; -fx-border-color: #334155; -fx-text-fill: #E2E8F0;
+    -fx-font-size: 14px;
 }
 .spinner .increment-arrow-button,
 .spinner .decrement-arrow-button {
-    -fx-background-color: #F1F5F9; -fx-border-color: #D1D5DB; -fx-border-width: 1.5; 
+    -fx-background-color: #0D9488; -fx-border-color: #0B8476; -fx-border-width: 1.5; 
     -fx-cursor: hand; -fx-background-radius: 0 8 0 0; -fx-border-radius: 0 8 0 0;
-    -fx-padding: 4px 8px; -fx-font-size: 12px;
+    -fx-padding: 6px 10px; -fx-font-size: 14px; -fx-text-fill: white; -fx-font-weight: bold;
 }
 .spinner .increment-arrow-button {
-    -fx-padding: 4px 8px; -fx-border-radius: 0 8 0 0; -fx-background-radius: 0 8 0 0;
+    -fx-padding: 6px 10px; -fx-border-radius: 0 8 0 0; -fx-background-radius: 0 8 0 0;
 }
 .spinner .decrement-arrow-button {
-    -fx-padding: 4px 8px; -fx-border-radius: 0 0 8 0; -fx-background-radius: 0 0 8 0;
+    -fx-padding: 6px 10px; -fx-border-radius: 0 0 8 0; -fx-background-radius: 0 0 8 0;
 }
 .spinner .increment-arrow,
 .spinner .decrement-arrow {
-    -fx-background-color: #334155; -fx-padding: 2px;
+    -fx-background-color: white; -fx-padding: 3px; -fx-font-size: 16px;
+}
+.spinner:hover .increment-arrow-button,
+.spinner:hover .decrement-arrow-button {
+    -fx-background-color: #0A7A68;
 }
 .dark-mode .spinner .increment-arrow-button,
 .dark-mode .spinner .decrement-arrow-button { 
-    -fx-background-color: #334155; -fx-border-color: #475569; -fx-border-width: 1.5;
+    -fx-background-color: #14B8A6; -fx-border-color: #0D9488; -fx-border-width: 1.5;
+    -fx-text-fill: white; -fx-font-weight: bold;
 }
 .dark-mode .spinner .increment-arrow,
 .dark-mode .spinner .decrement-arrow {
-    -fx-background-color: #E2E8F0;
+    -fx-background-color: white; -fx-padding: 3px;
+}
+.dark-mode .spinner:hover .increment-arrow-button,
+.dark-mode .spinner:hover .decrement-arrow-button {
+    -fx-background-color: #0D9488;
 }
 
 .check-box .box {
