@@ -377,7 +377,8 @@ public class RegistrationDialog {
      }
 
     private static VBox roleOption(RadioButton radioButton, String title, String description, boolean selected) {
-        radioButton.setStyle("-fx-padding: 2 0 0 0;");
+        radioButton.setStyle("-fx-padding: 2 0 0 0; -fx-font-size: 14px; " +
+                "-fx-border-color: transparent; -fx-background-color: transparent;");
 
         Label titleLabel = new Label(title);
         titleLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");

@@ -89,6 +89,10 @@ public class AnalyticsDashboard extends BorderPane {
 
     private ComboBox<String> overdueMetricFilter;
     private ComboBox<String> overdueSortFilter;
+    private ComboBox<String> overdueLimitFilter;
+    private ComboBox<String> overdueListSortFilter;
+    
+    private boolean isUpdatingCategories = false;
 
     public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff) {
         this.onRefresh = onRefresh;
@@ -229,24 +233,49 @@ public class AnalyticsDashboard extends BorderPane {
     }
 
     private void attachChartListeners() {
-        List<ComboBox<String>> controls = List.of(
+        List<ComboBox<String>> chartControls = List.of(
                 trendRangeFilter, trendGroupingFilter, trendSeriesFilter, trendCategoryFilter, trendStyleFilter,
                 categoryMetricFilter, categorySortFilter, categoryLimitFilter,
                 overdueMetricFilter, overdueSortFilter
         );
-        controls.forEach(control -> control.setOnAction(event -> refreshStaffCharts()));
+        chartControls.forEach(control -> control.setOnAction(event -> {
+            if (!isUpdatingCategories) {
+                refreshStaffCharts();
+            }
+        }));
+        
+        // Add listeners for overdue list filters
+        if (overdueLimitFilter != null) {
+            overdueLimitFilter.setOnAction(event -> updateOverduePanel());
+        }
+        if (overdueListSortFilter != null) {
+            overdueListSortFilter.setOnAction(event -> updateOverduePanel());
+        }
     }
 
     private void buildBottomPanels() {
         bottomPane.getChildren().clear();
 
         recentPanel = createSurfacePanel(isStaff ? "Recent Issues" : "My Active Books");
-        recentPanel.setPrefWidth(420);
+        recentPanel.setPrefWidth(Integer.MAX_VALUE);
         recentPanel.setMinWidth(320);
 
         overduePanel = createSurfacePanel(isStaff ? "Top Overdue" : "My Overdue Books");
-        overduePanel.setPrefWidth(420);
+        overduePanel.setPrefWidth(Integer.MAX_VALUE);
         overduePanel.setMinWidth(320);
+
+        // Add filter controls to overdue panel
+        if (isStaff) {
+            overdueLimitFilter = filterCombo("Top 6", List.of("Top 5", "Top 10", "Top 15", "All"));
+            overdueListSortFilter = filterCombo("Days Overdue (High)", 
+                    List.of("Days Overdue (High)", "Days Overdue (Low)", "Fine Amount (High)", "Fine Amount (Low)", "Borrower (A-Z)"));
+            
+            FlowPane overdueControls = filterRow(
+                    filterGroup("Limit", overdueLimitFilter),
+                    filterGroup("Sort", overdueListSortFilter)
+            );
+            overduePanel.getChildren().add(overdueControls);
+        }
 
         bottomPane.getChildren().addAll(recentPanel, overduePanel);
     }
@@ -287,19 +316,24 @@ public class AnalyticsDashboard extends BorderPane {
             return;
         }
 
-        String currentSelection = trendCategoryFilter.getValue();
-        List<String> items = new ArrayList<>();
-        items.add("All categories");
-        BookService.getAllBooks().stream()
-                .map(Book::getCategory)
-                .filter(category -> category != null && !category.isBlank())
-                .map(String::trim)
-                .distinct()
-                .sorted(String.CASE_INSENSITIVE_ORDER)
-                .forEach(items::add);
+        try {
+            isUpdatingCategories = true;
+            String currentSelection = trendCategoryFilter.getValue();
+            List<String> items = new ArrayList<>();
+            items.add("All categories");
+            BookService.getAllBooks().stream()
+                    .map(Book::getCategory)
+                    .filter(category -> category != null && !category.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .forEach(items::add);
 
-        trendCategoryFilter.getItems().setAll(items);
-        trendCategoryFilter.setValue(items.contains(currentSelection) ? currentSelection : "All categories");
+            trendCategoryFilter.getItems().setAll(items);
+            trendCategoryFilter.setValue(items.contains(currentSelection) ? currentSelection : "All categories");
+        } finally {
+            isUpdatingCategories = false;
+        }
     }
 
     private void updateStats(Map<String, Object> stats, int totalUsers, int staffCount) {
@@ -705,11 +739,9 @@ public class AnalyticsDashboard extends BorderPane {
 
     private void updateOverduePanel() {
         clearPanel(overduePanel);
+        
         List<IssueRecord> overdueRecords = isStaff
-                ? BookService.getAllOverdueBooks().stream()
-                .sorted(Comparator.comparingLong(IssueRecord::getDaysOverdue).reversed())
-                .limit(6)
-                .collect(Collectors.toList())
+                ? BookService.getAllOverdueBooks()
                 : BookService.getUserOverdueBooks(currentUser);
 
         if (overdueRecords.isEmpty()) {
@@ -717,7 +749,44 @@ public class AnalyticsDashboard extends BorderPane {
             return;
         }
 
-        overdueRecords.forEach(record -> overduePanel.getChildren().add(createOverdueRow(record)));
+        // Apply sorting based on the selected filter
+        if (isStaff && overdueListSortFilter != null) {
+            String sortOption = overdueListSortFilter.getValue();
+            if ("Days Overdue (Low)".equals(sortOption)) {
+                overdueRecords.sort(Comparator.comparingLong(IssueRecord::getDaysOverdue));
+            } else if ("Fine Amount (High)".equals(sortOption)) {
+                overdueRecords.sort((a, b) -> Double.compare(b.calculateFine(), a.calculateFine()));
+            } else if ("Fine Amount (Low)".equals(sortOption)) {
+                overdueRecords.sort((a, b) -> Double.compare(a.calculateFine(), b.calculateFine()));
+            } else if ("Borrower (A-Z)".equals(sortOption)) {
+                overdueRecords.sort(Comparator.comparing(IssueRecord::getUserId));
+            } else {
+                // Default: Days Overdue (High)
+                overdueRecords.sort(Comparator.comparingLong(IssueRecord::getDaysOverdue).reversed());
+            }
+        } else {
+            // Default sorting
+            overdueRecords.sort(Comparator.comparingLong(IssueRecord::getDaysOverdue).reversed());
+        }
+
+        // Apply limit based on the selected filter
+        long limit = 6;
+        if (isStaff && overdueLimitFilter != null) {
+            String limitOption = overdueLimitFilter.getValue();
+            if ("Top 5".equals(limitOption)) {
+                limit = 5;
+            } else if ("Top 10".equals(limitOption)) {
+                limit = 10;
+            } else if ("Top 15".equals(limitOption)) {
+                limit = 15;
+            } else if ("All".equals(limitOption)) {
+                limit = Long.MAX_VALUE;
+            }
+        }
+
+        overdueRecords.stream()
+                .limit(limit)
+                .forEach(record -> overduePanel.getChildren().add(createOverdueRow(record)));
     }
 
     private HBox createOverdueRow(IssueRecord record) {

@@ -87,12 +87,14 @@
             </plugin>
         </plugins>
 
-        <!-- Include theme.css from resources -->
+        <!-- Include theme.css and app icon from resources -->
         <resources>
             <resource>
                 <directory>src/main/resources</directory>
                 <includes>
                     <include>**/*.css</include>
+                    <include>**/*.svg</include>
+                    <include>**/*.png</include>
                 </includes>
             </resource>
         </resources>

@@ -376,14 +376,24 @@
 }
 .spinner .increment-arrow-button,
 .spinner .decrement-arrow-button {
-    -fx-background-color: #F1F5F9; -fx-border-color: #D1D5DB; -fx-cursor: hand;
+    -fx-background-color: #F1F5F9; -fx-border-color: #D1D5DB; -fx-border-width: 1.5; 
+    -fx-cursor: hand; -fx-background-radius: 0 8 0 0; -fx-border-radius: 0 8 0 0;
+    -fx-padding: 4px 8px; -fx-font-size: 12px;
+}
+.spinner .increment-arrow-button {
+    -fx-padding: 4px 8px; -fx-border-radius: 0 8 0 0; -fx-background-radius: 0 8 0 0;
+}
+.spinner .decrement-arrow-button {
+    -fx-padding: 4px 8px; -fx-border-radius: 0 0 8 0; -fx-background-radius: 0 0 8 0;
 }
 .spinner .increment-arrow,
 .spinner .decrement-arrow {
-    -fx-background-color: #334155;
+    -fx-background-color: #334155; -fx-padding: 2px;
 }
 .dark-mode .spinner .increment-arrow-button,
-.dark-mode .spinner .decrement-arrow-button { -fx-background-color: #334155; -fx-border-color: #475569; }
+.dark-mode .spinner .decrement-arrow-button { 
+    -fx-background-color: #334155; -fx-border-color: #475569; -fx-border-width: 1.5;
+}
 .dark-mode .spinner .increment-arrow,
 .dark-mode .spinner .decrement-arrow {
     -fx-background-color: #E2E8F0;

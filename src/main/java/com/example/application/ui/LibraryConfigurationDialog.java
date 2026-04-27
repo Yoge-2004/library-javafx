@@ -43,13 +43,19 @@ public class LibraryConfigurationDialog {
         GridPane rulesGrid = grid();
 
         Spinner<Integer> maxBorrowSpin = new Spinner<>(1, 100, maxBorrowLimit);
-        maxBorrowSpin.setEditable(true); maxBorrowSpin.setId("maxBorrow");
+        maxBorrowSpin.setEditable(true); 
+        maxBorrowSpin.setId("maxBorrow");
+        maxBorrowSpin.setStyle("-fx-font-size: 14px;");
 
         Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, loanDays);
-        loanDaysSpin.setEditable(true); loanDaysSpin.setId("loanDays");
+        loanDaysSpin.setEditable(true); 
+        loanDaysSpin.setId("loanDays");
+        loanDaysSpin.setStyle("-fx-font-size: 14px;");
 
         Spinner<Integer> renewalSpin = new Spinner<>(0, 10, 2);
-        renewalSpin.setEditable(true); renewalSpin.setId("renewals");
+        renewalSpin.setEditable(true); 
+        renewalSpin.setId("renewals");
+        renewalSpin.setStyle("-fx-font-size: 14px;");
 
         rulesGrid.addRow(0, gridLabel("Max Books per User:"),  maxBorrowSpin);
         rulesGrid.addRow(1, gridLabel("Loan Period (days):"),  loanDaysSpin);

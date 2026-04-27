@@ -104,11 +104,32 @@ public class CatalogView extends BorderPane {
         HBox.setHgrow(searchField, Priority.ALWAYS);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
 
-        // Category filter
+         // Category filter
         categoryFilter = new ComboBox<>();
         refreshCategoryFilter();
         categoryFilter.setValue("All Categories");
-        categoryFilter.valueProperty().addListener((obs, old, newVal) -> applyFilters());
+        categoryFilter.valueProperty().addListener((obs, old, newVal) -> {
+            // Handle "Add Category..." selection
+            if ("── Add Category...".equals(newVal)) {
+                TextInputDialog td = new TextInputDialog();
+                td.setTitle("New Category");
+                td.setHeaderText("Enter a new category name:");
+                td.setContentText("Category:");
+                td.showAndWait().ifPresent(name -> {
+                    if (!name.isBlank()) {
+                        String trimmed = name.trim();
+                        if (!categoryFilter.getItems().contains(trimmed)) {
+                            categoryFilter.getItems().add(categoryFilter.getItems().size() - 1, trimmed);
+                        }
+                        categoryFilter.setValue(trimmed);
+                    } else {
+                        categoryFilter.setValue("All Categories");
+                    }
+                });
+            } else {
+                applyFilters();
+            }
+        });
 
         // Add book button (staff only)
         if (isStaff) {
@@ -152,26 +173,6 @@ public class CatalogView extends BorderPane {
         cats.add("── Add Category...");
         categoryFilter.getItems().setAll(cats);
         categoryFilter.setValue(current != null && cats.contains(current) ? current : "All Categories");
-        // Handle "Add Category..." selection
-        categoryFilter.valueProperty().addListener((o, old, nv) -> {
-            if ("── Add Category...".equals(nv)) {
-                TextInputDialog td = new TextInputDialog();
-                td.setTitle("New Category");
-                td.setHeaderText("Enter a new category name:");
-                td.setContentText("Category:");
-                td.showAndWait().ifPresent(name -> {
-                    if (!name.isBlank()) {
-                        String trimmed = name.trim();
-                        if (!categoryFilter.getItems().contains(trimmed)) {
-                            categoryFilter.getItems().add(categoryFilter.getItems().size() - 1, trimmed);
-                        }
-                        categoryFilter.setValue(trimmed);
-                    } else {
-                        categoryFilter.setValue("All Categories");
-                    }
-                });
-            }
-        });
     }
 
     private void applyFilters() {

@@ -212,10 +212,13 @@ public class LoginView extends StackPane {
         loadingIndicator.setManaged(false);
         loadingIndicator.setMaxSize(24, 24);
 
-        HBox buttonContainer = new HBox(12);
+        StackPane buttonStack = new StackPane(loginButton, loadingIndicator);
+        StackPane.setAlignment(loadingIndicator, Pos.CENTER);
+        HBox.setHgrow(buttonStack, Priority.ALWAYS);
+
+        HBox buttonContainer = new HBox(buttonStack);
         buttonContainer.setAlignment(Pos.CENTER);
         buttonContainer.setMaxWidth(Double.MAX_VALUE);
-        buttonContainer.getChildren().addAll(loginButton, loadingIndicator);
 
         // Register link
         HBox registerBox = new HBox(6);
@@ -242,8 +245,13 @@ public class LoginView extends StackPane {
         VBox footerBox = new VBox(8, registerBox, forgotPassLink);
         footerBox.setAlignment(Pos.CENTER);
 
-        // Add enter key handler
-        librarySelector.setOnAction(e -> usernameField.requestFocus());
+        // Add enter key handler - only on explicit Enter press, not on every action
+        librarySelector.setOnAction(e -> {
+            // Only move focus if a value is actually selected (not during text editing)
+            if (librarySelector.getValue() != null && !librarySelector.getValue().isEmpty()) {
+                usernameField.requestFocus();
+            }
+        });
         usernameField.setOnAction(e -> passwordField.requestFocus());
         passwordField.setOnAction(e -> handleLogin());
         visiblePasswordField.setOnAction(e -> handleLogin());
@@ -525,6 +533,8 @@ public class LoginView extends StackPane {
 
         DialogPane pane = dlg.getDialogPane();
         AppTheme.applyTheme(pane);
+        pane.setPrefWidth(450);
+        pane.setMinWidth(400);
 
         VBox content = new VBox(12);
         content.setPadding(new Insets(20));
@@ -541,7 +551,9 @@ public class LoginView extends StackPane {
         Label statusLabel = new Label();
         statusLabel.setVisible(false);
         statusLabel.setWrapText(true);
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #DC2626;");
+        statusLabel.setPrefWidth(400);
+        statusLabel.setMaxWidth(400);
+        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #DC2626; -fx-padding: 8 0 0 0;");
 
         content.getChildren().addAll(info, new Label("Username:"), usernameResetField, statusLabel);
         pane.setContent(content);
