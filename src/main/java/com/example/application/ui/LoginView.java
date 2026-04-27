@@ -451,9 +451,17 @@ public class LoginView extends StackPane {
 
         syncingLibraryItems = true;
         try {
+            // Store the focused state before updating items
+            boolean wasEditorFocused = librarySelector.getEditor().isFocused();
+            
             librarySelector.setItems(FXCollections.observableArrayList(filtered));
             librarySelector.setVisibleRowCount(Math.max(1, Math.min(6, filtered.size())));
             librarySelector.getEditor().setText(currentText);
+            
+            // Restore focus to editor if it was focused before
+            if (wasEditorFocused) {
+                librarySelector.getEditor().requestFocus();
+            }
         } finally {
             syncingLibraryItems = false;
         }
@@ -533,8 +541,8 @@ public class LoginView extends StackPane {
 
         DialogPane pane = dlg.getDialogPane();
         AppTheme.applyTheme(pane);
-        pane.setPrefWidth(450);
-        pane.setMinWidth(400);
+        pane.setPrefWidth(500);
+        pane.setMinWidth(420);
 
         VBox content = new VBox(12);
         content.setPadding(new Insets(20));
@@ -551,8 +559,7 @@ public class LoginView extends StackPane {
         Label statusLabel = new Label();
         statusLabel.setVisible(false);
         statusLabel.setWrapText(true);
-        statusLabel.setPrefWidth(400);
-        statusLabel.setMaxWidth(400);
+        statusLabel.setMaxWidth(Double.MAX_VALUE);
         statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #DC2626; -fx-padding: 8 0 0 0;");
 
         content.getChildren().addAll(info, new Label("Username:"), usernameResetField, statusLabel);
