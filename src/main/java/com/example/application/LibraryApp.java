@@ -55,13 +55,13 @@ public class LibraryApp extends Application implements ToastDisplay {
     public void start(Stage stage) {
         this.primaryStage = stage;
         stage.setTitle("Library OS");
-        stage.setMinWidth(1100);
-        stage.setMinHeight(700);
+        stage.setMinWidth(1200);
+        stage.setMinHeight(800);
 
         rootStack = new StackPane();
 
-        double w = Math.min(1400, Screen.getPrimary().getVisualBounds().getWidth() * 0.9);
-        double h = Math.min(900,  Screen.getPrimary().getVisualBounds().getHeight() * 0.9);
+        double w = Screen.getPrimary().getVisualBounds().getWidth() * 0.95;
+        double h = Screen.getPrimary().getVisualBounds().getHeight() * 0.95;
 
         Scene scene = AppTheme.createScene(rootStack, w, h);
         stage.setScene(scene);

@@ -434,7 +434,9 @@ public class LoginView extends StackPane {
     private void showError(String message) {
         errorLabel.setText(message);
         errorLabel.setVisible(true);
-        errorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #DC2626; -fx-padding: 8 0 0 0;");
+        errorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: #DC2626; -fx-padding: 8 0 0 0; -fx-wrap-text: true;");
+        errorLabel.setWrapText(true);
+        errorLabel.setMaxWidth(Double.MAX_VALUE);
     }
 
     private void filterLibraries(String query) {
@@ -443,7 +445,7 @@ public class LoginView extends StackPane {
         }
 
         String currentText = query == null ? "" : query;
-        int caretPosition = librarySelector.getEditor().getCaretPosition();
+        int caretPosition = Math.max(0, librarySelector.getEditor().getCaretPosition());
         String normalized = query == null ? "" : query.trim().toLowerCase();
         List<String> filtered = availableLibraries.stream()
                 .filter(value -> normalized.isEmpty() || value.toLowerCase().contains(normalized))
@@ -451,12 +453,17 @@ public class LoginView extends StackPane {
 
         syncingLibraryItems = true;
         try {
-            // Store the focused state before updating items
+            // Store the focused state and selection before updating items
             boolean wasEditorFocused = librarySelector.getEditor().isFocused();
             
             librarySelector.setItems(FXCollections.observableArrayList(filtered));
             librarySelector.setVisibleRowCount(Math.max(1, Math.min(6, filtered.size())));
             librarySelector.getEditor().setText(currentText);
+            
+            // Immediately restore caret position after setting text
+            if (caretPosition <= currentText.length()) {
+                librarySelector.getEditor().positionCaret(caretPosition);
+            }
             
             // Restore focus to editor if it was focused before
             if (wasEditorFocused) {
@@ -466,12 +473,10 @@ public class LoginView extends StackPane {
             syncingLibraryItems = false;
         }
 
-        Platform.runLater(() -> {
-            librarySelector.getEditor().positionCaret(Math.min(caretPosition, currentText.length()));
-            if ((librarySelector.isFocused() || librarySelector.getEditor().isFocused()) && !librarySelector.isShowing()) {
-                librarySelector.show();
-            }
-        });
+        // Show dropdown if editor is focused and there are filtered results
+        if ((librarySelector.isFocused() || librarySelector.getEditor().isFocused()) && !librarySelector.isShowing() && !filtered.isEmpty()) {
+            librarySelector.show();
+        }
     }
 
     private String resolveSelectedLibrary() {

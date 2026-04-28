@@ -85,6 +85,20 @@
                     </includes>
                 </configuration>
             </plugin>
+
+            <!-- JAR plugin for standalone execution -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>${main.class}</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
         </plugins>
 
         <!-- Include theme.css and app icon from resources -->
