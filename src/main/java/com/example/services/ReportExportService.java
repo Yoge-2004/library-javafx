@@ -3,13 +3,13 @@ package com.example.services;
 import com.example.entities.AppConfiguration;
 import com.example.entities.BorrowRequest;
 import com.example.entities.BooksDB.IssueRecord;
+import com.example.storage.AppPaths;
 import com.example.storage.DataStorage;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -68,8 +68,8 @@ public final class ReportExportService {
     private static Path writeCsv(String prefix, String header, List<String> rows) throws IOException {
         AppConfiguration config = AppConfigurationService.getConfiguration();
         DataStorage.ensureDirectoryExists(config.getExportDirectory());
-        Path file = Paths.get(config.getExportDirectory(),
-                prefix + "_" + LocalDateTime.now().format(FILE_TS) + ".csv");
+        Path file = AppPaths.resolveExportDirectory()
+                .resolve(prefix + "_" + LocalDateTime.now().format(FILE_TS) + ".csv");
 
         List<String> lines = new ArrayList<>();
         lines.add(header);

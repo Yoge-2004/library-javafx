@@ -3,6 +3,7 @@ package com.example.services;
 import com.example.entities.User;
 import com.example.entities.UserRole;
 import com.example.entities.UsersDB;
+import com.example.entities.BorrowRequest;
 import com.example.exceptions.UserException;
 import com.example.exceptions.ValidationException;
 
@@ -151,12 +152,29 @@ public final class UserService {
         }
 
         try {
+            assertAccountCanBeRemoved(userId.trim());
             userDB.removeUser(userId.trim());
             LOGGER.log(Level.INFO, "User deleted successfully: {0}", userId);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to delete user: " + userId, e);
             throw new UserException("Failed to delete user: " + e.getMessage(), e);
         }
+    }
+
+    public static void deleteOwnAccount(String userId, String password) throws UserException {
+        if (userId == null || userId.trim().isEmpty()) {
+            throw new ValidationException("User ID cannot be empty");
+        }
+        if (password == null || password.isBlank()) {
+            throw new ValidationException("Current password is required");
+        }
+
+        User user = getUserById(userId.trim());
+        if (!Objects.equals(user.getPassword(), password)) {
+            throw new ValidationException("Current password is incorrect");
+        }
+
+        deleteUser(userId.trim());
     }
 
     /**
@@ -259,6 +277,19 @@ public final class UserService {
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to persist user database", e);
             throw new IOException("Failed to persist users database: " + e.getMessage(), e);
+        }
+    }
+
+    private static void assertAccountCanBeRemoved(String userId) {
+        if (!BookService.getUserActiveIssueRecords(userId).isEmpty()) {
+            throw new UserException("Return all issued books before deleting this account");
+        }
+
+        long pendingRequests = BookService.getBorrowRequestsForUser(userId).stream()
+                .filter(BorrowRequest::isPending)
+                .count();
+        if (pendingRequests > 0) {
+            throw new UserException("Resolve pending borrow requests before deleting this account");
         }
     }
 

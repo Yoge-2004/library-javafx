@@ -1,6 +1,7 @@
 package com.example.entities;
 
 import com.example.exceptions.UserException;
+import com.example.storage.AppPaths;
 import com.example.storage.DataStorage;
 
 import java.io.*;
@@ -17,7 +18,7 @@ public final class UsersDB implements Serializable {
     private static final long serialVersionUID = 3L; // Bumped for fixes
 
     private static final Logger LOGGER = Logger.getLogger(UsersDB.class.getName());
-    private static final String USERS_DB_FILE = "data/users_db.ser";
+    private static final String USERS_DB_FILE = "users_db.ser";
 
     private static volatile UsersDB instance;
     private static final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -43,7 +44,7 @@ public final class UsersDB implements Serializable {
             synchronized (UsersDB.class) {
                 if (instance == null) {
                     try {
-                        instance = DataStorage.readSerialized(USERS_DB_FILE, UsersDB.class);
+                        instance = DataStorage.readSerialized(dataFile(), UsersDB.class);
                         if (instance == null) {
                             instance = new UsersDB();
                             LOGGER.log(Level.INFO, "Created new UsersDB instance");
@@ -363,7 +364,7 @@ public final class UsersDB implements Serializable {
     public void forcePersist() throws IOException {
         lock.readLock().lock();
         try {
-            DataStorage.writeSerialized(USERS_DB_FILE, this);
+            DataStorage.writeSerialized(dataFile(), this);
             LOGGER.log(Level.INFO, "Users database forcibly persisted");
         } finally {
             lock.readLock().unlock();
@@ -422,7 +423,7 @@ public final class UsersDB implements Serializable {
      */
     private void loadUsersFromStorage() {
         try {
-            UsersDB loadedInstance = DataStorage.readSerialized(USERS_DB_FILE, UsersDB.class);
+            UsersDB loadedInstance = DataStorage.readSerialized(dataFile(), UsersDB.class);
             if (loadedInstance != null && loadedInstance.users != null) {
                 users.putAll(loadedInstance.users);
                 this.rolesInitialized = loadedInstance.rolesInitialized;
@@ -441,11 +442,15 @@ public final class UsersDB implements Serializable {
      */
     private void saveUsersToStorage() {
         try {
-            DataStorage.writeSerialized(USERS_DB_FILE, this);
+            DataStorage.writeSerialized(dataFile(), this);
             LOGGER.log(Level.FINE, "Users database saved successfully");
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to save users database", e);
         }
+    }
+
+    private static String dataFile() {
+        return AppPaths.resolveDataFile(USERS_DB_FILE).toString();
     }
 
     /**

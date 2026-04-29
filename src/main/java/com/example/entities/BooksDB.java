@@ -1,6 +1,7 @@
 package com.example.entities;
 
 import com.example.exceptions.BooksException;
+import com.example.storage.AppPaths;
 import com.example.storage.DataStorage;
 
 import java.io.*;
@@ -22,10 +23,10 @@ public final class BooksDB implements Serializable {
     private static final Logger LOGGER = Logger.getLogger(BooksDB.class.getName());
 
     // File paths for different data types
-    private static final String BOOKS_DB_FILE = "data/books_db.ser";
-    private static final String ISSUED_BOOKS_FILE = "data/issued_books.ser";
-    private static final String BORROWER_DETAILS_FILE = "data/borrower_details.ser";
-    private static final String ISSUE_RECORDS_FILE = "data/issue_records.ser";
+    private static final String BOOKS_DB_FILE = "books_db.ser";
+    private static final String ISSUED_BOOKS_FILE = "issued_books.ser";
+    private static final String BORROWER_DETAILS_FILE = "borrower_details.ser";
+    private static final String ISSUE_RECORDS_FILE = "issue_records.ser";
 
     // Business rule constants
     public static final int DEFAULT_LOAN_DAYS = 14;
@@ -254,7 +255,7 @@ public final class BooksDB implements Serializable {
             synchronized (BooksDB.class) {
                 if (instance == null) {
                     try {
-                        instance = DataStorage.readSerialized(BOOKS_DB_FILE, BooksDB.class);
+                        instance = DataStorage.readSerialized(dataFile(BOOKS_DB_FILE), BooksDB.class);
                         if (instance == null) {
                             instance = new BooksDB();
                             LOGGER.log(Level.INFO, "Created new BooksDB instance");
@@ -833,7 +834,7 @@ public final class BooksDB implements Serializable {
 
     private void loadIssuedBooks() {
         try {
-            Map<String, List<String>> loaded = DataStorage.readSerializedMap(ISSUED_BOOKS_FILE);
+            Map<String, List<String>> loaded = DataStorage.readSerializedMap(dataFile(ISSUED_BOOKS_FILE));
             if (loaded != null) {
                 issuedBooks.clear();
                 issuedBooks.putAll(loaded);
@@ -845,7 +846,7 @@ public final class BooksDB implements Serializable {
 
     private void loadBorrowerDetails() {
         try {
-            Map<String, Map<String, Integer>> loaded = DataStorage.readSerializedNestedMap(BORROWER_DETAILS_FILE);
+            Map<String, Map<String, Integer>> loaded = DataStorage.readSerializedNestedMap(dataFile(BORROWER_DETAILS_FILE));
             if (loaded != null) {
                 borrowerDetails.clear();
                 borrowerDetails.putAll(loaded);
@@ -858,7 +859,7 @@ public final class BooksDB implements Serializable {
     @SuppressWarnings("unchecked")
     private void loadIssueRecords() {
         try {
-            Map<String, List<IssueRecord>> loaded = DataStorage.readSerialized(ISSUE_RECORDS_FILE, Map.class);
+            Map<String, List<IssueRecord>> loaded = DataStorage.readSerialized(dataFile(ISSUE_RECORDS_FILE), Map.class);
             if (loaded != null) {
                 issueRecords.clear();
                 issueRecords.putAll(loaded);
@@ -876,13 +877,17 @@ public final class BooksDB implements Serializable {
 
     private void saveAllData() {
         try {
-            DataStorage.writeSerialized(BOOKS_DB_FILE, this);
-            DataStorage.writeSerializedMap(ISSUED_BOOKS_FILE, issuedBooks);
-            DataStorage.writeSerializedNestedMap(BORROWER_DETAILS_FILE, borrowerDetails);
-            DataStorage.writeSerialized(ISSUE_RECORDS_FILE, issueRecords);
+            DataStorage.writeSerialized(dataFile(BOOKS_DB_FILE), this);
+            DataStorage.writeSerializedMap(dataFile(ISSUED_BOOKS_FILE), issuedBooks);
+            DataStorage.writeSerializedNestedMap(dataFile(BORROWER_DETAILS_FILE), borrowerDetails);
+            DataStorage.writeSerialized(dataFile(ISSUE_RECORDS_FILE), issueRecords);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to save database files", e);
         }
+    }
+
+    private static String dataFile(String fileName) {
+        return AppPaths.resolveDataFile(fileName).toString();
     }
 
     /**

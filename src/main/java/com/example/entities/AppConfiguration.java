@@ -1,5 +1,7 @@
 package com.example.entities;
 
+import com.example.storage.AppPaths;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Currency;
@@ -18,8 +20,8 @@ public final class AppConfiguration implements Serializable {
     private String branchName     = "Main Branch";
 
     // ── Data storage
-    private String dataDirectory   = "data";
-    private String exportDirectory = "exports";
+    private String dataDirectory   = AppPaths.defaultDataDirectory().toString();
+    private String exportDirectory = AppPaths.defaultExportDirectory().toString();
 
     // ── Fine / currency
     private double finePerDay      = 2.00;
@@ -43,6 +45,7 @@ public final class AppConfiguration implements Serializable {
 
     // ── Library chooser support
     private List<String> knownLibraries = new ArrayList<>();
+    private List<String> savedCategories = new ArrayList<>();
 
     // ════════════════════════════════════════════════════════════════
     // Library identity
@@ -63,10 +66,16 @@ public final class AppConfiguration implements Serializable {
     // Data storage
     // ════════════════════════════════════════════════════════════════
     public String getDataDirectory()           { return dataDirectory; }
-    public void   setDataDirectory(String v)   { dataDirectory  = blankOr(v, "data"); }
+    public void   setDataDirectory(String v)   {
+        dataDirectory = AppPaths.resolveConfiguredDirectory(blankToNull(v), AppPaths.defaultDataDirectory())
+                .toString();
+    }
 
     public String getExportDirectory()         { return exportDirectory; }
-    public void   setExportDirectory(String v) { exportDirectory = blankOr(v, "exports"); }
+    public void   setExportDirectory(String v) {
+        exportDirectory = AppPaths.resolveConfiguredDirectory(blankToNull(v), AppPaths.defaultExportDirectory())
+                .toString();
+    }
 
     // ════════════════════════════════════════════════════════════════
     // Fine / currency
@@ -163,6 +172,26 @@ public final class AppConfiguration implements Serializable {
         knownLibraries.add(0, current);
     }
 
+    public List<String> getSavedCategories() {
+        ensureSavedCategories();
+        return List.copyOf(savedCategories);
+    }
+
+    public void setSavedCategories(List<String> categories) {
+        savedCategories = new ArrayList<>();
+        if (categories != null) {
+            for (String category : categories) {
+                addSavedCategory(category);
+            }
+        }
+        ensureSavedCategories();
+    }
+
+    public void rememberCategory(String category) {
+        addSavedCategory(category);
+        ensureSavedCategories();
+    }
+
     public void normalize() {
         if (libraryId == null || libraryId.isBlank()) {
             libraryId = UUID.randomUUID().toString();
@@ -178,6 +207,7 @@ public final class AppConfiguration implements Serializable {
         setCurrencyCode(currencyCode);
         setFinePerDay(finePerDay);
         ensureKnownLibraries();
+        ensureSavedCategories();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -210,5 +240,30 @@ public final class AppConfiguration implements Serializable {
             }
         }
         knownLibraries = new ArrayList<>(unique);
+    }
+
+    private void ensureSavedCategories() {
+        if (savedCategories == null) {
+            savedCategories = new ArrayList<>();
+        }
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (String category : savedCategories) {
+            if (category != null && !category.isBlank()) {
+                unique.add(category.trim());
+            }
+        }
+        savedCategories = new ArrayList<>(unique);
+    }
+
+    private void addSavedCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return;
+        }
+        if (savedCategories == null) {
+            savedCategories = new ArrayList<>();
+        }
+        String trimmed = category.trim();
+        savedCategories.removeIf(existing -> existing.equalsIgnoreCase(trimmed));
+        savedCategories.add(trimmed);
     }
 }

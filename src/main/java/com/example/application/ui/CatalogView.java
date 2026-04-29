@@ -3,16 +3,17 @@ package com.example.application.ui;
 import com.example.application.ToastDisplay;
 import com.example.entities.Book;
 import com.example.exceptions.BooksException;
+import com.example.services.AppConfigurationService;
 import com.example.services.BookService;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.scene.paint.Color;
 
 import java.util.*;
 
@@ -21,6 +22,8 @@ import java.util.*;
  * and intuitive book management actions.
  */
 public class CatalogView extends BorderPane {
+    private static final String ALL_CATEGORIES = "All Categories";
+    private static final String ADD_CATEGORY = "Add New Category...";
 
     private final ObservableList<Book> booksList;
     private final boolean isStaff;
@@ -33,6 +36,7 @@ public class CatalogView extends BorderPane {
     private FlowPane booksGrid;
     private Label resultCountLabel;
     private FilteredList<Book> filteredBooks;
+    private double bookCardWidth = 280;
 
     public CatalogView(ObservableList<Book> booksList, boolean isStaff, String currentUser,
                        Runnable onRefresh, ToastDisplay toastDisplay) {
@@ -63,7 +67,7 @@ public class CatalogView extends BorderPane {
         VBox header = createHeader();
 
         // Filter bar
-        HBox filterBar = createFilterBar();
+        FlowPane filterBar = createFilterBar();
 
         // Results count
         resultCountLabel = new Label("Showing all books");
@@ -75,6 +79,9 @@ public class CatalogView extends BorderPane {
         content.getChildren().addAll(header, filterBar, resultCountLabel, booksGrid);
         scrollPane.setContent(content);
         setCenter(scrollPane);
+
+        widthProperty().addListener((obs, oldValue, newValue) -> updateResponsiveLayout());
+        Platform.runLater(this::updateResponsiveLayout);
     }
 
     private VBox createHeader() {
@@ -90,8 +97,8 @@ public class CatalogView extends BorderPane {
         return header;
     }
 
-    private HBox createFilterBar() {
-        HBox bar = new HBox(12);
+    private FlowPane createFilterBar() {
+        FlowPane bar = new FlowPane(Orientation.HORIZONTAL, 12, 12);
         bar.setAlignment(Pos.CENTER_LEFT);
         bar.getStyleClass().add("filter-bar");
         bar.setPadding(new Insets(12, 16, 12, 16));
@@ -100,32 +107,20 @@ public class CatalogView extends BorderPane {
         searchField = new TextField();
         searchField.setPromptText("Search books by title, author, or ISBN...");
         searchField.getStyleClass().add("search-field");
-        searchField.setPrefWidth(350);
-        HBox.setHgrow(searchField, Priority.ALWAYS);
+        searchField.setMinWidth(240);
+        searchField.setPrefWidth(320);
         searchField.textProperty().addListener((obs, old, newVal) -> applyFilters());
 
-         // Category filter
+        // Category filter
         categoryFilter = new ComboBox<>();
         refreshCategoryFilter();
-        categoryFilter.setValue("All Categories");
+        categoryFilter.setValue(ALL_CATEGORIES);
+        categoryFilter.setPrefWidth(220);
+        categoryFilter.setMinWidth(200);
         categoryFilter.valueProperty().addListener((obs, old, newVal) -> {
-            // Handle "Add Category..." selection
-            if ("── Add Category...".equals(newVal)) {
-                TextInputDialog td = new TextInputDialog();
-                td.setTitle("New Category");
-                td.setHeaderText("Enter a new category name:");
-                td.setContentText("Category:");
-                td.showAndWait().ifPresent(name -> {
-                    if (!name.isBlank()) {
-                        String trimmed = name.trim();
-                        if (!categoryFilter.getItems().contains(trimmed)) {
-                            categoryFilter.getItems().add(categoryFilter.getItems().size() - 1, trimmed);
-                        }
-                        categoryFilter.setValue(trimmed);
-                    } else {
-                        categoryFilter.setValue("All Categories");
-                    }
-                });
+            if (ADD_CATEGORY.equals(newVal)) {
+                BookDialog.showCategoryDialog(getScene() != null ? getScene().getWindow() : null, "")
+                        .ifPresentOrElse(this::rememberAndSelectCategory, () -> categoryFilter.setValue(ALL_CATEGORIES));
             } else {
                 applyFilters();
             }
@@ -135,10 +130,10 @@ public class CatalogView extends BorderPane {
         if (isStaff) {
             Button addBookBtn = AppTheme.createIconTextButton("Add Book", AppTheme.ICON_ADD, AppTheme.ButtonStyle.PRIMARY);
             addBookBtn.setOnAction(e -> showAddBookDialog());
-            bar.getChildren().addAll(searchField, new Separator(javafx.geometry.Orientation.VERTICAL),
-                    categoryFilter, addBookBtn);
+            addBookBtn.setMinHeight(40);
+            bar.getChildren().addAll(searchField, categoryFilter, addBookBtn);
         } else {
-            bar.getChildren().addAll(searchField, new Separator(javafx.geometry.Orientation.VERTICAL), categoryFilter);
+            bar.getChildren().addAll(searchField, categoryFilter);
         }
 
         return bar;
@@ -149,6 +144,7 @@ public class CatalogView extends BorderPane {
         grid.setHgap(16);
         grid.setVgap(16);
         grid.setAlignment(Pos.TOP_LEFT);
+        grid.setPrefWrapLength(960);
         return grid;
     }
 
@@ -167,19 +163,19 @@ public class CatalogView extends BorderPane {
     /** Rebuild category dropdown from live book data + "Add category..." option. */
     private void refreshCategoryFilter() {
         String current = categoryFilter.getValue();
-        java.util.Set<String> cats = new java.util.TreeSet<>();
-        cats.add("All Categories");
-        booksList.forEach(b -> { if (b.getCategory() != null) cats.add(b.getCategory()); });
-        cats.add("── Add Category...");
-        categoryFilter.getItems().setAll(cats);
-        categoryFilter.setValue(current != null && cats.contains(current) ? current : "All Categories");
+        List<String> categories = new ArrayList<>();
+        categories.add(ALL_CATEGORIES);
+        categories.addAll(AppConfigurationService.getAvailableBookCategories(booksList));
+        categories.add(ADD_CATEGORY);
+        categoryFilter.getItems().setAll(categories);
+        categoryFilter.setValue(current != null && categories.contains(current) ? current : ALL_CATEGORIES);
     }
 
     private void applyFilters() {
         String searchText = searchField.getText().toLowerCase().trim();
         String category = categoryFilter.getValue();
         // Ignore the separator/add-category sentinel
-        if (category == null || category.startsWith("──")) return;
+        if (category == null || ADD_CATEGORY.equals(category)) return;
 
         filteredBooks.setPredicate(book -> {
             // Search filter
@@ -189,7 +185,7 @@ public class CatalogView extends BorderPane {
                     book.getIsbn().toLowerCase().contains(searchText);
 
             // Category filter
-            boolean matchesCategory = "All Categories".equals(category) ||
+            boolean matchesCategory = ALL_CATEGORIES.equals(category) ||
                     book.getCategory().equalsIgnoreCase(category);
 
             return matchesSearch && matchesCategory;
@@ -223,13 +219,17 @@ public class CatalogView extends BorderPane {
             VBox emptyState = createEmptyState();
             booksGrid.getChildren().add(emptyState);
         }
+
+        if (!booksGrid.getChildren().isEmpty()) {
+            AppTheme.staggeredEntrance(booksGrid.getChildren().stream().limit(8).toList(), 20, 35);
+        }
     }
 
     private VBox createBookCard(Book book) {
         VBox card = new VBox(0);
         card.getStyleClass().add("book-card");
-        card.setPrefWidth(280);
-        card.setMaxWidth(280);
+        card.setPrefWidth(bookCardWidth);
+        card.setMaxWidth(bookCardWidth);
 
         // Header with gradient
         VBox header = new VBox(8);
@@ -257,7 +257,7 @@ public class CatalogView extends BorderPane {
         Label titleLabel = new Label(book.getTitle());
         titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
         titleLabel.setWrapText(true);
-        titleLabel.setMaxWidth(240);
+        titleLabel.setMaxWidth(bookCardWidth - 40);
 
         Label authorLabel = new Label("by " + book.getAuthor());
         authorLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textMuted() + ";");
@@ -366,6 +366,7 @@ public class CatalogView extends BorderPane {
                         bookData.quantity()
                 );
                 BookService.addBook(newBook);
+                rememberAndSelectCategory(bookData.category());
 
                 if (onRefresh != null) {
                     onRefresh.run();
@@ -391,6 +392,7 @@ public class CatalogView extends BorderPane {
                 book.setQuantity(bookData.quantity());
 
                 BookService.updateBook(book);
+                rememberAndSelectCategory(bookData.category());
 
                 if (onRefresh != null) {
                     onRefresh.run();
@@ -413,6 +415,7 @@ public class CatalogView extends BorderPane {
         alert.setHeaderText("Delete \"" + book.getTitle() + "\"?");
         alert.setContentText("This action cannot be undone. The book will be permanently removed from the catalog.");
         alert.initOwner(getScene().getWindow());
+        AppTheme.applyTheme(alert.getDialogPane());
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
@@ -471,6 +474,47 @@ public class CatalogView extends BorderPane {
     private String textSoft() {
         return AppTheme.darkMode ? "#94A3B8" : "#94A3B8";
     }
+
+    private void rememberAndSelectCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return;
+        }
+        try {
+            AppConfigurationService.rememberBookCategory(category);
+            refreshCategoryFilter();
+            categoryFilter.setValue(category.trim());
+            applyFilters();
+        } catch (Exception e) {
+            if (toastDisplay != null) {
+                toastDisplay.showError("Failed to save category: " + e.getMessage());
+            }
+        }
+    }
+
+    private void updateResponsiveLayout() {
+        double availableWidth = Math.max(320, getWidth() - 112);
+        int columns;
+        if (availableWidth >= 1240) {
+            columns = 4;
+        } else if (availableWidth >= 920) {
+            columns = 3;
+        } else if (availableWidth >= 620) {
+            columns = 2;
+        } else {
+            columns = 1;
+        }
+
+        double computedWidth = (availableWidth - ((columns - 1) * 16)) / columns;
+        double targetWidth = Math.max(240, Math.min(320, computedWidth));
+        booksGrid.setPrefWrapLength(Math.max(targetWidth, availableWidth));
+
+        if (Math.abs(bookCardWidth - targetWidth) > 1) {
+            bookCardWidth = targetWidth;
+            if (filteredBooks != null) {
+                updateBooksGrid();
+            }
+        }
+    }
 }
 
 /**
@@ -491,10 +535,9 @@ class BookDialog {
         dialog.setTitle(title);
         dialog.initOwner(owner);
 
-        // Dialog pane styling
+        // Dialog pane styling – respect current dark / light theme
         DialogPane dialogPane = dialog.getDialogPane();
-        dialogPane.getStylesheets().add(AppTheme.class.getResource("/theme.css").toExternalForm());
-        dialogPane.getStyleClass().add("dialog-pane-modern");
+        AppTheme.applyTheme(dialogPane);   // adds stylesheet + dark-mode class when needed
 
         // Form fields
         GridPane grid = new GridPane();
@@ -513,14 +556,33 @@ class BookDialog {
         authorField.setPromptText("Enter author name");
 
         ComboBox<String> categoryField = new ComboBox<>();
-        categoryField.setEditable(true);   // allow typing a new category
-        categoryField.getItems().addAll("Fiction", "Non-Fiction", "Science", "Technology",
-                "History", "Biography", "Literature", "Reference",
-                "Philosophy", "Psychology", "Arts", "Mathematics", "Medicine", "Law");
+        categoryField.setEditable(true);
+        categoryField.getItems().addAll(AppConfigurationService.getAvailableBookCategories(BookService.getAllBooks()));
         categoryField.setPromptText("Select or type a category");
+        categoryField.setMaxWidth(Double.MAX_VALUE);
+
+        Button addCategoryButton = AppTheme.createIconButton(AppTheme.ICON_ADD, "Add category", AppTheme.ButtonStyle.GHOST);
+        addCategoryButton.setOnAction(e -> showCategoryDialog(owner, categoryField.getEditor().getText()).ifPresent(category -> {
+            try {
+                AppConfigurationService.rememberBookCategory(category);
+                categoryField.getItems().setAll(AppConfigurationService.getAvailableBookCategories(BookService.getAllBooks()));
+                if (!categoryField.getItems().contains(category)) {
+                    categoryField.getItems().add(category);
+                }
+                categoryField.setValue(category);
+            } catch (Exception ex) {
+                Alert alert = new Alert(Alert.AlertType.ERROR, "Failed to save category: " + ex.getMessage(), ButtonType.OK);
+                AppTheme.applyTheme(alert.getDialogPane());
+                alert.showAndWait();
+            }
+        }));
+        HBox categoryRow = new HBox(8, categoryField, addCategoryButton);
+        HBox.setHgrow(categoryField, Priority.ALWAYS);
 
         Spinner<Integer> quantityField = new Spinner<>(1, 1000, 1);
         quantityField.setEditable(true);
+        quantityField.getStyleClass().add("themed-spinner");
+        quantityField.setMaxWidth(Double.MAX_VALUE);
 
         // Pre-fill if editing
         if (existingBook != null) {
@@ -534,7 +596,7 @@ class BookDialog {
         grid.addRow(0, new Label("ISBN:"), isbnField);
         grid.addRow(1, new Label("Title:"), titleField);
         grid.addRow(2, new Label("Author:"), authorField);
-        grid.addRow(3, new Label("Category:"), categoryField);
+        grid.addRow(3, new Label("Category:"), categoryRow);
         grid.addRow(4, new Label("Quantity:"), quantityField);
 
         dialogPane.setContent(grid);
@@ -546,17 +608,69 @@ class BookDialog {
         // Result converter
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == saveButtonType) {
+                String categoryValue = categoryField.getEditor().getText() != null
+                        && !categoryField.getEditor().getText().isBlank()
+                        ? categoryField.getEditor().getText().trim()
+                        : categoryField.getValue();
                 return new BookData(
                         isbnField.getText().trim(),
                         titleField.getText().trim(),
                         authorField.getText().trim(),
-                        categoryField.getValue(),
+                        categoryValue,
                         quantityField.getValue()
                 );
             }
             return null;
         });
 
+        return dialog.showAndWait();
+    }
+
+    static Optional<String> showCategoryDialog(javafx.stage.Window owner, String initialValue) {
+        Dialog<String> dialog = new Dialog<>();
+        dialog.setTitle("New Category");
+        if (owner != null) {
+            dialog.initOwner(owner);
+        }
+
+        DialogPane dialogPane = dialog.getDialogPane();
+        AppTheme.applyTheme(dialogPane);
+        dialogPane.setPrefWidth(420);
+
+        VBox content = new VBox(10);
+        content.setPadding(new Insets(20));
+
+        Label heading = new Label("Add a Category");
+        heading.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:" +
+                (AppTheme.darkMode ? "#F8FAFC" : "#0F172A") + ";");
+
+        Label copy = new Label("Create a reusable category for catalog filters and new books.");
+        copy.setStyle("-fx-font-size:13px; -fx-text-fill:" + (AppTheme.darkMode ? "#94A3B8" : "#64748B") + ";");
+        copy.setWrapText(true);
+
+        TextField categoryField = new TextField(initialValue == null ? "" : initialValue.trim());
+        categoryField.setPromptText("e.g. Children");
+
+        Label errorLabel = new Label();
+        errorLabel.setVisible(false);
+        errorLabel.setStyle("-fx-font-size:12px; -fx-text-fill:#DC2626;");
+
+        content.getChildren().addAll(heading, copy, categoryField, errorLabel);
+        dialogPane.setContent(content);
+
+        ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        dialogPane.getButtonTypes().addAll(ButtonType.CANCEL, saveType);
+
+        Button saveButton = (Button) dialogPane.lookupButton(saveType);
+        saveButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            if (categoryField.getText() == null || categoryField.getText().isBlank()) {
+                errorLabel.setText("Category name is required.");
+                errorLabel.setVisible(true);
+                event.consume();
+            }
+        });
+
+        dialog.setResultConverter(button -> button == saveType ? categoryField.getText().trim() : null);
         return dialog.showAndWait();
     }
 

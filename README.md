@@ -10,7 +10,7 @@
 - 👤 User management: register users, view details, manage profiles
 - 🔁 Issue/return workflow with due-date tracking
 - 🔎 Search and filtering across lists
-- 💾 Local data persistence in `data/` (`.ser` files)
+- 💾 OS-aware local storage for data, exports, backups, config, and logs
 
 ## 🖼️ Screenshots
 
@@ -31,50 +31,39 @@ Track issued items and manage returns.
 
 ## ⚙️ Requirements
 
-- JDK 25
+- JDK 26
 - Internet access on first build (downloads dependencies)
 
 ## 🚀 Quick Start (IDE Run Button)
 
 Import as a Maven project, then run:
 
-- `com.example.application.LibraryApp` from the IDE, or
+- the shared `LibraryApp` run configuration from the IDE, or
 - the Maven goal `javafx:run`
 
-If the IDE complains about JavaFX runtime, use the Maven goal:
+The shared run configuration includes `--enable-native-access=javafx.graphics`, so the JavaFX 26 native-loader warning is suppressed for direct IDE runs. If you prefer Maven:
 
 ```powershell
 .\mvnw -q javafx:run
 ```
 
-## 🧱 Build A Windows App Image (Recommended)
+## 🧱 Build
 
-This creates a self-contained Windows app that runs without JavaFX installed:
+Create the application jar:
 
 ```powershell
-.\mvnw -q -DskipTests package -Pwindows
+.\mvnw -q -DskipTests package
 ```
-
-Run:
-
-`target\installer\LibraryApp\LibraryApp.exe`
-
-Distribute the whole folder:
-
-`target\installer\LibraryApp\`
 
 ## 🗂️ Data Files
 
-The app reads and writes data in `data/`.  
-If you distribute the app image, keep `data/` next to the app folder:
+The app no longer depends on a repo-local `data/` folder at runtime. By default it stores files under OS-specific application directories:
 
-```
-target\installer\LibraryApp\
-├── LibraryApp.exe
-├── app/
-├── runtime/
-└── data/
-```
+- Windows: `%APPDATA%\LibraryOS` and `%LOCALAPPDATA%\LibraryOS\logs`
+- macOS: `~/Library/Application Support/LibraryOS` and `~/Library/Logs/LibraryOS`
+- Linux: `${XDG_DATA_HOME:-~/.local/share}/LibraryOS` and `${XDG_STATE_HOME:-~/.local/state}/LibraryOS/logs`
+
+Data and export locations can still be overridden from the app configuration screen.
 
 ## 🧭 Project Layout
 
@@ -84,13 +73,8 @@ LMSJavaFX/
 │   └── main/
 │       └── java/
 │           └── com/example/...
-├── data/
-│   └── *.ser
 ├── assets/
 │   └── screenshots/
-├── target/
-│   └── installer/
-│       └── LibraryApp/        (Windows app image)
 ├── pom.xml
 └── README.md
 ```
@@ -98,7 +82,7 @@ LMSJavaFX/
 ## 🛠️ Troubleshooting
 
 - **JavaFX runtime error on `java -jar`:**  
-  Use the app image build instead (`package -Pwindows`). A plain jar does not bundle JavaFX runtime.
+  Use the IDE run configuration or `javafx:run`. A plain jar does not bundle the JavaFX runtime.
 
 - **Maven not found:**  
   Use the Maven Wrapper included in this repo:
@@ -113,4 +97,3 @@ Apache License 2.0. See `LICENSE`.
 ## 👤 Author
 
 Yogeshwaran
-

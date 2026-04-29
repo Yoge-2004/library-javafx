@@ -216,29 +216,17 @@ public final class AppTheme {
         if (stage == null) {
             return;
         }
+        // Always use programmatically-generated canvas icons.
+        // JavaFX's Image class cannot decode SVG natively; attempting to load
+        // an SVG as a window icon silently fails and leaves cachedLargeIcon null,
+        // so subsequent dialog stages never receive icons either.
         if (cachedLargeIcon == null) {
-            // Try to load from SVG first, fall back to generated icons
-            try {
-                Image svgIcon = new Image(AppTheme.class.getResourceAsStream("/app-icon.svg"), 256, 256, true, true);
-                if (svgIcon != null && !svgIcon.isError()) {
-                    stage.getIcons().add(svgIcon);
-                } else {
-                    cachedLargeIcon = createAppIcon(256);
-                    cachedMediumIcon = createAppIcon(128);
-                    cachedSmallIcon = createAppIcon(64);
-                    cachedTinyIcon = createAppIcon(32);
-                    stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
-                }
-            } catch (Exception e) {
-                cachedLargeIcon = createAppIcon(256);
-                cachedMediumIcon = createAppIcon(128);
-                cachedSmallIcon = createAppIcon(64);
-                cachedTinyIcon = createAppIcon(32);
-                stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
-            }
-        } else {
-            stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
+            cachedLargeIcon  = createAppIcon(256);
+            cachedMediumIcon = createAppIcon(128);
+            cachedSmallIcon  = createAppIcon(64);
+            cachedTinyIcon   = createAppIcon(32);
         }
+        stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
     }
 
     // === BUTTON CREATION ===

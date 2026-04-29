@@ -3,6 +3,7 @@ package com.example.application.ui;
 import com.example.services.BookService;
 import com.example.services.ReportExportService;
 import com.example.services.UserService;
+import com.example.storage.AppPaths;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
@@ -30,6 +31,16 @@ public class DataManagementDialog {
         AppTheme.applyTheme(dialogPane);
         dialogPane.setPrefWidth(600);
         dialogPane.setPrefHeight(500);
+
+        dialog.setOnShown(evt -> {
+            if (dialogPane.getScene() != null && dialogPane.getScene().getWindow() instanceof Stage st) {
+                AppTheme.applyWindowIcon(st);
+                st.setMinWidth(560);
+                st.setMinHeight(480);
+                st.sizeToScene();
+                st.centerOnScreen();
+            }
+        });
 
         VBox content = new VBox(24);
         content.setPadding(new Insets(24));
@@ -61,9 +72,10 @@ public class DataManagementDialog {
         Label actionsLabel = new Label("Actions");
         actionsLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill: " + textSecondary() + ";");
 
-        VBox actionsBox = new VBox(12);
-        actionsBox.setStyle(cardStyle());
-        actionsBox.setPadding(new Insets(20));
+        FlowPane actionsPane = new FlowPane();
+        actionsPane.setHgap(12);
+        actionsPane.setVgap(12);
+        actionsPane.setPrefWrapLength(520);
 
         // Export reports button
         Button exportBtn = createActionButton(AppTheme.ICON_DASHBOARD, "#0D9488", "Export Reports",
@@ -77,7 +89,7 @@ public class DataManagementDialog {
         Button restoreBtn = createActionButton(AppTheme.ICON_SYNC, "#F59E0B", "Restore from Backup",
                 "Load a previously saved backup file", () -> restoreBackup(owner));
 
-        actionsBox.getChildren().addAll(exportBtn, new Separator(), backupBtn, new Separator(), restoreBtn);
+        actionsPane.getChildren().addAll(exportBtn, backupBtn, restoreBtn);
 
         // Email configuration status
         HBox emailStatus = new HBox(12);
@@ -96,7 +108,7 @@ public class DataManagementDialog {
 
         emailStatus.getChildren().addAll(emailIcon, emailText);
 
-        content.getChildren().addAll(title, statsGrid, actionsLabel, actionsBox, emailStatus);
+        content.getChildren().addAll(title, statsGrid, actionsLabel, actionsPane, emailStatus);
 
         ScrollPane scrollPane = new ScrollPane(content);
         scrollPane.setFitToWidth(true);
@@ -131,29 +143,33 @@ public class DataManagementDialog {
     private static Button createActionButton(String iconPath, String accentColor,
                                              String title, String description, Runnable action) {
         Button btn = new Button();
-        btn.setStyle("-fx-background-color: transparent; -fx-cursor: hand;");
-        btn.setMaxWidth(Double.MAX_VALUE);
-        btn.setAlignment(Pos.CENTER_LEFT);
+        btn.setStyle(cardStyle() + "-fx-cursor: hand;");
+        btn.setPrefWidth(170);
+        btn.setMinWidth(160);
+        btn.setMaxWidth(220);
+        btn.setMinHeight(120);
+        btn.setPrefHeight(120);
+        btn.setAlignment(Pos.TOP_LEFT);
 
-        HBox content = new HBox(16);
-        content.setAlignment(Pos.CENTER_LEFT);
+        VBox content = new VBox(14);
+        content.setAlignment(Pos.TOP_LEFT);
+        content.setPadding(new Insets(18));
 
         StackPane iconBubble = createIconBubble(iconPath, accentColor);
 
         VBox textBox = new VBox(4);
-        HBox.setHgrow(textBox, Priority.ALWAYS);
+        textBox.setFillWidth(true);
 
         Label titleLabel = new Label(title);
         titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 600; -fx-text-fill: " + textPrimary() + ";");
+        titleLabel.setWrapText(true);
 
         Label descLabel = new Label(description);
         descLabel.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textMuted() + ";");
+        descLabel.setWrapText(true);
 
         textBox.getChildren().addAll(titleLabel, descLabel);
-
-        StackPane arrowLabel = new StackPane(AppTheme.createIcon(AppTheme.ICON_CHEVRON_RIGHT, 14));
-
-        content.getChildren().addAll(iconBubble, textBox, arrowLabel);
+        content.getChildren().addAll(iconBubble, textBox);
         btn.setGraphic(content);
 
         btn.setOnAction(e -> action.run());
@@ -184,11 +200,11 @@ public class DataManagementDialog {
     private static void createBackup(Stage owner) {
         try {
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
-            Path backupDir = Paths.get("backups", ts);
+            Path backupDir = AppPaths.backupDirectory().resolve(ts);
             Files.createDirectories(backupDir);
 
             // Copy all .ser files
-            Path dataDir = Paths.get("data");
+            Path dataDir = AppPaths.resolveDataDirectory();
             if (Files.exists(dataDir)) {
                 try (var stream = Files.list(dataDir)) {
                     stream.filter(p -> p.toString().endsWith(".ser"))
@@ -230,7 +246,7 @@ public class DataManagementDialog {
         confirm.showAndWait().filter(bt -> bt == ButtonType.OK).ifPresent(bt -> {
             try {
                 Path backupFolder = chosen.getParentFile().toPath();
-                Path dataDir = Paths.get("data");
+                Path dataDir = AppPaths.resolveDataDirectory();
                 Files.createDirectories(dataDir);
 
                 try (var stream = Files.list(backupFolder)) {

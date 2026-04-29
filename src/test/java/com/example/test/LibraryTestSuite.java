@@ -42,6 +42,7 @@ public class LibraryTestSuite {
     @BeforeAll
     static void setup() throws IOException {
         tempDir = Files.createTempDirectory("lib-test-");
+        System.setProperty("libraryos.home", tempDir.resolve("libraryos-home").toString());
         Files.createDirectories(Paths.get("data"));
     }
 
@@ -204,8 +205,14 @@ public class LibraryTestSuite {
     // ═══════════════════════════════════════════════════════════════
     @Nested @DisplayName("5 · AppConfiguration")
     class ConfigTests {
-        @Test @DisplayName("Default export dir") void def() { assertEquals("exports", new AppConfiguration().getExportDirectory()); }
-        @Test @DisplayName("Blank export falls back") void blank() { AppConfiguration c = new AppConfiguration(); c.setExportDirectory("  "); assertEquals("exports", c.getExportDirectory()); }
+        @Test @DisplayName("Default export dir") void def() {
+            assertTrue(new AppConfiguration().getExportDirectory().contains("libraryos-home"));
+        }
+        @Test @DisplayName("Blank export falls back") void blank() {
+            AppConfiguration c = new AppConfiguration();
+            c.setExportDirectory("  ");
+            assertTrue(c.getExportDirectory().contains("libraryos-home"));
+        }
         @Test @DisplayName("Email not configured by default") void noEmail() { assertFalse(new AppConfiguration().isEmailConfigured()); }
         @Test @DisplayName("Email configured without auth") void emailNoAuth() { AppConfiguration c = new AppConfiguration(); c.setSmtpHost("s"); c.setFromAddress("a@b.c"); c.setSmtpAuth(false); assertTrue(c.isEmailConfigured()); }
         @Test @DisplayName("Email auth requires username and password") void emailAuthNeedsPassword() {

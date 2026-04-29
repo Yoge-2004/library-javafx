@@ -5,7 +5,7 @@
 /* ─── GLOBAL BASE ─────────────────────────────────────────────── */
 /* .root is intentionally NOT set here to avoid affecting Dialog scenes.
    Background and font are set on the app root StackPane via LibraryApp inline styles. */
-
+@import "theme-additions.css";
 /* ─── SCROLLPANE ──────────────────────────────────────────────── */
 .scroll-pane,
 .scroll-pane > .viewport { -fx-background-color: transparent; }
@@ -136,6 +136,14 @@
     -fx-alignment: CENTER_LEFT;
     -fx-padding: 10 12; -fx-background-radius: 10px;
     -fx-cursor: hand; -fx-graphic-text-gap: 12;
+    -fx-border-color: transparent;
+}
+.sidebar-btn:focused {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+.dark-mode .sidebar-btn {
+    -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
 .sidebar-btn .icon-svg { -fx-fill: #64748B; }
@@ -425,9 +433,12 @@
 }
 .spinner .increment-arrow,
 .spinner .decrement-arrow {
-    -fx-background-color: white; -fx-padding: 4px; -fx-font-size: 18px;
-    -fx-shape: " ";
+    -fx-background-color: white;
+    -fx-padding: 3px 4px;
+    -fx-font-size: 18px;
 }
+.spinner .increment-arrow { -fx-shape: "M 0 -3.5 L 4 3.5 L -4 3.5 Z"; }
+.spinner .decrement-arrow { -fx-shape: "M 0 3.5 L 4 -3.5 L -4 -3.5 Z"; }
 .spinner:hover .increment-arrow-button,
 .spinner:hover .decrement-arrow-button {
     -fx-background-color: #0A7A68;

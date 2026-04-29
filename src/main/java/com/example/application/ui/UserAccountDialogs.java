@@ -35,6 +35,13 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(380);
+        dlg.setOnShown(evt -> {
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
+                AppTheme.applyWindowIcon(st);
+                st.setMinWidth(420); st.setMinHeight(340);
+                st.sizeToScene(); st.centerOnScreen();
+            }
+        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -92,6 +99,13 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(340);
+        dlg.setOnShown(evt -> {
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
+                AppTheme.applyWindowIcon(st);
+                st.setMinWidth(420); st.setMinHeight(300);
+                st.sizeToScene(); st.centerOnScreen();
+            }
+        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -143,6 +157,64 @@ public class UserAccountDialogs {
         return dlg.showAndWait().orElse(false);
     }
 
+    public static boolean showDeleteAccountDialog(Stage owner, String userId) {
+        User user;
+        try {
+            user = UserService.getUserById(userId);
+        } catch (Exception e) {
+            return false;
+        }
+
+        Dialog<Boolean> dlg = new Dialog<>();
+        dlg.setTitle("Delete Account");
+        dlg.initOwner(owner);
+        dlg.setResizable(true);
+
+        DialogPane pane = dlg.getDialogPane();
+        AppTheme.applyTheme(pane);
+        pane.setPrefWidth(460);
+        pane.setPrefHeight(320);
+
+        VBox content = new VBox(12);
+        content.setPadding(new Insets(20));
+
+        Label title = new Label("Delete " + user.getUserId() + "?");
+        title.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:" +
+                (AppTheme.darkMode ? "#F8FAFC" : "#0F172A") + ";");
+
+        Label body = new Label("This removes your sign-in account. Active loans, pending requests, and the last admin account cannot be deleted.");
+        body.setStyle("-fx-font-size:13px; -fx-text-fill:" + (AppTheme.darkMode ? "#94A3B8" : "#64748B") + ";");
+        body.setWrapText(true);
+
+        Label passwordLabel = bold("Current Password");
+        PasswordField passwordField = passField("Enter your current password");
+        Label err = errorLabel();
+
+        content.getChildren().addAll(title, body, passwordLabel, passwordField, err);
+
+        pane.setContent(content);
+        pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
+        Button deleteButton = styleOkBtn(pane, "Delete Account");
+        if (deleteButton != null) {
+            deleteButton.setStyle("-fx-background-color:#DC2626; -fx-text-fill:white;" +
+                    "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:8px; -fx-padding:9 22;");
+            deleteButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+                try {
+                    UserService.deleteOwnAccount(userId, passwordField.getText());
+                } catch (Exception e) {
+                    err.setText(e.getMessage());
+                    err.setVisible(true);
+                    event.consume();
+                }
+            });
+        }
+        styleSecondaryBtn(pane, ButtonType.CANCEL, "Cancel");
+
+        dlg.setResultConverter(bt -> bt == ButtonType.OK);
+
+        return dlg.showAndWait().orElse(false);
+    }
+
     // ── User Management (admin/librarian) ────────────────────────
 
     public static void showUserManagement(Stage owner, String currentUserId) {
@@ -157,6 +229,13 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(840);
         pane.setPrefHeight(560);
+        dlg.setOnShown(evt -> {
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
+                AppTheme.applyWindowIcon(st);
+                st.setMinWidth(760); st.setMinHeight(520);
+                st.sizeToScene(); st.centerOnScreen();
+            }
+        });
 
         // Header + Add button
         HBox topBar = new HBox(12);
@@ -287,6 +366,13 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(420);
+        dlg.setOnShown(evt -> {
+            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
+                AppTheme.applyWindowIcon(st);
+                st.setMinWidth(420); st.setMinHeight(380);
+                st.sizeToScene(); st.centerOnScreen();
+            }
+        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -374,7 +460,8 @@ public class UserAccountDialogs {
 
     private static Label bold(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:#374151;");
+        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:" +
+                (AppTheme.darkMode ? "#CBD5E1" : "#374151") + ";");
         return l;
     }
 

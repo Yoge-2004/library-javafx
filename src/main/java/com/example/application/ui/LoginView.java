@@ -10,10 +10,12 @@ import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
 import javafx.collections.FXCollections;
+import javafx.geometry.Orientation;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
@@ -54,17 +56,17 @@ public class LoginView extends StackPane {
 
     private void initializeUI() {
         // Main container with gradient background
-        setStyle("-fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F172A, #1E293B 50%, #134E4A);");
+        setStyle("-fx-background-color: " + loginBackground() + ";");
         setPadding(new Insets(40));
 
-        // Create split layout: Hero section + Login card
-        HBox mainLayout = new HBox(60);
+        // Create split layout that can wrap on smaller screens
+        FlowPane mainLayout = new FlowPane(Orientation.HORIZONTAL, 48, 32);
         mainLayout.setAlignment(Pos.CENTER);
         mainLayout.setMaxWidth(1200);
+        mainLayout.setPrefWrapLength(980);
 
         // Left side - Hero content
         VBox heroSection = createHeroSection();
-        HBox.setHgrow(heroSection, Priority.ALWAYS);
 
         // Right side - Login card
         VBox loginCard = createLoginCard();
@@ -139,7 +141,7 @@ public class LoginView extends StackPane {
         loginForm.setAlignment(Pos.TOP_CENTER);
         loginForm.setPadding(new Insets(48));
         loginForm.setMaxWidth(420);
-        loginForm.setStyle("-fx-background-color: white; -fx-background-radius: 24px;");
+        loginForm.setStyle(loginCardStyle());
 
         // Card shadow
         DropShadow shadow = new DropShadow();
@@ -154,10 +156,10 @@ public class LoginView extends StackPane {
 
         Label welcomeLabel = new Label("Welcome back");
         welcomeLabel.setStyle("-fx-font-family: 'Plus Jakarta Sans'; -fx-font-size: 28px; " +
-                "-fx-font-weight: 700; -fx-text-fill: #0F172A;");
+                "-fx-font-weight: 700; -fx-text-fill: " + primaryText() + ";");
 
         Label signInLabel = new Label("Sign in to your account");
-        signInLabel.setStyle("-fx-font-size: 15px; -fx-text-fill: #64748B;");
+        signInLabel.setStyle("-fx-font-size: 15px; -fx-text-fill: " + mutedText() + ";");
 
         header.getChildren().addAll(welcomeLabel, signInLabel);
 
@@ -170,7 +172,7 @@ public class LoginView extends StackPane {
         // Username field
         VBox usernameBox = new VBox(6);
         Label usernameLabel = new Label("Username");
-        usernameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+        usernameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: " + labelText() + ";");
 
         usernameField = new TextField();
         usernameField.setPromptText("Enter your username");
@@ -183,7 +185,7 @@ public class LoginView extends StackPane {
         // Password field with toggle
         VBox passwordBox = new VBox(6);
         Label passwordLabel = new Label("Password");
-        passwordLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+        passwordLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: " + labelText() + ";");
 
         HBox passwordContainer = createPasswordContainer();
 
@@ -225,7 +227,7 @@ public class LoginView extends StackPane {
         registerBox.setAlignment(Pos.CENTER);
 
         Label noAccountLabel = new Label("Don't have an account?");
-        noAccountLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: #6B7280;");
+        noAccountLabel.setStyle("-fx-font-size: 14px; -fx-text-fill: " + mutedText() + ";");
 
         Hyperlink registerLink = new Hyperlink("Create one");
         registerLink.setStyle("-fx-font-size: 14px; -fx-text-fill: #0D9488; -fx-font-weight: 600;");
@@ -239,16 +241,23 @@ public class LoginView extends StackPane {
 
         // Forgot password link
         Hyperlink forgotPassLink = new Hyperlink("Forgot password?");
-        forgotPassLink.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+        forgotPassLink.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedText() + ";");
         forgotPassLink.setOnAction(e -> showForgotPasswordDialog());
 
         VBox footerBox = new VBox(8, registerBox, forgotPassLink);
         footerBox.setAlignment(Pos.CENTER);
 
-        // Add enter key handler - only on explicit Enter press, not on every action
-        librarySelector.setOnAction(e -> {
-            // Only move focus if a value is actually selected (not during text editing)
-            if (librarySelector.getValue() != null && !librarySelector.getValue().isEmpty()) {
+        // Only advance from the library field when the user explicitly presses Enter.
+        librarySelector.getEditor().setOnAction(e -> {
+            String selectedLibrary = resolveSelectedLibrary();
+            if (selectedLibrary != null) {
+                syncingLibraryItems = true;
+                try {
+                    librarySelector.setValue(selectedLibrary);
+                    librarySelector.getEditor().setText(selectedLibrary);
+                } finally {
+                    syncingLibraryItems = false;
+                }
                 usernameField.requestFocus();
             }
         });
@@ -265,14 +274,14 @@ public class LoginView extends StackPane {
         passwordField = new PasswordField();
         passwordField.setPromptText("Enter your password");
         passwordField.setStyle("-fx-background-color:transparent; -fx-border-color:transparent; " +
-                "-fx-font-size:15px; -fx-text-fill:#111827; -fx-prompt-text-fill:#9CA3AF; " +
+                "-fx-font-size:15px; -fx-text-fill:" + fieldText() + "; -fx-prompt-text-fill:" + promptText() + "; " +
                 "-fx-padding:10 14; -fx-font-family:'Noto Sans','Liberation Sans','DejaVu Sans',sans-serif;");
         passwordField.setPrefHeight(48);
 
         visiblePasswordField = new TextField();
         visiblePasswordField.setPromptText("Enter your password");
         visiblePasswordField.setStyle("-fx-background-color:transparent; -fx-border-color:transparent; " +
-                "-fx-font-size:15px; -fx-text-fill:#111827; -fx-prompt-text-fill:#9CA3AF; " +
+                "-fx-font-size:15px; -fx-text-fill:" + fieldText() + "; -fx-prompt-text-fill:" + promptText() + "; " +
                 "-fx-padding:10 14; -fx-font-family:'Noto Sans','Liberation Sans','DejaVu Sans',sans-serif;");
         visiblePasswordField.setPrefHeight(48);
         visiblePasswordField.setVisible(false);
@@ -311,7 +320,7 @@ public class LoginView extends StackPane {
 
         VBox libraryBox = new VBox(6);
         Label libraryLabel = new Label("Library");
-        libraryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #374151;");
+        libraryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: " + labelText() + ";");
 
         librarySelector = new ComboBox<>(FXCollections.observableArrayList(availableLibraries));
         librarySelector.setEditable(true);
@@ -322,11 +331,8 @@ public class LoginView extends StackPane {
         librarySelector.setValue(configuration.getCurrentLibraryDisplayName());
         librarySelector.getEditor().setText(configuration.getCurrentLibraryDisplayName());
         librarySelector.getStyleClass().add("auth-combo-box");
-        librarySelector.setStyle("-fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB; " +
-                "-fx-border-width: 1.5; -fx-border-radius: 12px; -fx-background-radius: 12px;");
-        librarySelector.getEditor().setStyle("-fx-background-color: transparent; -fx-border-color: transparent; " +
-                "-fx-font-size: 15px; -fx-text-fill: #111827; -fx-prompt-text-fill: #9CA3AF; " +
-                "-fx-padding: 11 6 11 14;");
+        librarySelector.setStyle(comboBoxStyle());
+        librarySelector.getEditor().setStyle(comboBoxEditorStyle());
         librarySelector.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
             if (syncingLibraryItems) {
                 return;
@@ -341,7 +347,7 @@ public class LoginView extends StackPane {
         });
 
         Label helper = new Label("Start typing to filter the available libraries.");
-        helper.setStyle("-fx-font-size: 12px; -fx-text-fill: #64748B;");
+        helper.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedText() + ";");
         helper.setWrapText(true);
 
         libraryBox.getChildren().addAll(libraryLabel, librarySelector, helper);
@@ -349,10 +355,10 @@ public class LoginView extends StackPane {
     }
 
     private String getInputStyle() {
-        return "-fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB; " +
+        return "-fx-background-color: " + fieldSurface() + "; -fx-border-color: " + fieldBorder() + "; " +
                 "-fx-border-width: 1.5; -fx-border-radius: 12px; " +
                 "-fx-background-radius: 12px; -fx-font-size: 15px; " +
-                "-fx-text-fill: #111827; -fx-prompt-text-fill: #9CA3AF; " +
+                "-fx-text-fill: " + fieldText() + "; -fx-prompt-text-fill: " + promptText() + "; " +
                 "-fx-padding: 12 16;";
     }
 
@@ -444,38 +450,50 @@ public class LoginView extends StackPane {
             return;
         }
 
-        String currentText = query == null ? "" : query;
-        int caretPosition = Math.max(0, librarySelector.getEditor().getCaretPosition());
-        String normalized = query == null ? "" : query.trim().toLowerCase();
+        // Capture caret BEFORE any mutations
+        final int savedCaret = librarySelector.getEditor().getCaretPosition();
+        final String currentText = query == null ? "" : query;
+        final String normalized  = currentText.trim().toLowerCase();
+
         List<String> filtered = availableLibraries.stream()
-                .filter(value -> normalized.isEmpty() || value.toLowerCase().contains(normalized))
+                .filter(v -> normalized.isEmpty() || v.toLowerCase().contains(normalized))
                 .toList();
 
         syncingLibraryItems = true;
         try {
-            // Store the focused state and selection before updating items
-            boolean wasEditorFocused = librarySelector.getEditor().isFocused();
-            
             librarySelector.setItems(FXCollections.observableArrayList(filtered));
             librarySelector.setVisibleRowCount(Math.max(1, Math.min(6, filtered.size())));
-            librarySelector.getEditor().setText(currentText);
-            
-            // Immediately restore caret position after setting text
-            if (caretPosition <= currentText.length()) {
-                librarySelector.getEditor().positionCaret(caretPosition);
-            }
-            
-            // Restore focus to editor if it was focused before
-            if (wasEditorFocused) {
-                librarySelector.getEditor().requestFocus();
+
+            // Only call setText when the editor content actually differs –
+            // setText() always resets the caret to 0, causing the jump bug.
+            String editorNow = librarySelector.getEditor().getText();
+            if (!currentText.equals(editorNow)) {
+                librarySelector.getEditor().setText(currentText);
             }
         } finally {
             syncingLibraryItems = false;
         }
 
-        // Show dropdown if editor is focused and there are filtered results
-        if ((librarySelector.isFocused() || librarySelector.getEditor().isFocused()) && !librarySelector.isShowing() && !filtered.isEmpty()) {
-            librarySelector.show();
+        // Restore caret after JavaFX layout pass (Platform.runLater ensures
+        // we run after any internal text-field synchronization).
+        final int safeCaret = Math.min(savedCaret, currentText.length());
+        Platform.runLater(() -> {
+            if (librarySelector != null
+                    && currentText.equals(librarySelector.getEditor().getText())) {
+                librarySelector.getEditor().positionCaret(safeCaret);
+            }
+        });
+
+        // Open dropdown only when the field is active and results exist
+        boolean active = librarySelector.isFocused() || librarySelector.getEditor().isFocused();
+        if (active && !filtered.isEmpty() && !librarySelector.isShowing()) {
+            Platform.runLater(() -> {
+                if (!librarySelector.isShowing()) {
+                    librarySelector.show();
+                }
+            });
+        } else if (filtered.isEmpty() && librarySelector.isShowing()) {
+            librarySelector.hide();
         }
     }
 
@@ -498,17 +516,15 @@ public class LoginView extends StackPane {
     }
 
     private void shakeForm() {
-        TranslateTransition left = new TranslateTransition(Duration.millis(50), loginForm);
-        left.setToX(-8);
-
-        TranslateTransition right = new TranslateTransition(Duration.millis(50), loginForm);
-        right.setToX(8);
-
-        TranslateTransition center = new TranslateTransition(Duration.millis(50), loginForm);
-        center.setToX(0);
-
-        SequentialTransition shake = new SequentialTransition(left, right, left, right, center);
-        shake.play();
+        // FIXED: every child of SequentialTransition must be a distinct object.
+        // Re-using `left` and `right` caused:
+        //   IllegalArgumentException: Attempting to add a duplicate to the list of children
+        TranslateTransition t1 = new TranslateTransition(Duration.millis(50), loginForm); t1.setToX(-8);
+        TranslateTransition t2 = new TranslateTransition(Duration.millis(50), loginForm); t2.setToX(8);
+        TranslateTransition t3 = new TranslateTransition(Duration.millis(50), loginForm); t3.setToX(-8);
+        TranslateTransition t4 = new TranslateTransition(Duration.millis(50), loginForm); t4.setToX(8);
+        TranslateTransition t5 = new TranslateTransition(Duration.millis(50), loginForm); t5.setToX(0);
+        new SequentialTransition(t1, t2, t3, t4, t5).play();
     }
 
     private void showSuccessAnimation() {
@@ -554,7 +570,7 @@ public class LoginView extends StackPane {
 
         Label info = new Label("Enter your username and Library OS will email a temporary password to the address saved on your account.");
         info.setWrapText(true);
-        info.setStyle("-fx-font-size: 13px; -fx-text-fill: #64748B;");
+        info.setStyle("-fx-font-size: 13px; -fx-text-fill: " + mutedText() + ";");
 
         TextField usernameResetField = new TextField();
         usernameResetField.setPromptText("Enter your username");
@@ -637,5 +653,64 @@ public class LoginView extends StackPane {
     private String buildTemporaryPassword() {
         String seed = java.util.UUID.randomUUID().toString().replace("-", "").toUpperCase();
         return "LIB" + seed.substring(0, 8);
+    }
+
+    private String loginBackground() {
+        if (AppTheme.darkMode) {
+            return "linear-gradient(from 0% 0% to 100% 100%, #020617, #0F172A 50%, #134E4A)";
+        }
+        return "linear-gradient(from 0% 0% to 100% 100%, #0F172A, #1E293B 50%, #134E4A)";
+    }
+
+    private String loginCardStyle() {
+        return "-fx-background-color: " + cardSurface() + "; -fx-background-radius: 24px; " +
+                "-fx-border-radius: 24px; -fx-border-color: " + cardBorder() + "; -fx-border-width: 1;";
+    }
+
+    private String comboBoxStyle() {
+        return "-fx-background-color: " + fieldSurface() + "; -fx-border-color: " + fieldBorder() + "; " +
+                "-fx-border-width: 1.5; -fx-border-radius: 12px; -fx-background-radius: 12px;";
+    }
+
+    private String comboBoxEditorStyle() {
+        return "-fx-background-color: transparent; -fx-border-color: transparent; " +
+                "-fx-font-size: 15px; -fx-text-fill: " + fieldText() + "; -fx-prompt-text-fill: " + promptText() + "; " +
+                "-fx-padding: 11 6 11 14;";
+    }
+
+    private String cardSurface() {
+        return AppTheme.darkMode ? "#0F172A" : "white";
+    }
+
+    private String cardBorder() {
+        return AppTheme.darkMode ? "#1E293B" : "#E2E8F0";
+    }
+
+    private String primaryText() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
+    }
+
+    private String labelText() {
+        return AppTheme.darkMode ? "#CBD5E1" : "#374151";
+    }
+
+    private String mutedText() {
+        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
+    }
+
+    private String fieldSurface() {
+        return AppTheme.darkMode ? "#1E293B" : "#F9FAFB";
+    }
+
+    private String fieldBorder() {
+        return AppTheme.darkMode ? "#334155" : "#D1D5DB";
+    }
+
+    private String fieldText() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#111827";
+    }
+
+    private String promptText() {
+        return AppTheme.darkMode ? "#64748B" : "#9CA3AF";
     }
 }

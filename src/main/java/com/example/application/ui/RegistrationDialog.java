@@ -205,6 +205,7 @@ public class RegistrationDialog {
             }
             Scene scene = pane.getScene();
             if (scene.getWindow() instanceof Stage stage) {
+                AppTheme.applyWindowIcon(stage);
                 stage.setMinHeight(720);
                 stage.setMinWidth(520);
                 stage.sizeToScene();
@@ -345,36 +346,36 @@ public class RegistrationDialog {
             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
         }
     }
-     private static void checkMatch(Label lbl, String pass, String confirm) {
-         if (confirm == null || confirm.isEmpty()) { lbl.setText(""); return; }
-         if (pass.equals(confirm)) {
-             lbl.setText("Passwords match");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
-         } else {
-             lbl.setText("Passwords do not match");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
-         }
-     }
-     private static void checkEmail(Label lbl, String email) {
-         if (email == null || email.isEmpty()) { lbl.setText(""); return; }
-         if (User.isValidEmail(email)) {
-             lbl.setText("Valid email");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
-         } else {
-             lbl.setText("Invalid email format");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
-         }
-     }
-     private static void checkPhone(Label lbl, String phone) {
-         if (phone == null || phone.isEmpty()) { lbl.setText(""); return; }
-         if (User.isValidContactNumber(phone)) {
-             lbl.setText("Valid phone number");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
-         } else {
-             lbl.setText("Invalid phone format (10-15 digits)");
-             lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
-         }
-     }
+    private static void checkMatch(Label lbl, String pass, String confirm) {
+        if (confirm == null || confirm.isEmpty()) { lbl.setText(""); return; }
+        if (pass.equals(confirm)) {
+            lbl.setText("Passwords match");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+        } else {
+            lbl.setText("Passwords do not match");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+        }
+    }
+    private static void checkEmail(Label lbl, String email) {
+        if (email == null || email.isEmpty()) { lbl.setText(""); return; }
+        if (User.isValidEmail(email)) {
+            lbl.setText("Valid email");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+        } else {
+            lbl.setText("Invalid email format");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+        }
+    }
+    private static void checkPhone(Label lbl, String phone) {
+        if (phone == null || phone.isEmpty()) { lbl.setText(""); return; }
+        if (User.isValidContactNumber(phone)) {
+            lbl.setText("Valid phone number");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#16A34A;");
+        } else {
+            lbl.setText("Invalid phone format (10-15 digits)");
+            lbl.setStyle("-fx-font-size:11px; -fx-text-fill:#DC2626;");
+        }
+    }
 
     private static VBox roleOption(RadioButton radioButton, String title, String description, boolean selected) {
         radioButton.setStyle("-fx-padding: 2 0 0 0; -fx-font-size: 14px; " +

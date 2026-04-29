@@ -1,6 +1,7 @@
 module com.example.application {
+    requires javafx.base;
     requires javafx.controls;
-    requires javafx.fxml;
+    requires javafx.graphics;
     requires java.logging;
     requires jakarta.mail;
 

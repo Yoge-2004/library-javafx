@@ -55,8 +55,8 @@ public class LibraryApp extends Application implements ToastDisplay {
     public void start(Stage stage) {
         this.primaryStage = stage;
         stage.setTitle("Library OS");
-        stage.setMinWidth(1200);
-        stage.setMinHeight(800);
+        stage.setMinWidth(960);
+        stage.setMinHeight(720);
 
         rootStack = new StackPane();
 
@@ -182,8 +182,10 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
     private Button browseBtn(TextField target, String title) {
         Button b = new Button("Browse\u2026");
-        b.setStyle("-fx-background-color:#E2E8F0; -fx-background-radius:8px; " +
-                "-fx-border-radius:8px; -fx-cursor:hand; -fx-padding:8 14; -fx-font-weight:600;");
+        b.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; " +
+                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
+                "-fx-background-radius:8px; -fx-border-radius:8px; -fx-cursor:hand; " +
+                "-fx-padding:8 14; -fx-font-weight:600;");
         b.setOnAction(e -> {
             DirectoryChooser dc = new DirectoryChooser();
             dc.setTitle(title);
@@ -315,15 +317,20 @@ public class LibraryApp extends Application implements ToastDisplay {
             if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
                 showSuccess("Password changed.");
         });
-        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn);
+        Button deleteBtn = navBtn("Delete Account", AppTheme.ICON_DELETE, false, this::deleteCurrentAccount);
+        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn, deleteBtn);
 
         Region spacer = new Region(); VBox.setVgrow(spacer, Priority.ALWAYS);
 
         User u = UserService.getUserById(currentUser);
         userNameLabel = new Label(u != null ? u.getFullName() : currentUser);
         userNameLabel.getStyleClass().add("sidebar-profile-name");
+        userNameLabel.setWrapText(true);
+        userNameLabel.setMaxWidth(200);
         userRoleLabel = new Label(currentUserRole.getDisplayName());
         userRoleLabel.getStyleClass().add("sidebar-profile-role");
+        userRoleLabel.setWrapText(true);
+        userRoleLabel.setMaxWidth(200);
         VBox profile = new VBox(3, userNameLabel, userRoleLabel);
         profile.getStyleClass().add("sidebar-profile");
 
@@ -469,6 +476,7 @@ public class LibraryApp extends Application implements ToastDisplay {
                 if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
                     showSuccess("Password changed.");
             }
+            @Override public void openDeleteAccount() { deleteCurrentAccount(); }
             @Override public void openUserManagement() { showUserManagement(); }
             @Override public void openLibraryConfiguration() { showLibraryConfig(); }
             @Override public void openDataManagement() { showDataManagement(); }
@@ -487,6 +495,7 @@ public class LibraryApp extends Application implements ToastDisplay {
                         try {
                             BookService.updateLibraryConfiguration(
                                     data.maxBorrowLimit(), data.loanDays(), data.finePerDay());
+                            cfg.setDataDirectory(data.dataDirectory());
                             cfg.setExportDirectory(data.exportDirectory());
                             cfg.setFinePerDay(data.finePerDay());
                             cfg.setCurrencySymbol(data.currencySymbol());
@@ -515,6 +524,13 @@ public class LibraryApp extends Application implements ToastDisplay {
                     ((Number) s.getOrDefault("totalFines", 0.0)).doubleValue(),
                     cfg.getExportDirectory(), cfg.isEmailConfigured()));
         } catch (Exception ex) { showError("Data management error: " + ex.getMessage()); }
+    }
+
+    private void deleteCurrentAccount() {
+        if (UserAccountDialogs.showDeleteAccountDialog(primaryStage, currentUser)) {
+            showLoginScreen();
+            showInfo("Account deleted.");
+        }
     }
 
     private static int n(Map<String,Object> m, String k) {
@@ -652,5 +668,8 @@ public class LibraryApp extends Application implements ToastDisplay {
         try { BookService.persistBooksDatabase(); } catch (Exception ignored) {}
     }
 
-    public static void main(String[] args) { launch(args); }
+    public static void main(String[] args) {
+        LoggingConfigurator.configure();
+        launch(args);
+    }
 }

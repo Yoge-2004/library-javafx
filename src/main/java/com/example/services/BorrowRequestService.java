@@ -5,6 +5,7 @@ import com.example.entities.BorrowRequest;
 import com.example.entities.User;
 import com.example.exceptions.BooksException;
 import com.example.exceptions.UserException;
+import com.example.storage.AppPaths;
 import com.example.storage.DataStorage;
 
 import java.io.IOException;
@@ -22,8 +23,8 @@ import java.util.stream.Collectors;
  */
 public final class BorrowRequestService {
     private static final Logger LOGGER = Logger.getLogger(BorrowRequestService.class.getName());
-    private static final String REQUESTS_FILE = "data/borrow_requests.ser";
-    private static final String ARCHIVED_REQUESTS_FILE = "data/borrow_requests_archive.ser";
+    private static final String REQUESTS_FILE = "borrow_requests.ser";
+    private static final String ARCHIVED_REQUESTS_FILE = "borrow_requests_archive.ser";
     private static final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     // FIXED: Maximum limits to prevent memory exhaustion
@@ -187,7 +188,7 @@ public final class BorrowRequestService {
     @SuppressWarnings("unchecked")
     private static List<BorrowRequest> loadRequests() {
         try {
-            List<BorrowRequest> loaded = DataStorage.readSerialized(REQUESTS_FILE, List.class);
+            List<BorrowRequest> loaded = DataStorage.readSerialized(dataFile(REQUESTS_FILE), List.class);
             return loaded != null ? new ArrayList<>(loaded) : new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to load borrow requests, starting empty", e);
@@ -198,7 +199,7 @@ public final class BorrowRequestService {
     @SuppressWarnings("unchecked")
     private static List<BorrowRequest> loadArchivedRequests() {
         try {
-            List<BorrowRequest> loaded = DataStorage.readSerialized(ARCHIVED_REQUESTS_FILE, List.class);
+            List<BorrowRequest> loaded = DataStorage.readSerialized(dataFile(ARCHIVED_REQUESTS_FILE), List.class);
             return loaded != null ? new ArrayList<>(loaded) : new ArrayList<>();
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to load archived requests", e);
@@ -208,7 +209,7 @@ public final class BorrowRequestService {
 
     private static void saveRequests() {
         try {
-            DataStorage.writeSerialized(REQUESTS_FILE, new ArrayList<>(requests));
+            DataStorage.writeSerialized(dataFile(REQUESTS_FILE), new ArrayList<>(requests));
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to persist borrow requests", e);
             throw new BooksException("Failed to persist borrow requests: " + e.getMessage(), e);
@@ -216,6 +217,10 @@ public final class BorrowRequestService {
     }
 
     private static void saveArchivedRequests() throws IOException {
-        DataStorage.writeSerialized(ARCHIVED_REQUESTS_FILE, new ArrayList<>(archivedRequests));
+        DataStorage.writeSerialized(dataFile(ARCHIVED_REQUESTS_FILE), new ArrayList<>(archivedRequests));
+    }
+
+    private static String dataFile(String fileName) {
+        return AppPaths.resolveDataFile(fileName).toString();
     }
 }

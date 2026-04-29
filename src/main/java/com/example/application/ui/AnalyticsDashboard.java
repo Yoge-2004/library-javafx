@@ -91,7 +91,7 @@ public class AnalyticsDashboard extends BorderPane {
     private ComboBox<String> overdueSortFilter;
     private ComboBox<String> overdueLimitFilter;
     private ComboBox<String> overdueListSortFilter;
-    
+
     private boolean isUpdatingCategories = false;
 
     public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff) {
@@ -111,11 +111,13 @@ public class AnalyticsDashboard extends BorderPane {
 
         ScrollPane scroll = new ScrollPane();
         scroll.setFitToWidth(true);
+        scroll.setFitToHeight(false);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         scroll.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
 
         VBox content = new VBox(24);
-        content.setPadding(new Insets(24));
+        content.setPadding(new Insets(24, 24, 48, 24));
         content.setStyle("-fx-background-color:" + pageBackground() + ";");
 
         VBox header = AppTheme.createHeaderBlock(
@@ -140,7 +142,9 @@ public class AnalyticsDashboard extends BorderPane {
 
         scroll.setContent(content);
         setCenter(scroll);
+        widthProperty().addListener((obs, oldValue, newValue) -> updateResponsiveSections());
         loadData();
+        Platform.runLater(this::updateResponsiveSections);
     }
 
     private FlowPane createWrappingSection(double gap) {
@@ -160,8 +164,8 @@ public class AnalyticsDashboard extends BorderPane {
         chartsPane.getChildren().clear();
 
         VBox trendPanel = createSurfacePanel("Circulation Trends");
-        trendPanel.setPrefWidth(760);
-        trendPanel.setMinWidth(420);
+        trendPanel.setMinWidth(320);
+        trendPanel.setMaxWidth(Double.MAX_VALUE);
 
         trendRangeFilter = filterCombo("Last 90 days",
                 List.of("Last 7 days", "Last 30 days", "Last 90 days", "Last 12 months", "All time"));
@@ -186,8 +190,8 @@ public class AnalyticsDashboard extends BorderPane {
         trendPanel.getChildren().add(trendChartHolder);
 
         VBox categoryPanel = createSurfacePanel("Category Mix");
-        categoryPanel.setPrefWidth(360);
         categoryPanel.setMinWidth(320);
+        categoryPanel.setMaxWidth(Double.MAX_VALUE);
 
         categoryMetricFilter = filterCombo("Inventory Size",
                 List.of("Inventory Size", "Available Copies", "Issued Copies", "Overdue Items"));
@@ -203,15 +207,15 @@ public class AnalyticsDashboard extends BorderPane {
         categoryChart = new PieChart();
         categoryChart.setLabelsVisible(true);
         categoryChart.setLegendVisible(true);
-        categoryChart.setLegendSide(javafx.geometry.Side.RIGHT);
-        categoryChart.setPrefHeight(300);
-        categoryChart.setMinHeight(300);
+        categoryChart.setLegendSide(javafx.geometry.Side.BOTTOM);
+        categoryChart.setPrefHeight(360);
+        categoryChart.setMinHeight(320);
         categoryChart.setStyle("-fx-font-size: 11px;");
         categoryPanel.getChildren().add(categoryChart);
 
         VBox overdueInsightsPanel = createSurfacePanel("Overdue Insights");
-        overdueInsightsPanel.setPrefWidth(520);
-        overdueInsightsPanel.setMinWidth(360);
+        overdueInsightsPanel.setMinWidth(300);
+        overdueInsightsPanel.setMaxWidth(Double.MAX_VALUE);
 
         overdueMetricFilter = filterCombo("Outstanding Fine",
                 List.of("Outstanding Fine", "Days Overdue", "Books on Loan"));
@@ -228,6 +232,7 @@ public class AnalyticsDashboard extends BorderPane {
         overdueInsightsPanel.getChildren().add(overdueChartHolder);
 
         chartsPane.getChildren().addAll(trendPanel, categoryPanel, overdueInsightsPanel);
+        AppTheme.staggeredEntrance(chartsPane.getChildren(), 35, 45);
 
         attachChartListeners();
     }
@@ -243,7 +248,7 @@ public class AnalyticsDashboard extends BorderPane {
                 refreshStaffCharts();
             }
         }));
-        
+
         // Add listeners for overdue list filters
         if (overdueLimitFilter != null) {
             overdueLimitFilter.setOnAction(event -> updateOverduePanel());
@@ -257,19 +262,21 @@ public class AnalyticsDashboard extends BorderPane {
         bottomPane.getChildren().clear();
 
         recentPanel = createSurfacePanel(isStaff ? "Recent Issues" : "My Active Books");
-        recentPanel.setPrefWidth(Integer.MAX_VALUE);
+        recentPanel.setPrefWidth(USE_COMPUTED_SIZE);
+        recentPanel.setMaxWidth(Double.MAX_VALUE);
         recentPanel.setMinWidth(320);
 
         overduePanel = createSurfacePanel(isStaff ? "Top Overdue" : "My Overdue Books");
-        overduePanel.setPrefWidth(Integer.MAX_VALUE);
+        overduePanel.setPrefWidth(USE_COMPUTED_SIZE);
+        overduePanel.setMaxWidth(Double.MAX_VALUE);
         overduePanel.setMinWidth(320);
 
         // Add filter controls to overdue panel
         if (isStaff) {
             overdueLimitFilter = filterCombo("Top 6", List.of("Top 5", "Top 10", "Top 15", "All"));
-            overdueListSortFilter = filterCombo("Days Overdue (High)", 
+            overdueListSortFilter = filterCombo("Days Overdue (High)",
                     List.of("Days Overdue (High)", "Days Overdue (Low)", "Fine Amount (High)", "Fine Amount (Low)", "Borrower (A-Z)"));
-            
+
             FlowPane overdueControls = filterRow(
                     filterGroup("Limit", overdueLimitFilter),
                     filterGroup("Sort", overdueListSortFilter)
@@ -278,6 +285,7 @@ public class AnalyticsDashboard extends BorderPane {
         }
 
         bottomPane.getChildren().addAll(recentPanel, overduePanel);
+        AppTheme.staggeredEntrance(bottomPane.getChildren(), 40, 55);
     }
 
     private VBox createSurfacePanel(String title) {
@@ -301,6 +309,7 @@ public class AnalyticsDashboard extends BorderPane {
             }
             updateRecentPanel();
             updateOverduePanel();
+            updateResponsiveSections();
         });
     }
 
@@ -384,6 +393,8 @@ public class AnalyticsDashboard extends BorderPane {
                             "Requests waiting for approval", "#8B5CF6", onNavigateToCirculation)
             );
         }
+
+        AppTheme.staggeredEntrance(statsPane.getChildren(), 25, 35);
     }
 
     private VBox statCard(String iconPath, String label, String value, String subText,
@@ -391,9 +402,10 @@ public class AnalyticsDashboard extends BorderPane {
         VBox card = new VBox(12);
         card.getStyleClass().add("metric-card");
         card.setPadding(new Insets(18));
-        card.setPrefWidth(isStaff ? 235 : 250);
-        card.setMinWidth(220);
-        card.setMaxWidth(280);
+        // Responsive: min 200px, no fixed pref so FlowPane distributes space evenly
+        card.setMinWidth(200);
+        card.setPrefWidth(USE_COMPUTED_SIZE);
+        card.setMaxWidth(Double.MAX_VALUE);
 
         HBox header = new HBox(12);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -440,7 +452,7 @@ public class AnalyticsDashboard extends BorderPane {
         Comparator<Map.Entry<String, Double>> comparator = "A-Z".equals(categorySortFilter.getValue())
                 ? Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER)
                 : Map.Entry.<String, Double>comparingByValue().reversed()
-                .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
+                  .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
 
         int limit = switch (categoryLimitFilter.getValue()) {
             case "Top 5" -> 5;
@@ -563,7 +575,7 @@ public class AnalyticsDashboard extends BorderPane {
         Comparator<Map.Entry<String, Double>> comparator = "Borrower A-Z".equals(overdueSortFilter.getValue())
                 ? Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER)
                 : Map.Entry.<String, Double>comparingByValue().reversed()
-                .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
+                  .thenComparing(Map.Entry.comparingByKey(String.CASE_INSENSITIVE_ORDER));
 
         XYChart<String, Number> chart = createCartesianChart("Bar", "Borrower", metric);
         XYChart.Series<String, Number> series = new XYChart.Series<>();
@@ -719,9 +731,9 @@ public class AnalyticsDashboard extends BorderPane {
         clearPanel(recentPanel);
         List<IssueRecord> records = isStaff
                 ? BookService.getAllActiveIssueRecords().stream()
-                .sorted(Comparator.comparing(IssueRecord::getIssueDate).reversed())
-                .limit(6)
-                .collect(Collectors.toList())
+                  .sorted(Comparator.comparing(IssueRecord::getIssueDate).reversed())
+                  .limit(6)
+                  .collect(Collectors.toList())
                 : BookService.getUserActiveIssueRecords(currentUser);
 
         if (records.isEmpty()) {
@@ -739,7 +751,7 @@ public class AnalyticsDashboard extends BorderPane {
 
     private void updateOverduePanel() {
         clearPanel(overduePanel);
-        
+
         List<IssueRecord> overdueRecords = isStaff
                 ? BookService.getAllOverdueBooks()
                 : BookService.getUserOverdueBooks(currentUser);
@@ -972,6 +984,68 @@ public class AnalyticsDashboard extends BorderPane {
 
     private String dividerColor() {
         return AppTheme.darkMode ? "#334155" : "#E2E8F0";
+    }
+
+    private void updateResponsiveSections() {
+        double availableWidth = Math.max(360, getWidth() - 112);
+
+        applyResponsiveWidths(statsPane, availableWidth, 4, 3, 2, 220, 320);
+        applyResponsiveWidths(bottomPane, availableWidth,
+                availableWidth >= 1080 ? 2 : 1,
+                availableWidth >= 1080 ? 2 : 1,
+                1, 320, Double.MAX_VALUE);
+        applyResponsiveWidths(chartsPane, availableWidth,
+                availableWidth >= 1380 ? 3 : (availableWidth >= 920 ? 2 : 1),
+                availableWidth >= 920 ? 2 : 1,
+                1, 320, Double.MAX_VALUE);
+
+        if (trendChartHolder != null) {
+            double chartHeight = availableWidth < 760 ? 300 : 340;
+            trendChartHolder.setMinHeight(chartHeight);
+            trendChartHolder.setPrefHeight(chartHeight);
+        }
+        if (overdueChartHolder != null) {
+            double chartHeight = availableWidth < 760 ? 280 : 320;
+            overdueChartHolder.setMinHeight(chartHeight);
+            overdueChartHolder.setPrefHeight(chartHeight);
+        }
+        if (categoryChart != null) {
+            categoryChart.setMinHeight(availableWidth < 760 ? 320 : 360);
+            categoryChart.setPrefHeight(availableWidth < 760 ? 320 : 380);
+        }
+    }
+
+    private void applyResponsiveWidths(FlowPane pane, double availableWidth, int wideColumns,
+                                       int mediumColumns, int narrowColumns,
+                                       double minWidth, double maxWidth) {
+        if (pane == null || pane.getChildren().isEmpty()) {
+            return;
+        }
+
+        int columns;
+        if (availableWidth >= 1280) {
+            columns = wideColumns;
+        } else if (availableWidth >= 860) {
+            columns = mediumColumns;
+        } else {
+            columns = narrowColumns;
+        }
+        columns = Math.max(1, columns);
+
+        double gap = pane.getHgap();
+        double targetWidth = (availableWidth - ((columns - 1) * gap)) / columns;
+        targetWidth = Math.max(minWidth, targetWidth);
+        if (Double.isFinite(maxWidth)) {
+            targetWidth = Math.min(maxWidth, targetWidth);
+        }
+
+        pane.setPrefWrapLength(availableWidth);
+        for (Node child : pane.getChildren()) {
+            if (child instanceof Region region) {
+                region.setPrefWidth(targetWidth);
+                region.setMaxWidth(Double.MAX_VALUE);
+            }
+        }
     }
 
     private static String safeCategory(String category) {

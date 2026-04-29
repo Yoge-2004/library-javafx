@@ -43,19 +43,22 @@ public class LibraryConfigurationDialog {
         GridPane rulesGrid = grid();
 
         Spinner<Integer> maxBorrowSpin = new Spinner<>(1, 100, maxBorrowLimit);
-        maxBorrowSpin.setEditable(true); 
+        maxBorrowSpin.setEditable(true);
         maxBorrowSpin.setId("maxBorrow");
-        maxBorrowSpin.setStyle("-fx-font-size: 14px;");
+        maxBorrowSpin.getStyleClass().add("themed-spinner");
+        maxBorrowSpin.setMaxWidth(Double.MAX_VALUE);
 
         Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, loanDays);
-        loanDaysSpin.setEditable(true); 
+        loanDaysSpin.setEditable(true);
         loanDaysSpin.setId("loanDays");
-        loanDaysSpin.setStyle("-fx-font-size: 14px;");
+        loanDaysSpin.getStyleClass().add("themed-spinner");
+        loanDaysSpin.setMaxWidth(Double.MAX_VALUE);
 
         Spinner<Integer> renewalSpin = new Spinner<>(0, 10, 2);
-        renewalSpin.setEditable(true); 
+        renewalSpin.setEditable(true);
         renewalSpin.setId("renewals");
-        renewalSpin.setStyle("-fx-font-size: 14px;");
+        renewalSpin.getStyleClass().add("themed-spinner");
+        renewalSpin.setMaxWidth(Double.MAX_VALUE);
 
         rulesGrid.addRow(0, gridLabel("Max Books per User:"),  maxBorrowSpin);
         rulesGrid.addRow(1, gridLabel("Loan Period (days):"),  loanDaysSpin);
@@ -69,7 +72,10 @@ public class LibraryConfigurationDialog {
         GridPane fineGrid = grid();
 
         Spinner<Double> fineSpin = new Spinner<>(0.0, 1000.0, finePerDay, 0.50);
-        fineSpin.setEditable(true); fineSpin.setId("finePerDay");
+        fineSpin.setEditable(true);
+        fineSpin.setId("finePerDay");
+        fineSpin.getStyleClass().add("themed-spinner");
+        fineSpin.setMaxWidth(Double.MAX_VALUE);
 
         TextField currSymbolField = new TextField(
                 config.getCurrencySymbol() != null ? config.getCurrencySymbol() : "$");
@@ -142,13 +148,20 @@ public class LibraryConfigurationDialog {
 
         GridPane storageGrid = grid();
 
+        TextField dataDirField = inputTF("dataDirectory",
+                config.getDataDirectory(), "Library OS data");
+        Button dataBrowse = browseBtn("Choose data folder", dataDirField, owner);
+        HBox dataRow = new HBox(8, dataDirField, dataBrowse);
+        HBox.setHgrow(dataDirField, Priority.ALWAYS);
+
         TextField exportDirField = inputTF("exportDirectory",
                 config.getExportDirectory(), "exports");
         Button exportBrowse = browseBtn("Choose export folder", exportDirField, owner);
         HBox exportRow = new HBox(8, exportDirField, exportBrowse);
         HBox.setHgrow(exportDirField, Priority.ALWAYS);
 
-        storageGrid.addRow(0, gridLabel("Export Directory:"), exportRow);
+        storageGrid.addRow(0, gridLabel("Data Directory:"), dataRow);
+        storageGrid.addRow(1, gridLabel("Export Directory:"), exportRow);
 
         // Library / Branch identity
         Separator sep2 = new Separator();
@@ -191,6 +204,7 @@ public class LibraryConfigurationDialog {
                     maxBorrowSpin.getValue(),
                     loanDaysSpin.getValue(),
                     fineSpin.getValue(),
+                    dataDirField.getText().trim(),
                     exportDirField.getText().trim(),
                     currSymbolField.getText().trim(),
                     currCodeField.getText().trim(),
@@ -259,8 +273,10 @@ public class LibraryConfigurationDialog {
     }
     private static Button browseBtn(String title, TextField target, Stage owner) {
         Button b = new Button("Browse...");
-        b.setStyle("-fx-background-color:#E2E8F0; -fx-background-radius:8px; " +
-                "-fx-border-radius:8px; -fx-cursor:hand; -fx-padding:8 14; -fx-font-weight:600;");
+        b.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; " +
+                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
+                "-fx-background-radius:8px; -fx-border-radius:8px; -fx-cursor:hand; " +
+                "-fx-padding:8 14; -fx-font-weight:600;");
         b.setOnAction(e -> {
             DirectoryChooser dc = new DirectoryChooser();
             dc.setTitle(title);
@@ -315,7 +331,7 @@ public class LibraryConfigurationDialog {
 
     public record ConfigData(
             int maxBorrowLimit, int loanDays, double finePerDay,
-            String exportDirectory, String currencySymbol, String currencyCode,
+            String dataDirectory, String exportDirectory, String currencySymbol, String currencyCode,
             String smtpHost, int smtpPort,
             String smtpUsername, String smtpPassword, String fromAddress,
             boolean smtpAuth, boolean startTlsEnabled,
