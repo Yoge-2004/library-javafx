@@ -1,6 +1,7 @@
 package com.example.application.ui;
 
 import com.example.entities.AppConfiguration;
+import com.example.entities.DatabaseConfiguration;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -13,7 +14,7 @@ import java.util.Optional;
 
 /**
  * Library configuration dialog.
- * Tabs: Borrowing Rules | Email | Export & Storage
+ * Tabs: Borrowing Rules | Email | Export & Storage | Database
  * Added: currency symbol, fine rate, data directory browse.
  */
 public class LibraryConfigurationDialog {
@@ -30,6 +31,12 @@ public class LibraryConfigurationDialog {
         pane.setPrefWidth(580);
         pane.setMinWidth(520);
         pane.setPrefHeight(620);
+
+        final DatabaseConfiguration[] databaseConfigHolder = {
+                config.getDatabaseConfiguration() != null
+                        ? config.getDatabaseConfiguration()
+                        : new DatabaseConfiguration()
+        };
 
         TabPane tabs = new TabPane();
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
@@ -177,11 +184,72 @@ public class LibraryConfigurationDialog {
 
         storagePanel.getChildren().addAll(storageGrid, sep2, idTitle, idGrid);
 
+        // ─── Tab 4: Database ───────────────────────────────────────
+        VBox databasePanel = panelContainer();
+        databasePanel.getChildren().addAll(
+                panelTitle("Database"),
+                panelDesc("File storage remains the default. Optionally configure a database connection for shared or dual-write persistence.")
+        );
+
+        VBox databaseSummary = new VBox(10);
+        databaseSummary.setPadding(new Insets(18));
+        databaseSummary.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#0F172A" : "#F8FAFC") + ";" +
+                "-fx-border-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + ";" +
+                "-fx-border-width:1; -fx-background-radius:12px; -fx-border-radius:12px;");
+
+        Label dbStatusLabel = new Label();
+        dbStatusLabel.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
+        Label dbDetailLabel = new Label();
+        dbDetailLabel.setWrapText(true);
+        dbDetailLabel.setStyle("-fx-font-size:13px; -fx-text-fill:" + textMuted() + ";");
+
+        Runnable refreshDatabaseSummary = () -> {
+            DatabaseConfiguration dbConfig = databaseConfigHolder[0] != null
+                    ? databaseConfigHolder[0]
+                    : new DatabaseConfiguration();
+            if (!dbConfig.isConfigured()) {
+                dbStatusLabel.setText("Using file storage only");
+                dbDetailLabel.setText("No database engine is configured. Library OS will continue storing data locally without requiring additional permissions.");
+                return;
+            }
+
+            String location = dbConfig.getEngine() == DatabaseConfiguration.Engine.SQLITE
+                    ? dbConfig.getSqliteFile()
+                    : dbConfig.getHost() + ":" + dbConfig.getPort() + " / " + dbConfig.getDatabase();
+            String mode = dbConfig.isDualWrite()
+                    ? "Dual-write is enabled so file storage stays in sync."
+                    : "Database-only mode is selected.";
+            dbStatusLabel.setText(dbConfig.getEngine().getDisplayName());
+            dbDetailLabel.setText(location + "\n" + mode);
+        };
+        refreshDatabaseSummary.run();
+
+        databaseSummary.getChildren().addAll(dbStatusLabel, dbDetailLabel);
+
+        Button configureDatabaseBtn = AppTheme.createIconTextButton(
+                "Configure Database", AppTheme.ICON_SAVE, AppTheme.ButtonStyle.PRIMARY);
+        configureDatabaseBtn.setOnAction(event -> DatabaseConfigurationDialog.show(owner, databaseConfigHolder[0])
+                .ifPresent(updated -> {
+                    databaseConfigHolder[0] = updated;
+                    refreshDatabaseSummary.run();
+                }));
+
+        Button disableDatabaseBtn = AppTheme.createButton("Use File Storage Only", AppTheme.ButtonStyle.OUTLINE);
+        disableDatabaseBtn.setOnAction(event -> {
+            databaseConfigHolder[0] = new DatabaseConfiguration();
+            refreshDatabaseSummary.run();
+        });
+
+        HBox databaseActions = new HBox(10, configureDatabaseBtn, disableDatabaseBtn);
+        databaseActions.setAlignment(Pos.CENTER_LEFT);
+        databasePanel.getChildren().addAll(databaseSummary, databaseActions);
+
         // ─── Assemble tabs ───────────────────────────────────────
         tabs.getTabs().addAll(
                 tab("Borrowing", AppTheme.ICON_LIBRARY, rulesPanel),
                 tab("Email", AppTheme.ICON_MAIL, emailPanel),
-                tab("Storage", AppTheme.ICON_SAVE, storagePanel)
+                tab("Storage", AppTheme.ICON_SAVE, storagePanel),
+                tab("Database", AppTheme.ICON_SYNC, databasePanel)
         );
         pane.setContent(tabs);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
@@ -216,7 +284,8 @@ public class LibraryConfigurationDialog {
                     authCheck.isSelected(),
                     tlsCheck.isSelected(),
                     libNameField.getText().trim(),
-                    branchNameField.getText().trim()
+                    branchNameField.getText().trim(),
+                    databaseConfigHolder[0]
             );
         });
 
@@ -335,5 +404,6 @@ public class LibraryConfigurationDialog {
             String smtpHost, int smtpPort,
             String smtpUsername, String smtpPassword, String fromAddress,
             boolean smtpAuth, boolean startTlsEnabled,
-            String libraryName, String branchName) {}
+            String libraryName, String branchName,
+            DatabaseConfiguration databaseConfiguration) {}
 }

@@ -1,5 +1,6 @@
 package com.example.application.ui;
 
+import com.example.application.ToastDisplay;
 import com.example.services.BookService;
 import com.example.services.ReportExportService;
 import com.example.services.UserService;
@@ -21,7 +22,7 @@ import java.time.format.DateTimeFormatter;
  */
 public class DataManagementDialog {
 
-    public static void show(Stage owner, Snapshot snapshot) {
+    public static void show(Stage owner, Snapshot snapshot, ToastDisplay toastDisplay) {
         Dialog<Void> dialog = new Dialog<>();
         dialog.setTitle("Data Management");
         dialog.initOwner(owner);
@@ -79,15 +80,15 @@ public class DataManagementDialog {
 
         // Export reports button
         Button exportBtn = createActionButton(AppTheme.ICON_DASHBOARD, "#0D9488", "Export Reports",
-                "Generate overdue, issued books & requests as CSV", () -> exportReports(snapshot));
+                "Generate overdue, issued books & requests as CSV", () -> exportReports(snapshot, toastDisplay));
 
         // Backup button
         Button backupBtn = createActionButton(AppTheme.ICON_SAVE, "#3B82F6", "Create Backup",
-                "Snapshot all data files to a timestamped backup", () -> createBackup(owner));
+                "Snapshot all data files to a timestamped backup", () -> createBackup(owner, toastDisplay));
 
         // Restore button
         Button restoreBtn = createActionButton(AppTheme.ICON_SYNC, "#F59E0B", "Restore from Backup",
-                "Load a previously saved backup file", () -> restoreBackup(owner));
+                "Load a previously saved backup file", () -> restoreBackup(owner, toastDisplay));
 
         actionsPane.getChildren().addAll(exportBtn, backupBtn, restoreBtn);
 
@@ -177,27 +178,19 @@ public class DataManagementDialog {
         return btn;
     }
 
-    private static void exportReports(Snapshot snapshot) {
+    private static void exportReports(Snapshot snapshot, ToastDisplay toastDisplay) {
         try {
             Path overduePath  = ReportExportService.exportOverdueReportCsv(BookService.getAllOverdueBooks());
             Path issuedPath   = ReportExportService.exportIssuedBooksCsv(BookService.getAllActiveIssueRecords());
             Path requestsPath = ReportExportService.exportBorrowRequestsCsv(BookService.getAllBorrowRequests());
-
-            Alert a = new Alert(Alert.AlertType.INFORMATION);
-            AppTheme.applyTheme(a.getDialogPane());
-            a.setTitle("Export Complete");
-            a.setHeaderText("Reports exported successfully");
-            a.setContentText("Saved to: " + snapshot.exportDirectory() +
-                    "\n• " + overduePath.getFileName() +
-                    "\n• " + issuedPath.getFileName() +
-                    "\n• " + requestsPath.getFileName());
-            a.showAndWait();
+            notifySuccess(toastDisplay, "Reports exported to " + snapshot.exportDirectory() +
+                    " (" + overduePath.getFileName() + ", " + issuedPath.getFileName() + ", " + requestsPath.getFileName() + ")");
         } catch (Exception e) {
-            error("Export Failed", e.getMessage());
+            notifyError(toastDisplay, "Export failed: " + e.getMessage());
         }
     }
 
-    private static void createBackup(Stage owner) {
+    private static void createBackup(Stage owner, ToastDisplay toastDisplay) {
         try {
             String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
             Path backupDir = AppPaths.backupDirectory().resolve(ts);
@@ -219,19 +212,13 @@ public class DataManagementDialog {
             // Persist latest in-memory state
             BookService.persistBooksDatabase();
             UserService.persistDatabase();
-
-            Alert a = new Alert(Alert.AlertType.INFORMATION);
-            AppTheme.applyTheme(a.getDialogPane());
-            a.setTitle("Backup Complete");
-            a.setHeaderText("Backup created successfully");
-            a.setContentText("Location: " + backupDir.toAbsolutePath());
-            a.showAndWait();
+            notifySuccess(toastDisplay, "Backup created at " + backupDir.toAbsolutePath());
         } catch (Exception e) {
-            error("Backup Failed", e.getMessage());
+            notifyError(toastDisplay, "Backup failed: " + e.getMessage());
         }
     }
 
-    private static void restoreBackup(Stage owner) {
+    private static void restoreBackup(Stage owner, ToastDisplay toastDisplay) {
         FileChooser fc = new FileChooser();
         fc.setTitle("Select Backup Folder — choose any .ser file inside it");
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Serialized data", "*.ser"));
@@ -257,14 +244,9 @@ public class DataManagementDialog {
                                 catch (Exception ignored) {}
                             });
                 }
-                Alert done = new Alert(Alert.AlertType.INFORMATION);
-                AppTheme.applyTheme(done.getDialogPane());
-                done.setTitle("Restore Complete");
-                done.setHeaderText("Data restored from backup.");
-                done.setContentText("Please restart Library OS for changes to take effect.");
-                done.showAndWait();
+                notifySuccess(toastDisplay, "Backup restored. Restart Library OS to load the restored data.");
             } catch (Exception e) {
-                error("Restore Failed", e.getMessage());
+                notifyError(toastDisplay, "Restore failed: " + e.getMessage());
             }
         });
     }
@@ -274,6 +256,27 @@ public class DataManagementDialog {
         AppTheme.applyTheme(a.getDialogPane());
         a.setTitle(title); a.setHeaderText(title); a.setContentText(msg);
         a.showAndWait();
+    }
+
+    private static void notifySuccess(ToastDisplay toastDisplay, String message) {
+        if (toastDisplay != null) {
+            toastDisplay.showSuccess(message);
+            return;
+        }
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        AppTheme.applyTheme(a.getDialogPane());
+        a.setTitle("Completed");
+        a.setHeaderText("Completed");
+        a.setContentText(message);
+        a.showAndWait();
+    }
+
+    private static void notifyError(ToastDisplay toastDisplay, String message) {
+        if (toastDisplay != null) {
+            toastDisplay.showError(message);
+            return;
+        }
+        error("Operation Failed", message);
     }
 
     private static StackPane createIconBubble(String iconPath, String accentColor) {

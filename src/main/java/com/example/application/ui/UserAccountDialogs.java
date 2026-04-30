@@ -1,5 +1,6 @@
 package com.example.application.ui;
 
+import com.example.application.ToastDisplay;
 import com.example.entities.User;
 import com.example.entities.UserRole;
 import com.example.exceptions.UserException;
@@ -8,6 +9,7 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
@@ -35,13 +37,6 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(380);
-        dlg.setOnShown(evt -> {
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
-                AppTheme.applyWindowIcon(st);
-                st.setMinWidth(420); st.setMinHeight(340);
-                st.sizeToScene(); st.centerOnScreen();
-            }
-        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -99,13 +94,6 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(340);
-        dlg.setOnShown(evt -> {
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
-                AppTheme.applyWindowIcon(st);
-                st.setMinWidth(420); st.setMinHeight(300);
-                st.sizeToScene(); st.centerOnScreen();
-            }
-        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -157,67 +145,9 @@ public class UserAccountDialogs {
         return dlg.showAndWait().orElse(false);
     }
 
-    public static boolean showDeleteAccountDialog(Stage owner, String userId) {
-        User user;
-        try {
-            user = UserService.getUserById(userId);
-        } catch (Exception e) {
-            return false;
-        }
-
-        Dialog<Boolean> dlg = new Dialog<>();
-        dlg.setTitle("Delete Account");
-        dlg.initOwner(owner);
-        dlg.setResizable(true);
-
-        DialogPane pane = dlg.getDialogPane();
-        AppTheme.applyTheme(pane);
-        pane.setPrefWidth(460);
-        pane.setPrefHeight(320);
-
-        VBox content = new VBox(12);
-        content.setPadding(new Insets(20));
-
-        Label title = new Label("Delete " + user.getUserId() + "?");
-        title.setStyle("-fx-font-size:18px; -fx-font-weight:700; -fx-text-fill:" +
-                (AppTheme.darkMode ? "#F8FAFC" : "#0F172A") + ";");
-
-        Label body = new Label("This removes your sign-in account. Active loans, pending requests, and the last admin account cannot be deleted.");
-        body.setStyle("-fx-font-size:13px; -fx-text-fill:" + (AppTheme.darkMode ? "#94A3B8" : "#64748B") + ";");
-        body.setWrapText(true);
-
-        Label passwordLabel = bold("Current Password");
-        PasswordField passwordField = passField("Enter your current password");
-        Label err = errorLabel();
-
-        content.getChildren().addAll(title, body, passwordLabel, passwordField, err);
-
-        pane.setContent(content);
-        pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
-        Button deleteButton = styleOkBtn(pane, "Delete Account");
-        if (deleteButton != null) {
-            deleteButton.setStyle("-fx-background-color:#DC2626; -fx-text-fill:white;" +
-                    "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:8px; -fx-padding:9 22;");
-            deleteButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
-                try {
-                    UserService.deleteOwnAccount(userId, passwordField.getText());
-                } catch (Exception e) {
-                    err.setText(e.getMessage());
-                    err.setVisible(true);
-                    event.consume();
-                }
-            });
-        }
-        styleSecondaryBtn(pane, ButtonType.CANCEL, "Cancel");
-
-        dlg.setResultConverter(bt -> bt == ButtonType.OK);
-
-        return dlg.showAndWait().orElse(false);
-    }
-
     // ── User Management (admin/librarian) ────────────────────────
 
-    public static void showUserManagement(Stage owner, String currentUserId) {
+    public static void showUserManagement(Stage owner, String currentUserId, ToastDisplay toastDisplay) {
         boolean isAdmin = UserService.isAdmin(currentUserId);
 
         Dialog<Void> dlg = new Dialog<>();
@@ -229,13 +159,6 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(840);
         pane.setPrefHeight(560);
-        dlg.setOnShown(evt -> {
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
-                AppTheme.applyWindowIcon(st);
-                st.setMinWidth(760); st.setMinHeight(520);
-                st.sizeToScene(); st.centerOnScreen();
-            }
-        });
 
         // Header + Add button
         HBox topBar = new HBox(12);
@@ -252,7 +175,7 @@ public class UserAccountDialogs {
 
         // Table
         TableView<User> table = new TableView<>();
-        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         VBox.setVgrow(table, Priority.ALWAYS);
         table.setPrefHeight(400);
 
@@ -287,8 +210,13 @@ public class UserAccountDialogs {
                 apprBtn.setOnAction(e -> {
                     User u = getTableRow().getItem(); if (u == null) return;
                     u.setActive(true);
-                    try { UserService.updateUser(u); reload(table); }
-                    catch (Exception ex) { showAlert(ex.getMessage()); }
+                    try {
+                        UserService.updateUser(u);
+                        reload(table);
+                        notifySuccess(toastDisplay, "User approved: " + u.getUserId());
+                    } catch (Exception ex) {
+                        notifyError(toastDisplay, ex.getMessage());
+                    }
                 });
                 editBtn.setOnAction(e -> {
                     User u = getTableRow().getItem(); if (u == null) return;
@@ -299,15 +227,25 @@ public class UserAccountDialogs {
                     User u = getTableRow().getItem();
                     if (u == null || u.getUserId().equals(currentUserId)) return;
                     if (!isAdmin && u.getRole().isAdmin()) {
-                        showAlert("Only administrators can delete admin accounts."); return;
+                        notifyError(toastDisplay, "Only administrators can delete admin accounts."); return;
                     }
-                    Alert conf = new Alert(Alert.AlertType.CONFIRMATION,
-                            "Delete \"" + u.getUserId() + "\"?", ButtonType.YES, ButtonType.NO);
+                    Alert conf = new Alert(Alert.AlertType.WARNING,
+                            "Delete \"" + u.getUserId() + "\"?",
+                            new ButtonType("Delete", ButtonBar.ButtonData.OK_DONE),
+                            ButtonType.CANCEL);
+                    conf.setTitle("Delete User");
                     AppTheme.applyTheme(conf.getDialogPane());
-                    conf.showAndWait().filter(bt -> bt == ButtonType.YES).ifPresent(bt -> {
-                        try { UserService.deleteUser(u.getUserId()); reload(table); }
-                        catch (Exception ex) { showAlert(ex.getMessage()); }
-                    });
+                    conf.showAndWait()
+                            .filter(bt -> bt.getButtonData() == ButtonBar.ButtonData.OK_DONE)
+                            .ifPresent(bt -> {
+                                try {
+                                    UserService.deleteUser(u.getUserId());
+                                    reload(table);
+                                    notifySuccess(toastDisplay, "User deleted: " + u.getUserId());
+                                } catch (Exception ex) {
+                                    notifyError(toastDisplay, ex.getMessage());
+                                }
+                            });
                 });
             }
             @Override protected void updateItem(Void v, boolean empty) {
@@ -333,16 +271,20 @@ public class UserAccountDialogs {
             RegistrationDialog.show(owner, false).ifPresent(req -> {
                 try {
                     if (UserService.userExists(req.username())) {
-                        showAlert("Username already taken."); return;
+                        notifyError(toastDisplay, "Username already taken."); return;
+                    }
+                    if (UserService.emailExists(req.email())) {
+                        notifyError(toastDisplay, "Email address already in use."); return;
                     }
                     UserService.createUser(req.username(), req.password(), req.role());
-                    if (req.pendingApproval()) {
-                        User created = UserService.getUserById(req.username());
-                        created.setActive(false);
-                        UserService.updateUser(created);
-                    }
+                    User created = UserService.getUserById(req.username());
+                    created.setEmail(req.email());
+                    created.setContactNumber(req.phoneNumber());
+                    created.setActive(!req.pendingApproval());
+                    UserService.updateUser(created);
                     reload(table);
-                } catch (Exception ex) { showAlert(ex.getMessage()); }
+                    notifySuccess(toastDisplay, "User created: " + req.username());
+                } catch (Exception ex) { notifyError(toastDisplay, ex.getMessage()); }
             });
         });
 
@@ -366,13 +308,6 @@ public class UserAccountDialogs {
         AppTheme.applyTheme(pane);
         pane.setPrefWidth(460);
         pane.setPrefHeight(420);
-        dlg.setOnShown(evt -> {
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
-                AppTheme.applyWindowIcon(st);
-                st.setMinWidth(420); st.setMinHeight(380);
-                st.sizeToScene(); st.centerOnScreen();
-            }
-        });
 
         GridPane grid = new GridPane();
         grid.setHgap(14); grid.setVgap(14);
@@ -451,7 +386,7 @@ public class UserAccountDialogs {
         var icon = AppTheme.createIcon(iconPath, 14);
         icon.setStyle("-fx-fill:white;");
         b.setGraphic(icon);
-        b.setTooltip(new Tooltip(tooltip));
+        b.setTooltip(AppTheme.createTooltip(tooltip));
         b.setStyle("-fx-background-color:" + color + "; -fx-text-fill:white; -fx-cursor:hand;" +
                 "-fx-background-radius:8px; -fx-padding:5; -fx-min-width:26px; -fx-pref-width:26px; " +
                 "-fx-max-width:26px; -fx-min-height:26px; -fx-pref-height:26px; -fx-max-height:26px;");
@@ -460,8 +395,7 @@ public class UserAccountDialogs {
 
     private static Label bold(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:" +
-                (AppTheme.darkMode ? "#CBD5E1" : "#374151") + ";");
+        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:#374151;");
         return l;
     }
 
@@ -519,5 +453,19 @@ public class UserAccountDialogs {
         Alert alert = new Alert(Alert.AlertType.ERROR, msg, ButtonType.OK);
         AppTheme.applyTheme(alert.getDialogPane());
         alert.showAndWait();
+    }
+
+    private static void notifySuccess(ToastDisplay toastDisplay, String message) {
+        if (toastDisplay != null) {
+            toastDisplay.showSuccess(message);
+        }
+    }
+
+    private static void notifyError(ToastDisplay toastDisplay, String message) {
+        if (toastDisplay != null) {
+            toastDisplay.showError(message);
+            return;
+        }
+        showAlert(message);
     }
 }

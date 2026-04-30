@@ -1,5 +1,6 @@
 package com.example.application.ui;
 
+import com.example.application.ToastDisplay;
 import com.example.entities.Book;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.entities.User;
@@ -63,6 +64,7 @@ public class AnalyticsDashboard extends BorderPane {
     private final Runnable onRefresh;
     private final String currentUser;
     private final boolean isStaff;
+    private final ToastDisplay toastDisplay;
 
     private Runnable onNavigateToCirculation;
     private Runnable onNavigateToCatalog;
@@ -94,10 +96,21 @@ public class AnalyticsDashboard extends BorderPane {
 
     private boolean isUpdatingCategories = false;
 
-    public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff) {
+    private static final String[] CATEGORY_CHART_COLORS = {
+            "#0D9488", "#3B82F6", "#8B5CF6", "#F59E0B", "#06B6D4", "#16A34A",
+            "#EC4899", "#EF4444", "#84CC16", "#F97316", "#14B8A6", "#6366F1",
+            "#A855F7", "#D97706", "#10B981", "#0EA5E9", "#7C3AED", "#F43F5E",
+            "#FB923C", "#FBBF24", "#A3E635", "#34D399", "#22D3EE", "#60A5FA",
+            "#C084FC", "#F87171", "#FCA5A5", "#FED7AA", "#FECDC3", "#FECACA",
+            "#FBCFE8", "#F5D0FC", "#E9D5FF", "#DDD6FE", "#C7D2FE", "#BFDBFE",
+            "#BAE6FD", "#B4E7FF", "#BFDBFE", "#99F6E4", "#86EFAC", "#BBF7D0"
+    };
+
+    public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff, ToastDisplay toastDisplay) {
         this.onRefresh = onRefresh;
         this.currentUser = currentUser;
         this.isStaff = isStaff;
+        this.toastDisplay = toastDisplay;
         initUI();
     }
 
@@ -152,7 +165,10 @@ public class AnalyticsDashboard extends BorderPane {
         section.setHgap(gap);
         section.setVgap(gap);
         section.setAlignment(Pos.TOP_LEFT);
-        section.prefWrapLengthProperty().bind(widthProperty().subtract(72));
+        // Do NOT bind prefWrapLengthProperty here — applyResponsiveWidths() calls
+        // setPrefWrapLength() at runtime, which throws if the property is bound:
+        //   "FlowPane.prefWrapLength: A bound value cannot be set."
+        // The widthProperty listener + Platform.runLater call in initUI() handles this.
         return section;
     }
 
@@ -238,16 +254,22 @@ public class AnalyticsDashboard extends BorderPane {
     }
 
     private void attachChartListeners() {
-        List<ComboBox<String>> chartControls = List.of(
-                trendRangeFilter, trendGroupingFilter, trendSeriesFilter, trendCategoryFilter, trendStyleFilter,
-                categoryMetricFilter, categorySortFilter, categoryLimitFilter,
-                overdueMetricFilter, overdueSortFilter
+        List<ComboBox<String>> trendControls = List.of(
+                trendRangeFilter, trendGroupingFilter, trendSeriesFilter, trendCategoryFilter, trendStyleFilter
         );
-        chartControls.forEach(control -> control.setOnAction(event -> {
+        trendControls.forEach(control -> control.setOnAction(event -> {
             if (!isUpdatingCategories) {
-                refreshStaffCharts();
+                updateTrendChart();
             }
         }));
+
+        List<ComboBox<String>> categoryControls = List.of(
+                categoryMetricFilter, categorySortFilter, categoryLimitFilter
+        );
+        categoryControls.forEach(control -> control.setOnAction(event -> updateCategoryChart()));
+
+        List<ComboBox<String>> overdueControls = List.of(overdueMetricFilter, overdueSortFilter);
+        overdueControls.forEach(control -> control.setOnAction(event -> updateOverdueInsightsChart()));
 
         // Add listeners for overdue list filters
         if (overdueLimitFilter != null) {
@@ -470,7 +492,29 @@ public class AnalyticsDashboard extends BorderPane {
                         entry.getKey() + " (" + AppTheme.formatNumber(Math.round(entry.getValue())) + ")",
                         entry.getValue())));
 
+        for (int index = 0; index < data.size(); index++) {
+            final int colorIndex = index;
+            data.get(index).nodeProperty().addListener((obs, oldNode, newNode) -> applyPieColor(newNode, colorIndex));
+        }
+
         categoryChart.setData(data);
+        Platform.runLater(() -> {
+            applyCategoryChartPalette();
+            refreshLayout();
+        });
+    }
+
+    private void applyCategoryChartPalette() {
+        ObservableList<PieChart.Data> pieData = categoryChart.getData();
+        for (int i = 0; i < pieData.size(); i++) {
+            applyPieColor(pieData.get(i).getNode(), i);
+        }
+    }
+
+    private void applyPieColor(Node node, int index) {
+        if (node != null) {
+            node.setStyle("-fx-pie-color: " + CATEGORY_CHART_COLORS[index % CATEGORY_CHART_COLORS.length] + ";");
+        }
     }
 
     private Map<String, Double> buildCategoryMetricValues() {
@@ -830,14 +874,14 @@ public class AnalyticsDashboard extends BorderPane {
             Button contactBtn = new Button();
             contactBtn.setGraphic(AppTheme.createIcon(AppTheme.ICON_USER, 14));
             contactBtn.getStyleClass().addAll("app-button", "btn-ghost");
-            contactBtn.setTooltip(new Tooltip("View borrower contact"));
+            contactBtn.setTooltip(AppTheme.createTooltip("View borrower contact"));
             contactBtn.setOnAction(event -> showContactSummary(record.getUserId()));
 
             Button reminderBtn = new Button();
             reminderBtn.setGraphic(AppTheme.createIcon(AppTheme.ICON_MAIL, 14));
             reminderBtn.getStyleClass().addAll("app-button", "btn-ghost");
-            reminderBtn.setTooltip(new Tooltip("Send overdue reminder"));
-            reminderBtn.setOnAction(event -> sendDashboardReminder(record));
+            reminderBtn.setTooltip(AppTheme.createTooltip("Send overdue reminder"));
+            reminderBtn.setOnAction(event -> sendDashboardReminder(record, reminderBtn));
 
             HBox actions = new HBox(4, contactBtn, reminderBtn);
             actions.setAlignment(Pos.CENTER_RIGHT);
@@ -849,7 +893,11 @@ public class AnalyticsDashboard extends BorderPane {
         return row;
     }
 
-    private void sendDashboardReminder(IssueRecord record) {
+    private void sendDashboardReminder(IssueRecord record, Button triggerButton) {
+        if (toastDisplay != null) {
+            toastDisplay.showInfo("Sending reminder email…");
+        }
+        Platform.runLater(() -> triggerButton.setDisable(true));
         new Thread(() -> {
             try {
                 User user = UserService.getUserById(record.getUserId());
@@ -858,15 +906,29 @@ public class AnalyticsDashboard extends BorderPane {
                 }
 
                 ReminderService.sendOverdueReminder(user, List.of(record));
-                Platform.runLater(() -> showInfoAlert(
-                        "Reminder Sent",
-                        "Reminder sent to " + user.getEmail(),
-                        "An overdue reminder was emailed successfully."));
+                Platform.runLater(() -> {
+                    triggerButton.setDisable(false);
+                    if (toastDisplay != null) {
+                        toastDisplay.showSuccess("Reminder sent to " + user.getEmail());
+                    } else {
+                        showInfoAlert(
+                                "Reminder Sent",
+                                "Reminder sent to " + user.getEmail(),
+                                "An overdue reminder was emailed successfully.");
+                    }
+                });
             } catch (Exception ex) {
-                Platform.runLater(() -> showInfoAlert(
-                        "Reminder Failed",
-                        "Could not send the overdue reminder",
-                        ex.getMessage()));
+                Platform.runLater(() -> {
+                    triggerButton.setDisable(false);
+                    if (toastDisplay != null) {
+                        toastDisplay.showError("Reminder failed: " + ReminderService.toUserMessage(ex));
+                    } else {
+                        showInfoAlert(
+                                "Reminder Failed",
+                                "Could not send the overdue reminder",
+                                ReminderService.toUserMessage(ex));
+                    }
+                });
             }
         }, "dashboard-reminder").start();
     }
@@ -989,23 +1051,20 @@ public class AnalyticsDashboard extends BorderPane {
     private void updateResponsiveSections() {
         double availableWidth = Math.max(360, getWidth() - 112);
 
-        applyResponsiveWidths(statsPane, availableWidth, 4, 3, 2, 220, 320);
+        applyResponsiveWidths(statsPane, availableWidth, 3, 2, 1, 220, Double.MAX_VALUE);
         applyResponsiveWidths(bottomPane, availableWidth,
                 availableWidth >= 1080 ? 2 : 1,
                 availableWidth >= 1080 ? 2 : 1,
                 1, 320, Double.MAX_VALUE);
-        applyResponsiveWidths(chartsPane, availableWidth,
-                availableWidth >= 1380 ? 3 : (availableWidth >= 920 ? 2 : 1),
-                availableWidth >= 920 ? 2 : 1,
-                1, 320, Double.MAX_VALUE);
+        applyResponsiveWidths(chartsPane, availableWidth, 1, 1, 1, 320, Double.MAX_VALUE);
 
         if (trendChartHolder != null) {
-            double chartHeight = availableWidth < 760 ? 300 : 340;
+            double chartHeight = availableWidth < 760 ? 320 : 360;
             trendChartHolder.setMinHeight(chartHeight);
             trendChartHolder.setPrefHeight(chartHeight);
         }
         if (overdueChartHolder != null) {
-            double chartHeight = availableWidth < 760 ? 280 : 320;
+            double chartHeight = availableWidth < 760 ? 300 : 340;
             overdueChartHolder.setMinHeight(chartHeight);
             overdueChartHolder.setPrefHeight(chartHeight);
         }
@@ -1013,6 +1072,10 @@ public class AnalyticsDashboard extends BorderPane {
             categoryChart.setMinHeight(availableWidth < 760 ? 320 : 360);
             categoryChart.setPrefHeight(availableWidth < 760 ? 320 : 380);
         }
+    }
+
+    public void refreshLayout() {
+        updateResponsiveSections();
     }
 
     private void applyResponsiveWidths(FlowPane pane, double availableWidth, int wideColumns,

@@ -43,6 +43,11 @@ public class LibraryApp extends Application implements ToastDisplay {
     private Timeline autoRefreshTimer;
     private int      toastSlot = 0;
 
+    private enum SetupAccess {
+        STAFF,
+        USER
+    }
+
     private final ObservableList<Book>          booksList    = FXCollections.observableArrayList();
     private final ObservableList<IssueRecord>   issuesList   = FXCollections.observableArrayList();
     private final ObservableList<BorrowRequest> requestsList = FXCollections.observableArrayList();
@@ -53,10 +58,11 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     @Override
     public void start(Stage stage) {
+        LoggingConfigurator.configure();
         this.primaryStage = stage;
         stage.setTitle("Library OS");
-        stage.setMinWidth(960);
-        stage.setMinHeight(720);
+        stage.setMinWidth(1200);
+        stage.setMinHeight(800);
 
         rootStack = new StackPane();
 
@@ -69,6 +75,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
         initializeLibrarySelection(cfg);
+        initializeOptionalDatabase(cfg);
         AppTheme.darkMode = cfg.isDarkMode();
         if (cfg.isDarkMode()) applyDarkMode(true);
         if (cfg.isInitialSetupDone()) {
@@ -88,8 +95,28 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- First-run wizard ---
 
     private void showSetupWizard() {
+        Optional<SetupAccess> setupAccess = promptInitialSetupAccess();
+        if (setupAccess.isEmpty()) {
+            Platform.exit();
+            return;
+        }
+
+        AppConfiguration cfg = AppConfigurationService.getConfiguration();
+        if (setupAccess.get() == SetupAccess.USER) {
+            cfg.markSetupDone();
+            try {
+                AppConfigurationService.updateConfiguration(cfg);
+                showLoginScreen();
+                showInfo("Initial setup was skipped. A librarian or administrator can configure Library OS later from Settings.");
+            } catch (IOException ex) {
+                LOG.warning("Config save: " + ex.getMessage());
+                showError("Could not save the initial library configuration: " + ex.getMessage());
+            }
+            return;
+        }
+
         Dialog<Boolean> dlg = new Dialog<>();
-        dlg.setTitle("Library OS - Administrator Setup");
+        dlg.setTitle("Library OS - Staff Setup");
         dlg.initOwner(primaryStage);
         dlg.initModality(Modality.APPLICATION_MODAL);
 
@@ -112,11 +139,15 @@ public class LibraryApp extends Application implements ToastDisplay {
         VBox form = new VBox(14);
         form.setPadding(new Insets(24, 32, 16, 32));
 
-        AppConfiguration cfg = AppConfigurationService.getConfiguration();
         TextField libNameField  = wField(cfg.getLibraryName(),  "e.g. City Public Library");
         TextField branchField   = wField(cfg.getBranchName(),   "e.g. Main Branch");
         TextField dataDirField  = wField(cfg.getDataDirectory(),   "data");
         TextField exportField   = wField(cfg.getExportDirectory(),  "exports");
+        final DatabaseConfiguration[] databaseConfigHolder = {
+                cfg.getDatabaseConfiguration() != null
+                        ? cfg.getDatabaseConfiguration()
+                        : new DatabaseConfiguration()
+        };
 
         Button browseData = browseBtn(dataDirField, "Choose data folder");
         Button browseExp  = browseBtn(exportField,  "Choose export folder");
@@ -130,6 +161,34 @@ public class LibraryApp extends Application implements ToastDisplay {
                 wRow("Data Folder",  dataRow),
                 wRow("Export Folder", exportRow)
         );
+
+        Label dbStatus = new Label();
+        dbStatus.setWrapText(true);
+        dbStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#64748B;");
+        Runnable refreshDatabaseStatus = () -> {
+            DatabaseConfiguration dbConfig = databaseConfigHolder[0];
+            if (dbConfig == null || !dbConfig.isConfigured()) {
+                dbStatus.setText("Database setup is optional. File storage will be used by default.");
+                return;
+            }
+
+            String location = dbConfig.getEngine() == DatabaseConfiguration.Engine.SQLITE
+                    ? dbConfig.getSqliteFile()
+                    : dbConfig.getHost() + ":" + dbConfig.getPort() + " / " + dbConfig.getDatabase();
+            dbStatus.setText("Configured: " + dbConfig.getEngine().getDisplayName() + " - " + location);
+        };
+        refreshDatabaseStatus.run();
+
+        Button dbConfigBtn = AppTheme.createIconTextButton(
+                "Optional Database Setup", AppTheme.ICON_SAVE, AppTheme.ButtonStyle.OUTLINE);
+        dbConfigBtn.setOnAction(e -> DatabaseConfigurationDialog.show(primaryStage, databaseConfigHolder[0])
+                .ifPresent(updated -> {
+                    databaseConfigHolder[0] = updated;
+                    refreshDatabaseStatus.run();
+                }));
+
+        VBox databaseBox = new VBox(8, dbConfigBtn, dbStatus);
+        form.getChildren().add(wRow("Database", databaseBox));
 
         root.getChildren().addAll(hero, form);
         dp.setContent(root);
@@ -159,10 +218,12 @@ public class LibraryApp extends Application implements ToastDisplay {
             cfg.setBranchName(branchField.getText());
             cfg.setDataDirectory(dataDirField.getText());
             cfg.setExportDirectory(exportField.getText());
+            cfg.setDatabaseConfiguration(databaseConfigHolder[0]);
             cfg.markSetupDone();
             try {
                 AppConfigurationService.updateConfiguration(cfg);
                 showLoginScreen();
+                showConfigurationSavedToast(new DatabaseConfiguration(), cfg.getDatabaseConfiguration());
             } catch (IOException ex) {
                 LOG.warning("Config save: " + ex.getMessage());
                 showError("Could not save the initial library configuration: " + ex.getMessage());
@@ -182,10 +243,8 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
     private Button browseBtn(TextField target, String title) {
         Button b = new Button("Browse\u2026");
-        b.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; " +
-                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
-                "-fx-background-radius:8px; -fx-border-radius:8px; -fx-cursor:hand; " +
-                "-fx-padding:8 14; -fx-font-weight:600;");
+        b.setStyle("-fx-background-color:#E2E8F0; -fx-background-radius:8px; " +
+                "-fx-border-radius:8px; -fx-cursor:hand; -fx-padding:8 14; -fx-font-weight:600;");
         b.setOnAction(e -> {
             DirectoryChooser dc = new DirectoryChooser();
             dc.setTitle(title);
@@ -198,6 +257,29 @@ public class LibraryApp extends Application implements ToastDisplay {
         Label l = new Label(lbl);
         l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:#374151;");
         return new VBox(6, l, field);
+    }
+
+    private Optional<SetupAccess> promptInitialSetupAccess() {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Library OS Setup");
+        alert.setHeaderText("Who is setting up this library?");
+        alert.setContentText("Librarians and administrators can configure library settings now. Regular users can skip setup and continue to sign in.");
+        alert.initOwner(primaryStage);
+        AppTheme.applyTheme(alert.getDialogPane());
+
+        ButtonType staffType = new ButtonType("Librarian / Admin", ButtonBar.ButtonData.OK_DONE);
+        ButtonType userType = new ButtonType("User", ButtonBar.ButtonData.OTHER);
+        alert.getButtonTypes().setAll(staffType, userType, ButtonType.CANCEL);
+
+        return alert.showAndWait().flatMap(result -> {
+            if (result == staffType) {
+                return Optional.of(SetupAccess.STAFF);
+            }
+            if (result == userType) {
+                return Optional.of(SetupAccess.USER);
+            }
+            return Optional.empty();
+        });
     }
 
     // --- Login ---
@@ -215,10 +297,25 @@ public class LibraryApp extends Application implements ToastDisplay {
         }
     }
 
+    private void initializeOptionalDatabase(AppConfiguration cfg) {
+        try {
+            DatabaseConfiguration databaseConfiguration = cfg.getDatabaseConfiguration();
+            if (databaseConfiguration != null && databaseConfiguration.isConfigured()) {
+                if (!DatabaseConnectionService.connect(databaseConfiguration)) {
+                    LOG.warning("Database configuration is present but the connection could not be established.");
+                }
+            } else {
+                DatabaseConnectionService.disconnect();
+            }
+        } catch (Exception ex) {
+            LOG.warning("Database initialization failed: " + ex.getMessage());
+        }
+    }
+
     private void showLoginScreen() {
         stopAutoRefresh();
         analyticsDashboard = null; catalogView = null; circulationView = null;
-        LoginView lv = new LoginView(this::handleLoginSuccess, this::showRegistrationDialog);
+        LoginView lv = new LoginView(this::handleLoginSuccess, this::showRegistrationDialog, this);
         lv.setOpacity(0);
         rootStack.getChildren().setAll(lv);
         FadeTransition _ft = new FadeTransition(Duration.millis(350), lv); _ft.setToValue(1); _ft.play();
@@ -231,6 +328,10 @@ public class LibraryApp extends Application implements ToastDisplay {
                         // Check username uniqueness before creating
                         if (UserService.userExists(req.username())) {
                             showError("Username \"" + req.username() + "\" is already taken. Please choose another.");
+                            return;
+                        }
+                        if (UserService.emailExists(req.email())) {
+                            showError("Email address \"" + req.email() + "\" is already in use.");
                             return;
                         }
                         UserService.createUser(req.username(), req.password(), req.role());
@@ -263,7 +364,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         sidebar     = buildSidebar();
         contentArea = new StackPane();
-        contentArea.setPadding(new Insets(24, 24, 24, 24));
+        contentArea.setPadding(new Insets(24, 24, 0, 24));
         contentArea.getStyleClass().add("content-area");
 
         layout.setLeft(sidebar);
@@ -276,7 +377,10 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         refreshAllData();
         startAutoRefresh();
-        Platform.runLater(this::navigateToDashboard);
+        Platform.runLater(() -> {
+            navigateToDashboard();
+            showSuccess("Signed in as " + currentUser + ".");
+        });
     }
 
     private VBox buildSidebar() {
@@ -317,20 +421,15 @@ public class LibraryApp extends Application implements ToastDisplay {
             if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
                 showSuccess("Password changed.");
         });
-        Button deleteBtn = navBtn("Delete Account", AppTheme.ICON_DELETE, false, this::deleteCurrentAccount);
-        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn, deleteBtn);
+        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn);
 
         Region spacer = new Region(); VBox.setVgrow(spacer, Priority.ALWAYS);
 
         User u = UserService.getUserById(currentUser);
         userNameLabel = new Label(u != null ? u.getFullName() : currentUser);
         userNameLabel.getStyleClass().add("sidebar-profile-name");
-        userNameLabel.setWrapText(true);
-        userNameLabel.setMaxWidth(200);
         userRoleLabel = new Label(currentUserRole.getDisplayName());
         userRoleLabel.getStyleClass().add("sidebar-profile-role");
-        userRoleLabel.setWrapText(true);
-        userRoleLabel.setMaxWidth(200);
         VBox profile = new VBox(3, userNameLabel, userRoleLabel);
         profile.getStyleClass().add("sidebar-profile");
 
@@ -373,7 +472,7 @@ public class LibraryApp extends Application implements ToastDisplay {
         Button refreshBtn = AppTheme.createIconButton(AppTheme.ICON_REFRESH, "Refresh", AppTheme.ButtonStyle.GHOST);
         refreshBtn.setOnAction(e -> {
             title.setText("Refreshing\u2026");
-            refreshAllData();
+            refreshAllData(true);
             PauseTransition p = new PauseTransition(Duration.millis(900));
             p.setOnFinished(ev -> title.setText("Dashboard"));
             p.play();
@@ -390,7 +489,7 @@ public class LibraryApp extends Application implements ToastDisplay {
             applyDarkMode(cfg.isDarkMode());
             themeBtn.setGraphic(AppTheme.createIcon(
                     cfg.isDarkMode() ? AppTheme.ICON_MOON : AppTheme.ICON_SUN, 18));
-            themeBtn.setTooltip(new Tooltip(cfg.isDarkMode() ? "Dark theme enabled" : "Light theme enabled"));
+            themeBtn.setTooltip(AppTheme.createTooltip(cfg.isDarkMode() ? "Dark theme enabled" : "Light theme enabled"));
             try { AppConfigurationService.updateConfiguration(cfg); } catch (IOException ignored) {}
         });
 
@@ -433,7 +532,7 @@ public class LibraryApp extends Application implements ToastDisplay {
     private void navigateToDashboard() {
         if (analyticsDashboard == null) {
             analyticsDashboard = new AnalyticsDashboard(
-                    this::refreshAllData, currentUser, currentUserRole.isStaff());
+                    this::refreshAllData, currentUser, currentUserRole.isStaff(), this);
             analyticsDashboard.setNavigationCallbacks(
                     this::navigateToCirculation, this::navigateToCatalog);
         }
@@ -454,12 +553,15 @@ public class LibraryApp extends Application implements ToastDisplay {
     private void showView(Region view) {
         contentArea.getChildren().setAll(view);
         AppTheme.slideUp(view, 0);
+        if (view instanceof AnalyticsDashboard dashboard) {
+            Platform.runLater(dashboard::refreshLayout);
+        }
     }
 
     // --- Settings dialogs ---
 
     private void showUserManagement() {
-        UserAccountDialogs.showUserManagement(primaryStage, currentUser);
+        UserAccountDialogs.showUserManagement(primaryStage, currentUser, this);
         refreshAllData();
     }
 
@@ -476,7 +578,6 @@ public class LibraryApp extends Application implements ToastDisplay {
                 if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
                     showSuccess("Password changed.");
             }
-            @Override public void openDeleteAccount() { deleteCurrentAccount(); }
             @Override public void openUserManagement() { showUserManagement(); }
             @Override public void openLibraryConfiguration() { showLibraryConfig(); }
             @Override public void openDataManagement() { showDataManagement(); }
@@ -485,8 +586,13 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     private void showLibraryConfig() {
+        if (!currentUserRole.isStaff()) {
+            showInfo("Library Configuration is only accessible to library staff.");
+            return;
+        }
         try {
             AppConfiguration cfg = AppConfigurationService.getConfiguration();
+            DatabaseConfiguration previousDatabaseConfiguration = cfg.getDatabaseConfiguration().copy();
             LibraryConfigurationDialog.show(primaryStage, cfg,
                             BookService.getMaxBorrowLimit(),
                             BookService.getLoanPeriodDays(),
@@ -506,8 +612,9 @@ public class LibraryApp extends Application implements ToastDisplay {
                             cfg.setSmtpAuth(data.smtpAuth()); cfg.setStartTlsEnabled(data.startTlsEnabled());
                             cfg.setLibraryName(data.libraryName());
                             cfg.setBranchName(data.branchName());
+                            cfg.setDatabaseConfiguration(data.databaseConfiguration());
                             AppConfigurationService.updateConfiguration(cfg);
-                            showSuccess("Configuration saved.");
+                            showConfigurationSavedToast(previousDatabaseConfiguration, data.databaseConfiguration());
                         } catch (Exception ex) { showError("Save failed: " + ex.getMessage()); }
                     });
         } catch (Exception ex) { showError("Could not load config: " + ex.getMessage()); }
@@ -522,15 +629,8 @@ public class LibraryApp extends Application implements ToastDisplay {
                     n(s,"issuedCopies"), n(s,"overdueBooks"), UserService.getAllUsers().size(),
                     n(s,"pendingRequests"),
                     ((Number) s.getOrDefault("totalFines", 0.0)).doubleValue(),
-                    cfg.getExportDirectory(), cfg.isEmailConfigured()));
+                    cfg.getExportDirectory(), cfg.isEmailConfigured()), this);
         } catch (Exception ex) { showError("Data management error: " + ex.getMessage()); }
-    }
-
-    private void deleteCurrentAccount() {
-        if (UserAccountDialogs.showDeleteAccountDialog(primaryStage, currentUser)) {
-            showLoginScreen();
-            showInfo("Account deleted.");
-        }
     }
 
     private static int n(Map<String,Object> m, String k) {
@@ -540,6 +640,10 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- Data refresh ---
 
     private void refreshAllData() {
+        refreshAllData(false);
+    }
+
+    private void refreshAllData(boolean showToastOnSuccess) {
         if (loadingIndicator != null) { loadingIndicator.setVisible(true); statusLabel.setText("Syncing\u2026"); }
         CompletableFuture.supplyAsync(() -> {
             Map<String,Object> r = new HashMap<>();
@@ -568,6 +672,9 @@ public class LibraryApp extends Application implements ToastDisplay {
                 statusLabel.setText("Updated " + java.time.LocalTime.now()
                         .format(DateTimeFormatter.ofPattern("HH:mm:ss")));
             }
+            if (showToastOnSuccess) {
+                showInfo("Library data refreshed.");
+            }
         })).exceptionally(ex -> {
             Platform.runLater(() -> {
                 if (loadingIndicator != null) { loadingIndicator.setVisible(false); statusLabel.setText("Sync failed"); }
@@ -578,7 +685,7 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     private void startAutoRefresh() {
-        autoRefreshTimer = new Timeline(new KeyFrame(Duration.seconds(60), e -> refreshAllData()));
+        autoRefreshTimer = new Timeline(new KeyFrame(Duration.seconds(60), e -> refreshAllData(false)));
         autoRefreshTimer.setCycleCount(Timeline.INDEFINITE);
         autoRefreshTimer.play();
     }
@@ -594,27 +701,31 @@ public class LibraryApp extends Application implements ToastDisplay {
     private void toast(String message, String style, String icon) {
         Platform.runLater(() -> {
             HBox t = new HBox(8);
-            t.setAlignment(Pos.CENTER_LEFT);
+            t.setAlignment(Pos.CENTER);
             t.getStyleClass().addAll("toast-notification", style);
-            t.setMaxWidth(340);
+            t.setPadding(new Insets(10, 16, 10, 16));
+            t.setMaxWidth(Region.USE_PREF_SIZE);
+            t.setMinWidth(Region.USE_PREF_SIZE);
 
-            Label ico = new Label(icon); ico.setStyle("-fx-font-size:14px;");
+            Label ico = new Label(icon);
+            ico.setStyle("-fx-font-size:14px; -fx-min-width:20px; -fx-max-width:20px; -fx-alignment:center;");
             Label msg = new Label(message);
-            msg.setStyle("-fx-font-size:13px; -fx-font-weight:500;");
-            msg.setWrapText(true); msg.setMaxWidth(280);
+            msg.setStyle("-fx-font-size:12px; -fx-font-weight:500;");
+            msg.setWrapText(true);
+            msg.setMinHeight(Region.USE_PREF_SIZE);
             t.getChildren().addAll(ico, msg);
 
-            int slot = toastSlot++ % 5;
-            StackPane.setAlignment(t, Pos.BOTTOM_RIGHT);
-            StackPane.setMargin(t, new Insets(0, 16, 16 + slot * 56, 0));
+            StackPane.setAlignment(t, Pos.TOP_CENTER);
+            StackPane.setMargin(t, new Insets(16, 0, 0, 0));
             rootStack.getChildren().add(t);
-            t.setOpacity(0); t.setTranslateY(10);
+            t.setOpacity(0);
+            t.setTranslateY(-5);
 
-            FadeTransition     fi = new FadeTransition(Duration.millis(200), t);     fi.setToValue(1);
-            TranslateTransition si = new TranslateTransition(Duration.millis(200), t); si.setToY(0);
+            FadeTransition     fi = new FadeTransition(Duration.millis(250), t);     fi.setToValue(1);
+            TranslateTransition si = new TranslateTransition(Duration.millis(250), t); si.setToY(0);
             PauseTransition     pa = new PauseTransition(Duration.seconds(3.5));
-            FadeTransition      fo = new FadeTransition(Duration.millis(180), t);    fo.setToValue(0);
-            fo.setOnFinished(e -> { rootStack.getChildren().remove(t); toastSlot = Math.max(0, toastSlot-1); });
+            FadeTransition      fo = new FadeTransition(Duration.millis(250), t);    fo.setToValue(0);
+            fo.setOnFinished(e -> rootStack.getChildren().remove(t));
             new SequentialTransition(new ParallelTransition(fi, si), pa, fo).play();
         });
     }
@@ -664,12 +775,43 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private void shutdown() {
         stopAutoRefresh();
+        DatabaseConnectionService.disconnect();
         try { UserService.persistDatabase(); } catch (Exception ignored) {}
         try { BookService.persistBooksDatabase(); } catch (Exception ignored) {}
     }
 
-    public static void main(String[] args) {
-        LoggingConfigurator.configure();
-        launch(args);
+    private void showConfigurationSavedToast(DatabaseConfiguration previousDatabaseConfiguration,
+                                             DatabaseConfiguration currentDatabaseConfiguration) {
+        DatabaseConfiguration previous = previousDatabaseConfiguration != null
+                ? previousDatabaseConfiguration
+                : new DatabaseConfiguration();
+        DatabaseConfiguration current = currentDatabaseConfiguration != null
+                ? currentDatabaseConfiguration
+                : new DatabaseConfiguration();
+
+        if (!current.isConfigured()) {
+            DatabaseConnectionService.disconnect();
+            if (previous.isConfigured()) {
+                showSuccess("Configuration saved. Database sync is disabled and file storage is active.");
+            } else {
+                showSuccess("Configuration saved.");
+            }
+            return;
+        }
+
+        boolean changed = !current.equals(previous);
+        if (DatabaseConnectionService.connect(current)) {
+            if (changed) {
+                showSuccess("Configuration saved. " + current.getEngine().getDisplayName() + " is connected.");
+            } else {
+                showSuccess("Configuration saved.");
+            }
+        } else {
+            showWarning(changed
+                    ? "Configuration saved, but the database connection could not be established. File storage remains active."
+                    : "Configuration saved. The current database connection is unavailable, so file storage remains active.");
+        }
     }
+
+    public static void main(String[] args) { launch(args); }
 }

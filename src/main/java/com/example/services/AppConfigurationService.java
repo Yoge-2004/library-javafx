@@ -80,19 +80,18 @@ public final class AppConfigurationService {
     );
 
     public static java.util.List<String> getAvailableBookCategories(java.util.Collection<com.example.entities.Book> books) {
-        java.util.LinkedHashSet<String> categories = new java.util.LinkedHashSet<>(DEFAULT_BOOK_CATEGORIES);
+        java.util.TreeSet<String> categories = new java.util.TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        categories.addAll(DEFAULT_BOOK_CATEGORIES);
         if (books != null) {
             books.stream()
                     .map(com.example.entities.Book::getCategory)
                     .filter(category -> category != null && !category.isBlank())
                     .map(String::trim)
-                    .sorted(String.CASE_INSENSITIVE_ORDER)
                     .forEach(categories::add);
         }
         getConfiguration().getSavedCategories().stream()
                 .filter(category -> category != null && !category.isBlank())
                 .map(String::trim)
-                .sorted(String.CASE_INSENSITIVE_ORDER)
                 .forEach(categories::add);
         return java.util.List.copyOf(categories);
     }
@@ -104,6 +103,16 @@ public final class AppConfigurationService {
         AppConfiguration updated = getConfiguration();
         updated.rememberCategory(category);
         updateConfiguration(updated);
+    }
+
+    public static void selectKnownLibrary(String displayName) throws IOException {
+        if (displayName == null || displayName.isBlank()) {
+            return;
+        }
+        AppConfiguration updated = getConfiguration();
+        if (updated.selectKnownLibrary(displayName.trim())) {
+            updateConfiguration(updated);
+        }
     }
 
     private static void migrateLegacyStorage(AppConfiguration configuration) {

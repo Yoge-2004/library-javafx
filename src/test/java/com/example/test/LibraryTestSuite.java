@@ -228,6 +228,19 @@ public class LibraryTestSuite {
         @Test @DisplayName("Port clamped to 1") void portClamp() { AppConfiguration c = new AppConfiguration(); c.setSmtpPort(-1); assertEquals(1, c.getSmtpPort()); }
         @Test @DisplayName("Custom SMTP port is preserved in choices") void customPortPreserved() { AppConfiguration c = new AppConfiguration(); c.setSmtpPort(1025); assertTrue(c.getCommonSmtpPorts().contains(1025)); }
         @Test @DisplayName("formatAmount") void format() { AppConfiguration c = new AppConfiguration(); c.setCurrencySymbol("Rs."); assertEquals("Rs.10.00", c.formatAmount(10.0)); }
+        @Test @DisplayName("Known library selection restores library and branch") void knownLibrarySelection() {
+            AppConfiguration c = new AppConfiguration();
+            c.setLibraryName("Central Library");
+            c.setBranchName("North Branch");
+            c.rememberCurrentLibrary();
+            c.setLibraryName("City Library");
+            c.setBranchName("Main Branch");
+            c.rememberCurrentLibrary();
+
+            assertTrue(c.selectKnownLibrary("Central Library - North Branch"));
+            assertEquals("Central Library", c.getLibraryName());
+            assertEquals("North Branch", c.getBranchName());
+        }
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -379,6 +392,20 @@ public class LibraryTestSuite {
             assertFalse(UserService.userExists(uid));
             UserService.createUser(uid, "pass1234");
             assertTrue(UserService.userExists(uid));
+        }
+        @Test @DisplayName("Duplicate email on update is rejected") void duplicateEmailRejected() throws ValidationException, UserException {
+            String uid1 = "svc6_" + System.nanoTime();
+            String uid2 = "svc7_" + System.nanoTime();
+            UserService.createUser(uid1, "pass1234");
+            UserService.createUser(uid2, "pass1234");
+
+            User first = UserService.getUserById(uid1);
+            first.setEmail("dup-" + uid1 + "@example.com");
+            UserService.updateUser(first);
+
+            User second = UserService.getUserById(uid2);
+            second.setEmail("dup-" + uid1 + "@example.com");
+            assertThrows(UserException.class, () -> UserService.updateUser(second));
         }
     }
 

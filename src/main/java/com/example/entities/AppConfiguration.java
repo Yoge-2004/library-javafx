@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Currency;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 public final class AppConfiguration implements Serializable {
@@ -40,11 +41,15 @@ public final class AppConfiguration implements Serializable {
     // ── UI preferences
     private boolean darkMode            = false;
 
+    // ── Optional database persistence
+    private DatabaseConfiguration databaseConfiguration = new DatabaseConfiguration();
+
     // ── First-run flag
     private boolean initialSetupDone    = false;
 
     // ── Library chooser support
     private List<String> knownLibraries = new ArrayList<>();
+    private List<LibraryIdentity> knownLibraryProfiles = new ArrayList<>();
     private List<String> savedCategories = new ArrayList<>();
 
     // ════════════════════════════════════════════════════════════════
@@ -142,6 +147,19 @@ public final class AppConfiguration implements Serializable {
     public void    setDarkMode(boolean v)      { darkMode = v; }
     public void    toggleDarkMode()            { darkMode = !darkMode; }
 
+    public DatabaseConfiguration getDatabaseConfiguration() {
+        if (databaseConfiguration == null) {
+            databaseConfiguration = new DatabaseConfiguration();
+        }
+        return databaseConfiguration;
+    }
+
+    public void setDatabaseConfiguration(DatabaseConfiguration databaseConfiguration) {
+        this.databaseConfiguration = databaseConfiguration != null
+                ? databaseConfiguration
+                : new DatabaseConfiguration();
+    }
+
     // ════════════════════════════════════════════════════════════════
     // First-run setup
     // ════════════════════════════════════════════════════════════════
@@ -155,10 +173,13 @@ public final class AppConfiguration implements Serializable {
 
     public void setKnownLibraries(List<String> libraries) {
         knownLibraries = new ArrayList<>();
+        knownLibraryProfiles = new ArrayList<>();
         if (libraries != null) {
             for (String library : libraries) {
                 if (library != null && !library.isBlank()) {
-                    knownLibraries.add(library.trim());
+                    String trimmed = library.trim();
+                    knownLibraries.add(trimmed);
+                    addKnownLibraryProfile(parseDisplayName(trimmed));
                 }
             }
         }
@@ -167,9 +188,36 @@ public final class AppConfiguration implements Serializable {
 
     public void rememberCurrentLibrary() {
         ensureKnownLibraries();
-        String current = getCurrentLibraryDisplayName();
-        knownLibraries.removeIf(value -> value.equalsIgnoreCase(current));
-        knownLibraries.add(0, current);
+        LibraryIdentity current = new LibraryIdentity(getLibraryName(), getBranchName());
+        knownLibraryProfiles.removeIf(current::matches);
+        knownLibraryProfiles.add(0, current);
+        syncKnownLibraryDisplays();
+    }
+
+    public boolean selectKnownLibrary(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            return false;
+        }
+
+        ensureKnownLibraries();
+        String trimmed = displayName.trim();
+        for (LibraryIdentity profile : knownLibraryProfiles) {
+            if (profile.matches(trimmed)) {
+                setLibraryName(profile.libraryName());
+                setBranchName(profile.branchName());
+                rememberCurrentLibrary();
+                return true;
+            }
+        }
+
+        LibraryIdentity parsed = parseDisplayName(trimmed);
+        if (parsed != null) {
+            setLibraryName(parsed.libraryName());
+            setBranchName(parsed.branchName());
+            rememberCurrentLibrary();
+            return true;
+        }
+        return false;
     }
 
     public List<String> getSavedCategories() {
@@ -206,6 +254,7 @@ public final class AppConfiguration implements Serializable {
         setCurrencySymbol(currencySymbol);
         setCurrencyCode(currencyCode);
         setFinePerDay(finePerDay);
+        setDatabaseConfiguration(databaseConfiguration);
         ensureKnownLibraries();
         ensureSavedCategories();
     }
@@ -232,14 +281,21 @@ public final class AppConfiguration implements Serializable {
         if (knownLibraries == null) {
             knownLibraries = new ArrayList<>();
         }
-        knownLibraries.add(getCurrentLibraryDisplayName());
-        LinkedHashSet<String> unique = new LinkedHashSet<>();
-        for (String value : knownLibraries) {
-            if (value != null && !value.isBlank()) {
-                unique.add(value.trim());
-            }
+        if (knownLibraryProfiles == null) {
+            knownLibraryProfiles = new ArrayList<>();
         }
-        knownLibraries = new ArrayList<>(unique);
+
+        List<LibraryIdentity> mergedProfiles = new ArrayList<>();
+        for (LibraryIdentity profile : knownLibraryProfiles) {
+            addKnownLibraryProfile(mergedProfiles, profile);
+        }
+        for (String value : knownLibraries) {
+            addKnownLibraryProfile(mergedProfiles, parseDisplayName(value));
+        }
+        addKnownLibraryProfile(mergedProfiles, new LibraryIdentity(getLibraryName(), getBranchName()));
+
+        knownLibraryProfiles = mergedProfiles;
+        syncKnownLibraryDisplays();
     }
 
     private void ensureSavedCategories() {
@@ -265,5 +321,94 @@ public final class AppConfiguration implements Serializable {
         String trimmed = category.trim();
         savedCategories.removeIf(existing -> existing.equalsIgnoreCase(trimmed));
         savedCategories.add(trimmed);
+    }
+
+    private void syncKnownLibraryDisplays() {
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        for (LibraryIdentity profile : knownLibraryProfiles) {
+            if (profile != null) {
+                unique.add(profile.displayName());
+            }
+        }
+        unique.add(getCurrentLibraryDisplayName());
+        knownLibraries = new ArrayList<>(unique);
+    }
+
+    private void addKnownLibraryProfile(LibraryIdentity identity) {
+        if (knownLibraryProfiles == null) {
+            knownLibraryProfiles = new ArrayList<>();
+        }
+        addKnownLibraryProfile(knownLibraryProfiles, identity);
+    }
+
+    private static void addKnownLibraryProfile(List<LibraryIdentity> profiles, LibraryIdentity identity) {
+        if (profiles == null || identity == null) {
+            return;
+        }
+        profiles.removeIf(identity::matches);
+        profiles.add(identity);
+    }
+
+    private static LibraryIdentity parseDisplayName(String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            return null;
+        }
+        String trimmed = displayName.trim();
+        int separator = trimmed.lastIndexOf(" - ");
+        if (separator <= 0 || separator >= trimmed.length() - 3) {
+            return new LibraryIdentity(trimmed, "Main Branch");
+        }
+        return new LibraryIdentity(trimmed.substring(0, separator), trimmed.substring(separator + 3));
+    }
+
+    private static final class LibraryIdentity implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        private final String libraryName;
+        private final String branchName;
+
+        private LibraryIdentity(String libraryName, String branchName) {
+            this.libraryName = blankOr(libraryName, "My Library");
+            this.branchName = blankOr(branchName, "Main Branch");
+        }
+
+        private String libraryName() {
+            return libraryName;
+        }
+
+        private String branchName() {
+            return branchName;
+        }
+
+        private String displayName() {
+            return libraryName + " - " + branchName;
+        }
+
+        private boolean matches(String displayName) {
+            return displayName != null && displayName().equalsIgnoreCase(displayName.trim());
+        }
+
+        private boolean matches(LibraryIdentity other) {
+            return other != null
+                    && libraryName.equalsIgnoreCase(other.libraryName)
+                    && branchName.equalsIgnoreCase(other.branchName);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof LibraryIdentity that)) {
+                return false;
+            }
+            return libraryName.equalsIgnoreCase(that.libraryName)
+                    && branchName.equalsIgnoreCase(that.branchName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(libraryName.toLowerCase(), branchName.toLowerCase());
+        }
     }
 }

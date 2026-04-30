@@ -16,49 +16,66 @@
 
 
 /* ══════════════════════════════════════════════════════════════════
-   SPINNER — sharp triangles via -fx-shape, works in any theme
+   SPINNER — sharp triangles via -fx-shape, works in any theme.
+   The container is transparent so Modena's default multi-layer
+   background doesn't leak as black rounded corners.
    ══════════════════════════════════════════════════════════════════ */
 
 .themed-spinner {
     -fx-font-size: 14px;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
 }
 
 .themed-spinner .text-field {
     -fx-alignment: center-right;
-    -fx-padding: 6 8;
+    -fx-padding: 10 14;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
 }
 
 .themed-spinner .increment-arrow-button,
 .themed-spinner .decrement-arrow-button {
-    -fx-background-color: derive(-fx-base, -5%),
-    linear-gradient(to bottom, derive(-fx-base, 5%), derive(-fx-base,-10%));
-    -fx-background-insets: 1 1 1 0, 2 2 2 1;
-    -fx-background-radius: 0 4 4 0;
-    -fx-padding: 5 12 5 12;
+    -fx-background-color: #0D9488;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
     -fx-cursor: hand;
 }
 
+.themed-spinner .increment-arrow-button {
+    -fx-background-radius: 0 10 0 0;
+    -fx-border-radius: 0 10 0 0;
+    -fx-padding: 9 10 5 10;
+}
+
+.themed-spinner .decrement-arrow-button {
+    -fx-background-radius: 0 0 10 0;
+    -fx-border-radius: 0 0 10 0;
+    -fx-padding: 5 10 9 10;
+}
+
 .themed-spinner .increment-arrow-button .increment-arrow {
-    -fx-background-color: -fx-mark-color;
+    -fx-background-color: white;
     -fx-padding: 3 4 3 4;
     -fx-shape: "M 0 -3.5 L 4 3.5 L -4 3.5 Z";
 }
 
 .themed-spinner .decrement-arrow-button .decrement-arrow {
-    -fx-background-color: -fx-mark-color;
+    -fx-background-color: white;
     -fx-padding: 3 4 3 4;
     -fx-shape: "M 0 3.5 L 4 -3.5 L -4 -3.5 Z";
 }
 
 .themed-spinner .increment-arrow-button:hover,
 .themed-spinner .decrement-arrow-button:hover {
-    -fx-background-color: derive(-fx-base,-15%),
-    linear-gradient(to bottom, derive(-fx-base,-5%), derive(-fx-base,-20%));
+    -fx-background-color: #0F766E;
 }
 
 .themed-spinner .increment-arrow-button:pressed,
 .themed-spinner .decrement-arrow-button:pressed {
-    -fx-background-color: derive(-fx-base,-25%);
+    -fx-background-color: #115E59;
 }
 
 
@@ -163,6 +180,8 @@
 
 /* ══════════════════════════════════════════════════════════════════
    DARK MODE — TextField / PasswordField / TextArea
+   background-insets: 0 prevents Modena's inner highlight layer
+   from creating a second visible border ring.
    ══════════════════════════════════════════════════════════════════ */
 
 .dark-mode .text-field,
@@ -171,8 +190,10 @@
     -fx-background-color: #0F172A;
     -fx-border-color: #475569;
     -fx-border-width: 1.5;
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
     -fx-text-fill: #F1F5F9;
     -fx-prompt-text-fill: #64748B;
 }
@@ -180,6 +201,8 @@
 .dark-mode .text-field:focused,
 .dark-mode .password-field:focused {
     -fx-border-color: #0D9488;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
     -fx-effect: dropshadow(gaussian, rgba(13,148,136,0.3), 6, 0, 0, 0);
 }
 
@@ -198,8 +221,10 @@
     -fx-background-color: #0F172A;
     -fx-border-color: #475569;
     -fx-border-width: 1.5;
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
 }
 
 .dark-mode .combo-box .list-cell,
@@ -229,31 +254,39 @@
 
 /* ══════════════════════════════════════════════════════════════════
    DARK MODE — Spinner (both .spinner and .themed-spinner)
-   Arrow color is #E2E8F0 — clearly visible on dark button surface
+   Container is transparent; only the text-field and buttons have
+   visible backgrounds/borders. This eliminates double borders.
    ══════════════════════════════════════════════════════════════════ */
 
 .dark-mode .spinner,
 .dark-mode .themed-spinner {
-    -fx-background-color: #0F172A;
-    -fx-border-color: #475569;
-    -fx-border-width: 1.5;
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
 }
 
 .dark-mode .spinner .text-field,
 .dark-mode .themed-spinner .text-field {
-    -fx-background-color: transparent;
+    -fx-background-color: #1E293B;
+    -fx-border-color: #334155;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 10 0 0 10;
+    -fx-background-radius: 10 0 0 10;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
     -fx-text-fill: #F1F5F9;
-    -fx-border-color: transparent;
+    -fx-font-size: 14px;
+    -fx-padding: 10 14;
 }
 
 .dark-mode .spinner .increment-arrow-button,
 .dark-mode .spinner .decrement-arrow-button,
 .dark-mode .themed-spinner .increment-arrow-button,
 .dark-mode .themed-spinner .decrement-arrow-button {
-    -fx-background-color: #1E293B, #334155;
-    -fx-background-insets: 0, 0 0 0 1;
+    -fx-background-color: #14B8A6;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
     -fx-cursor: hand;
 }
 
@@ -261,16 +294,15 @@
 .dark-mode .spinner .decrement-arrow-button:hover,
 .dark-mode .themed-spinner .increment-arrow-button:hover,
 .dark-mode .themed-spinner .decrement-arrow-button:hover {
-    -fx-background-color: #334155, #475569;
-    -fx-background-insets: 0, 0 0 0 1;
+    -fx-background-color: #0D9488;
 }
 
-/* HIGH-CONTRAST ARROWS — white on dark slate */
+/* HIGH-CONTRAST ARROWS — white on teal */
 .dark-mode .spinner .increment-arrow-button .increment-arrow,
 .dark-mode .spinner .decrement-arrow-button .decrement-arrow,
 .dark-mode .themed-spinner .increment-arrow-button .increment-arrow,
 .dark-mode .themed-spinner .decrement-arrow-button .decrement-arrow {
-    -fx-background-color: #E2E8F0;
+    -fx-background-color: white;
 }
 
 .dark-mode .themed-spinner .increment-arrow-button .increment-arrow {
@@ -361,7 +393,7 @@
 .dark-mode .tab:selected                       { -fx-background-color: #1E293B; }
 .dark-mode .tab:selected .tab-label            { -fx-text-fill: #14B8A6; }
 .dark-mode .tab:hover:!selected .tab-label     { -fx-text-fill: #CBD5E1; }
-.dark-mode .tab-content-area                   { -fx-background-color: #1E293B; -fx-border-color: #334155; -fx-border-width: 0 1 1 1; }
+.dark-mode .tab-content-area                   { -fx-background-color: #1E293B; -fx-border-color: transparent; -fx-border-width: 0; }
 
 
 /* ══════════════════════════════════════════════════════════════════

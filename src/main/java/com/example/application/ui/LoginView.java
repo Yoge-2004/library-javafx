@@ -1,5 +1,6 @@
 package com.example.application.ui;
 
+import com.example.application.ToastDisplay;
 import com.example.entities.AppConfiguration;
 import com.example.entities.User;
 import com.example.services.AppConfigurationService;
@@ -9,7 +10,6 @@ import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.beans.property.SimpleStringProperty;
 import javafx.beans.property.StringProperty;
-import javafx.collections.FXCollections;
 import javafx.geometry.Orientation;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -21,6 +21,7 @@ import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -32,6 +33,7 @@ public class LoginView extends StackPane {
 
     private final Consumer<String> onLoginSuccess;
     private final Runnable onRegisterRequested;
+    private final ToastDisplay toastDisplay;
     private final StringProperty passwordProperty = new SimpleStringProperty("");
 
     private TextField usernameField;
@@ -42,13 +44,15 @@ public class LoginView extends StackPane {
     private Button loginButton;
     private ProgressIndicator loadingIndicator;
     private VBox loginForm;
-    private ComboBox<String> librarySelector;
+    private TextField libraryField;
+    private ContextMenu librarySuggestionMenu;
     private final List<String> availableLibraries = new ArrayList<>();
-    private boolean syncingLibraryItems;
+    private boolean updatingLibrarySuggestions;
 
-    public LoginView(Consumer<String> onLoginSuccess, Runnable onRegisterRequested) {
+    public LoginView(Consumer<String> onLoginSuccess, Runnable onRegisterRequested, ToastDisplay toastDisplay) {
         this.onLoginSuccess = onLoginSuccess;
         this.onRegisterRequested = onRegisterRequested;
+        this.toastDisplay = toastDisplay;
 
         initializeUI();
         setupAnimations();
@@ -248,16 +252,10 @@ public class LoginView extends StackPane {
         footerBox.setAlignment(Pos.CENTER);
 
         // Only advance from the library field when the user explicitly presses Enter.
-        librarySelector.getEditor().setOnAction(e -> {
+        libraryField.setOnAction(e -> {
             String selectedLibrary = resolveSelectedLibrary();
             if (selectedLibrary != null) {
-                syncingLibraryItems = true;
-                try {
-                    librarySelector.setValue(selectedLibrary);
-                    librarySelector.getEditor().setText(selectedLibrary);
-                } finally {
-                    syncingLibraryItems = false;
-                }
+                selectLibrary(selectedLibrary);
                 usernameField.requestFocus();
             }
         });
@@ -317,32 +315,33 @@ public class LoginView extends StackPane {
         if (availableLibraries.isEmpty()) {
             availableLibraries.add(configuration.getCurrentLibraryDisplayName());
         }
+        availableLibraries.sort(String.CASE_INSENSITIVE_ORDER);
 
         VBox libraryBox = new VBox(6);
         Label libraryLabel = new Label("Library");
         libraryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: " + labelText() + ";");
 
-        librarySelector = new ComboBox<>(FXCollections.observableArrayList(availableLibraries));
-        librarySelector.setEditable(true);
-        librarySelector.setMaxWidth(Double.MAX_VALUE);
-        librarySelector.setPrefHeight(48);
-        librarySelector.setVisibleRowCount(Math.min(6, availableLibraries.size()));
-        librarySelector.setPromptText("Select your library");
-        librarySelector.setValue(configuration.getCurrentLibraryDisplayName());
-        librarySelector.getEditor().setText(configuration.getCurrentLibraryDisplayName());
-        librarySelector.getStyleClass().add("auth-combo-box");
-        librarySelector.setStyle(comboBoxStyle());
-        librarySelector.getEditor().setStyle(comboBoxEditorStyle());
-        librarySelector.getEditor().textProperty().addListener((obs, oldValue, newValue) -> {
-            if (syncingLibraryItems) {
+        libraryField = new TextField(configuration.getCurrentLibraryDisplayName());
+        libraryField.setPromptText("Select your library");
+        libraryField.setPrefHeight(48);
+        libraryField.setMaxWidth(Double.MAX_VALUE);
+        libraryField.setStyle(getInputStyle());
+
+        librarySuggestionMenu = new ContextMenu();
+        librarySuggestionMenu.setAutoHide(true);
+        librarySuggestionMenu.setHideOnEscape(true);
+
+        libraryField.textProperty().addListener((obs, oldValue, newValue) -> {
+            if (updatingLibrarySuggestions) {
                 return;
             }
             filterLibraries(newValue);
         });
-        librarySelector.setOnShowing(event -> filterLibraries(librarySelector.getEditor().getText()));
-        librarySelector.valueProperty().addListener((obs, oldValue, newValue) -> {
-            if (!syncingLibraryItems && newValue != null) {
-                librarySelector.getEditor().setText(newValue);
+        libraryField.focusedProperty().addListener((obs, oldValue, focused) -> {
+            if (focused) {
+                filterLibraries(libraryField.getText());
+            } else if (librarySuggestionMenu != null) {
+                librarySuggestionMenu.hide();
             }
         });
 
@@ -350,7 +349,7 @@ public class LoginView extends StackPane {
         helper.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedText() + ";");
         helper.setWrapText(true);
 
-        libraryBox.getChildren().addAll(libraryLabel, librarySelector, helper);
+        libraryBox.getChildren().addAll(libraryLabel, libraryField, helper);
         return libraryBox;
     }
 
@@ -402,6 +401,7 @@ public class LoginView extends StackPane {
         // Perform login asynchronously
         new Thread(() -> {
             try {
+                AppConfigurationService.selectKnownLibrary(selectedLibrary);
                 boolean success = UserService.login(username, password);
 
                 Platform.runLater(() -> {
@@ -434,7 +434,9 @@ public class LoginView extends StackPane {
         passwordField.setDisable(loading);
         visiblePasswordField.setDisable(loading);
         togglePasswordBtn.setDisable(loading);
-        librarySelector.setDisable(loading);
+        if (libraryField != null) {
+            libraryField.setDisable(loading);
+        }
     }
 
     private void showError(String message) {
@@ -446,64 +448,46 @@ public class LoginView extends StackPane {
     }
 
     private void filterLibraries(String query) {
-        if (librarySelector == null) {
+        if (libraryField == null || librarySuggestionMenu == null) {
             return;
         }
 
-        // Capture caret BEFORE any mutations
-        final int savedCaret = librarySelector.getEditor().getCaretPosition();
-        final String currentText = query == null ? "" : query;
-        final String normalized  = currentText.trim().toLowerCase();
+        String currentText = query == null ? "" : query;
+        String normalized = currentText.trim().toLowerCase();
 
         List<String> filtered = availableLibraries.stream()
                 .filter(v -> normalized.isEmpty() || v.toLowerCase().contains(normalized))
+                .sorted(Comparator.naturalOrder())
                 .toList();
 
-        syncingLibraryItems = true;
-        try {
-            librarySelector.setItems(FXCollections.observableArrayList(filtered));
-            librarySelector.setVisibleRowCount(Math.max(1, Math.min(6, filtered.size())));
-
-            // Only call setText when the editor content actually differs –
-            // setText() always resets the caret to 0, causing the jump bug.
-            String editorNow = librarySelector.getEditor().getText();
-            if (!currentText.equals(editorNow)) {
-                librarySelector.getEditor().setText(currentText);
-            }
-        } finally {
-            syncingLibraryItems = false;
+        librarySuggestionMenu.getItems().clear();
+        for (String library : filtered.stream().limit(6).toList()) {
+            Label label = new Label(library);
+            label.setWrapText(true);
+            label.setMaxWidth(360);
+            CustomMenuItem item = new CustomMenuItem(label, true);
+            item.setOnAction(event -> selectLibrary(library));
+            librarySuggestionMenu.getItems().add(item);
         }
 
-        // Restore caret after JavaFX layout pass (Platform.runLater ensures
-        // we run after any internal text-field synchronization).
-        final int safeCaret = Math.min(savedCaret, currentText.length());
-        Platform.runLater(() -> {
-            if (librarySelector != null
-                    && currentText.equals(librarySelector.getEditor().getText())) {
-                librarySelector.getEditor().positionCaret(safeCaret);
-            }
-        });
-
-        // Open dropdown only when the field is active and results exist
-        boolean active = librarySelector.isFocused() || librarySelector.getEditor().isFocused();
-        if (active && !filtered.isEmpty() && !librarySelector.isShowing()) {
+        if (libraryField.isFocused() && !filtered.isEmpty()) {
             Platform.runLater(() -> {
-                if (!librarySelector.isShowing()) {
-                    librarySelector.show();
+                if (libraryField.getScene() != null) {
+                    librarySuggestionMenu.show(libraryField, javafx.geometry.Side.BOTTOM, 0, 4);
                 }
             });
-        } else if (filtered.isEmpty() && librarySelector.isShowing()) {
-            librarySelector.hide();
+        } else {
+            librarySuggestionMenu.hide();
         }
     }
 
     private String resolveSelectedLibrary() {
-        if (librarySelector == null) {
+        if (libraryField == null) {
             return null;
         }
 
-        String typedValue = librarySelector.getEditor().getText() != null
-                ? librarySelector.getEditor().getText().trim()
+        String typedValue = libraryField.getText() != null
+                ? libraryField.getText().trim()
                 : "";
         if (typedValue.isEmpty()) {
             return null;
@@ -513,6 +497,19 @@ public class LoginView extends StackPane {
                 .filter(value -> value.equalsIgnoreCase(typedValue))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private void selectLibrary(String library) {
+        updatingLibrarySuggestions = true;
+        try {
+            libraryField.setText(library);
+            libraryField.positionCaret(library.length());
+        } finally {
+            updatingLibrarySuggestions = false;
+        }
+        if (librarySuggestionMenu != null) {
+            librarySuggestionMenu.hide();
+        }
     }
 
     private void shakeForm() {
@@ -613,6 +610,9 @@ public class LoginView extends StackPane {
     }
 
     private void dispatchForgotPasswordEmail(String username) {
+        if (toastDisplay != null) {
+            toastDisplay.showInfo("Sending temporary password email…");
+        }
         new Thread(() -> {
             try {
                 User user = UserService.getUserById(username);
@@ -637,15 +637,21 @@ public class LoginView extends StackPane {
                 }
 
                 Platform.runLater(() -> {
-                    Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                    AppTheme.applyTheme(alert.getDialogPane());
-                    alert.setTitle("Password Reset Email Sent");
-                    alert.setHeaderText("Temporary password sent");
-                    alert.setContentText("A temporary password was emailed to " + user.getEmail() + ".");
-                    alert.showAndWait();
+                    if (toastDisplay != null) {
+                        toastDisplay.showSuccess("Temporary password emailed to " + user.getEmail() + ".");
+                    } else {
+                        showError("Temporary password emailed to " + user.getEmail() + ".");
+                    }
                 });
             } catch (Exception ex) {
-                Platform.runLater(() -> showError("Forgot password failed: " + ex.getMessage()));
+                Platform.runLater(() -> {
+                    String message = ReminderService.toUserMessage(ex);
+                    if (toastDisplay != null) {
+                        toastDisplay.showError("Forgot password failed: " + message);
+                    } else {
+                        showError("Forgot password failed: " + message);
+                    }
+                });
             }
         }, "forgot-password-email").start();
     }
@@ -665,17 +671,6 @@ public class LoginView extends StackPane {
     private String loginCardStyle() {
         return "-fx-background-color: " + cardSurface() + "; -fx-background-radius: 24px; " +
                 "-fx-border-radius: 24px; -fx-border-color: " + cardBorder() + "; -fx-border-width: 1;";
-    }
-
-    private String comboBoxStyle() {
-        return "-fx-background-color: " + fieldSurface() + "; -fx-border-color: " + fieldBorder() + "; " +
-                "-fx-border-width: 1.5; -fx-border-radius: 12px; -fx-background-radius: 12px;";
-    }
-
-    private String comboBoxEditorStyle() {
-        return "-fx-background-color: transparent; -fx-border-color: transparent; " +
-                "-fx-font-size: 15px; -fx-text-fill: " + fieldText() + "; -fx-prompt-text-fill: " + promptText() + "; " +
-                "-fx-padding: 11 6 11 14;";
     }
 
     private String cardSurface() {

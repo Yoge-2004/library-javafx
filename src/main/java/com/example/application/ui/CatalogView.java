@@ -156,6 +156,7 @@ public class CatalogView extends BorderPane {
             Platform.runLater(() -> {
                 refreshCategoryFilter();
                 updateBooksGrid();
+                updateResponsiveLayout();
             });
         });
     }
@@ -165,7 +166,9 @@ public class CatalogView extends BorderPane {
         String current = categoryFilter.getValue();
         List<String> categories = new ArrayList<>();
         categories.add(ALL_CATEGORIES);
-        categories.addAll(AppConfigurationService.getAvailableBookCategories(booksList));
+        List<String> bookCategories = new ArrayList<>(AppConfigurationService.getAvailableBookCategories(booksList));
+        bookCategories.sort(String::compareToIgnoreCase);
+        categories.addAll(bookCategories);
         categories.add(ADD_CATEGORY);
         categoryFilter.getItems().setAll(categories);
         categoryFilter.setValue(current != null && categories.contains(current) ? current : ALL_CATEGORIES);
@@ -231,11 +234,11 @@ public class CatalogView extends BorderPane {
         card.setPrefWidth(bookCardWidth);
         card.setMaxWidth(bookCardWidth);
 
-        // Header with gradient
+        // Header with per-category gradient — deterministic, readable in both themes
         VBox header = new VBox(8);
         header.setAlignment(Pos.CENTER);
         header.setPadding(new Insets(24));
-        header.setStyle("-fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F766E, #14B8A6); " +
+        header.setStyle("-fx-background-color: " + gradientForCategory(book.getCategory()) + "; " +
                 "-fx-background-radius: 12 12 0 0;");
 
         StackPane iconLabel = new StackPane(AppTheme.createIcon(AppTheme.ICON_BOOK, 26));
@@ -340,8 +343,10 @@ public class CatalogView extends BorderPane {
         empty.setPadding(new Insets(60));
         empty.setPrefWidth(600);
 
-        Label icon = new Label("Books");
-        icon.setGraphic(AppTheme.createIcon(AppTheme.ICON_LIBRARY, 36));
+        StackPane icon = new StackPane(AppTheme.createIcon(AppTheme.ICON_LIBRARY, 36));
+        icon.setPrefSize(52, 52);
+        icon.setMaxSize(52, 52);
+        icon.setStyle("-fx-background-color: " + (AppTheme.darkMode ? "#0F172A" : "#E2E8F0") + "; -fx-background-radius: 16px;");
 
         Label title = new Label("No books found");
         title.setStyle("-fx-font-size: 20px; -fx-font-weight: 600; -fx-text-fill: " + textPrimary() + ";");
@@ -366,16 +371,13 @@ public class CatalogView extends BorderPane {
                         bookData.quantity()
                 );
                 BookService.addBook(newBook);
-                rememberAndSelectCategory(bookData.category());
-
-                if (onRefresh != null) {
-                    onRefresh.run();
-                }
+                booksList.setAll(BookService.getAllBooks());
+                rememberCategory(bookData.category(), false, null);
 
                 if (toastDisplay != null) {
                     toastDisplay.showSuccess("Book added successfully!");
                 }
-            } catch (BooksException e) {
+            } catch (Exception e) {
                 if (toastDisplay != null) {
                     toastDisplay.showError("Failed to add book: " + e.getMessage());
                 }
@@ -392,7 +394,7 @@ public class CatalogView extends BorderPane {
                 book.setQuantity(bookData.quantity());
 
                 BookService.updateBook(book);
-                rememberAndSelectCategory(bookData.category());
+                rememberCategory(bookData.category(), false, null);
 
                 if (onRefresh != null) {
                     onRefresh.run();
@@ -401,7 +403,7 @@ public class CatalogView extends BorderPane {
                 if (toastDisplay != null) {
                     toastDisplay.showSuccess("Book updated successfully!");
                 }
-            } catch (BooksException e) {
+            } catch (Exception e) {
                 if (toastDisplay != null) {
                     toastDisplay.showError("Failed to update book: " + e.getMessage());
                 }
@@ -410,15 +412,17 @@ public class CatalogView extends BorderPane {
     }
 
     private void showDeleteBookConfirmation(Book book) {
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle("Delete Book");
         alert.setHeaderText("Delete \"" + book.getTitle() + "\"?");
         alert.setContentText("This action cannot be undone. The book will be permanently removed from the catalog.");
         alert.initOwner(getScene().getWindow());
+        ButtonType deleteType = new ButtonType("Delete", ButtonBar.ButtonData.OK_DONE);
+        alert.getButtonTypes().setAll(deleteType, ButtonType.CANCEL);
         AppTheme.applyTheme(alert.getDialogPane());
 
         Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
+        if (result.isPresent() && result.get() == deleteType) {
             try {
                 BookService.deleteBook(book.getIsbn());
 
@@ -455,8 +459,37 @@ public class CatalogView extends BorderPane {
         return AppTheme.darkMode ? "#0F172A" : "#F1F5F9";
     }
 
-    private String cardSurface() {
-        return AppTheme.darkMode ? "#1E293B" : "white";
+    /** Deterministic gradient per category — same name → same colour across runs. */
+    private static final String[] CATEGORY_GRADIENTS = {
+            "linear-gradient(from 0% 0% to 100% 100%, #0F766E, #14B8A6)", // teal
+            "linear-gradient(from 0% 0% to 100% 100%, #1D4ED8, #60A5FA)", // blue
+            "linear-gradient(from 0% 0% to 100% 100%, #7C3AED, #A78BFA)", // violet
+            "linear-gradient(from 0% 0% to 100% 100%, #B45309, #F59E0B)", // amber
+            "linear-gradient(from 0% 0% to 100% 100%, #0E7490, #38BDF8)", // cyan
+            "linear-gradient(from 0% 0% to 100% 100%, #065F46, #34D399)", // emerald
+            "linear-gradient(from 0% 0% to 100% 100%, #9D174D, #F472B6)", // pink
+            "linear-gradient(from 0% 0% to 100% 100%, #1E3A5F, #3B82F6)", // navy
+            "linear-gradient(from 0% 0% to 100% 100%, #7F1D1D, #F87171)", // red
+            "linear-gradient(from 0% 0% to 100% 100%, #4C1D95, #8B5CF6)", // purple
+            "linear-gradient(from 0% 0% to 100% 100%, #134E4A, #2DD4BF)", // dark-teal
+            "linear-gradient(from 0% 0% to 100% 100%, #3B1F00, #FB923C)", // orange
+            "linear-gradient(from 0% 0% to 100% 100%, #0F766E, #5EEAD4)", // aqua
+            "linear-gradient(from 0% 0% to 100% 100%, #1E40AF, #93C5FD)", // sky
+            "linear-gradient(from 0% 0% to 100% 100%, #831843, #FDA4AF)", // rose
+            "linear-gradient(from 0% 0% to 100% 100%, #365314, #BEF264)", // lime
+            "linear-gradient(from 0% 0% to 100% 100%, #5B21B6, #C4B5FD)", // lavender
+            "linear-gradient(from 0% 0% to 100% 100%, #9A3412, #FDBA74)", // tangerine
+    };
+
+    private static String gradientForCategory(String category) {
+        if (category == null || category.isBlank()) {
+            return CATEGORY_GRADIENTS[0];
+        }
+        int index = Math.abs(category.trim().toLowerCase().hashCode()) % CATEGORY_GRADIENTS.length;
+        return CATEGORY_GRADIENTS[index];
+    }
+
+    private String cardSurface() {        return AppTheme.darkMode ? "#1E293B" : "white";
     }
 
     private String dividerColor() {
@@ -476,14 +509,23 @@ public class CatalogView extends BorderPane {
     }
 
     private void rememberAndSelectCategory(String category) {
+        rememberCategory(category, true, "Category added.");
+    }
+
+    private void rememberCategory(String category, boolean selectFilter, String successMessage) {
         if (category == null || category.isBlank()) {
             return;
         }
         try {
             AppConfigurationService.rememberBookCategory(category);
             refreshCategoryFilter();
-            categoryFilter.setValue(category.trim());
-            applyFilters();
+            if (selectFilter) {
+                categoryFilter.setValue(category.trim());
+                applyFilters();
+            }
+            if (successMessage != null && toastDisplay != null) {
+                toastDisplay.showSuccess(successMessage);
+            }
         } catch (Exception e) {
             if (toastDisplay != null) {
                 toastDisplay.showError("Failed to save category: " + e.getMessage());
@@ -599,26 +641,32 @@ class BookDialog {
         grid.addRow(3, new Label("Category:"), categoryRow);
         grid.addRow(4, new Label("Quantity:"), quantityField);
 
+        Label errorLabel = new Label();
+        errorLabel.setVisible(false);
+        errorLabel.setStyle("-fx-font-size:12px; -fx-text-fill:#DC2626;");
+        grid.add(errorLabel, 0, 5, 2, 1);
+
         dialogPane.setContent(grid);
 
         // Buttons
         ButtonType saveButtonType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
         dialogPane.getButtonTypes().addAll(ButtonType.CANCEL, saveButtonType);
+        Button saveButton = (Button) dialogPane.lookupButton(saveButtonType);
+        saveButton.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
+            try {
+                resolveBookData(isbnField, titleField, authorField, categoryField, quantityField);
+                errorLabel.setVisible(false);
+            } catch (Exception ex) {
+                errorLabel.setText(ex.getMessage());
+                errorLabel.setVisible(true);
+                event.consume();
+            }
+        });
 
         // Result converter
         dialog.setResultConverter(dialogButton -> {
             if (dialogButton == saveButtonType) {
-                String categoryValue = categoryField.getEditor().getText() != null
-                        && !categoryField.getEditor().getText().isBlank()
-                        ? categoryField.getEditor().getText().trim()
-                        : categoryField.getValue();
-                return new BookData(
-                        isbnField.getText().trim(),
-                        titleField.getText().trim(),
-                        authorField.getText().trim(),
-                        categoryValue,
-                        quantityField.getValue()
-                );
+                return resolveBookData(isbnField, titleField, authorField, categoryField, quantityField);
             }
             return null;
         });
@@ -672,6 +720,28 @@ class BookDialog {
 
         dialog.setResultConverter(button -> button == saveType ? categoryField.getText().trim() : null);
         return dialog.showAndWait();
+    }
+
+    private static BookData resolveBookData(TextField isbnField, TextField titleField, TextField authorField,
+                                            ComboBox<String> categoryField, Spinner<Integer> quantityField) {
+        String categoryValue = categoryField.getEditor().getText() != null
+                && !categoryField.getEditor().getText().isBlank()
+                ? categoryField.getEditor().getText().trim()
+                : categoryField.getValue();
+        Book preview = new Book(
+                isbnField.getText().trim(),
+                titleField.getText().trim(),
+                authorField.getText().trim(),
+                categoryValue,
+                quantityField.getValue()
+        );
+        return new BookData(
+                preview.getIsbn(),
+                preview.getTitle(),
+                preview.getAuthor(),
+                preview.getCategory(),
+                quantityField.getValue()
+        );
     }
 
     public record BookData(String isbn, String title, String author, String category, int quantity) {}

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -265,6 +266,27 @@ public final class UserService {
         }
     }
 
+    public static boolean emailExists(String email) {
+        return findUserByEmail(email).isPresent();
+    }
+
+    public static Optional<User> findUserByEmail(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            return Optional.empty();
+        }
+
+        String normalized = email.trim();
+        try {
+            return userDB.getUsers().stream()
+                    .filter(Objects::nonNull)
+                    .filter(user -> user.getEmail() != null && user.getEmail().equalsIgnoreCase(normalized))
+                    .findFirst();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to search by email: " + email, e);
+            return Optional.empty();
+        }
+    }
+
     /**
      * Persists users database to permanent storage.
      *
@@ -344,12 +366,30 @@ public final class UserService {
             if (!email.matches("^[A-Za-z0-9+_.-]+@([A-Za-z0-9.-]+\\.[A-Za-z]{2,})$")) {
                 throw new UserException("Invalid email format");
             }
+
+            Optional<User> duplicate = userDB.getUsers().stream()
+                    .filter(Objects::nonNull)
+                    .filter(existing -> existing.getEmail() != null && existing.getEmail().equalsIgnoreCase(email))
+                    .filter(existing -> !existing.getUserId().equalsIgnoreCase(user.getUserId()))
+                    .findFirst();
+            if (duplicate.isPresent()) {
+                throw new UserException("Email address is already used by " + duplicate.get().getUserId());
+            }
         }
 
         if (user.getContactNumber() != null && !user.getContactNumber().trim().isEmpty()) {
             String contact = user.getContactNumber().trim();
             if (!contact.matches("^[+]?[0-9]{10,15}$")) {
                 throw new UserException("Invalid contact number format");
+            }
+
+            Optional<User> duplicateContact = userDB.getUsers().stream()
+                    .filter(Objects::nonNull)
+                    .filter(existing -> existing.getContactNumber() != null && existing.getContactNumber().equalsIgnoreCase(contact))
+                    .filter(existing -> !existing.getUserId().equalsIgnoreCase(user.getUserId()))
+                    .findFirst();
+            if (duplicateContact.isPresent()) {
+                throw new UserException("Contact number is already used by " + duplicateContact.get().getUserId());
             }
         }
     }

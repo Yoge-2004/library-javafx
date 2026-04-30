@@ -4,6 +4,7 @@ import com.example.entities.AppConfiguration;
 import com.example.entities.User;
 import com.example.entities.UserRole;
 import com.example.services.AppConfigurationService;
+import com.example.services.UserService;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -230,6 +231,9 @@ public class RegistrationDialog {
             }
             if (!User.isValidEmail(emailField.getText())) {
                 err(errorLbl, "Enter a valid email address."); ev.consume(); return;
+            }
+            if (UserService.emailExists(emailField.getText().trim())) {
+                err(errorLbl, "Email address is already in use."); ev.consume(); return;
             }
             if (phoneField.getText().trim().isEmpty()) {
                 err(errorLbl, "Mobile number is required."); ev.consume(); return;

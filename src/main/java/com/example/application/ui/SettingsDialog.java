@@ -16,7 +16,6 @@ public class SettingsDialog {
     public interface Actions {
         void openProfile();
         void openPassword();
-        void openDeleteAccount();
         void openUserManagement();
         void openLibraryConfiguration();
         void openDataManagement();
@@ -62,11 +61,7 @@ public class SettingsDialog {
 
                 settingItem(AppTheme.ICON_LOCK, "Password",
                         "Change your account password",
-                        "#3B82F6", () -> openFromSettings(actions::openPassword)),
-
-                settingItem(AppTheme.ICON_DELETE, "Delete Account",
-                        "Remove your sign-in account when there are no active loans or requests",
-                        "#DC2626", () -> openFromSettings(actions::openDeleteAccount))
+                        "#3B82F6", () -> openFromSettings(actions::openPassword))
         );
 
         // ── Administration section (staff only) ──────────────────
@@ -79,7 +74,7 @@ public class SettingsDialog {
                             "#8B5CF6", () -> openFromSettings(actions::openUserManagement)),
 
                     settingItem(AppTheme.ICON_LIBRARY, "Library Configuration",
-                            "Borrowing rules, fine rates, loan periods, email SMTP",
+                            "Borrowing rules, fines, email, storage, and the database tab",
                             "#F59E0B", () -> openFromSettings(actions::openLibraryConfiguration)),
 
                     settingItem(AppTheme.ICON_SAVE, "Data Management",
@@ -100,7 +95,7 @@ public class SettingsDialog {
         VBox aboutTxt = new VBox(2);
         Label aboutTitle = new Label("Library OS  v3.1");
         aboutTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
-        Label aboutSub = new Label("Modern library management . JavaFX 26 . Java 26");
+        Label aboutSub = new Label("Modern library management . JavaFX 21 . Java 26");
         aboutSub.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         aboutTxt.getChildren().addAll(aboutTitle, aboutSub);
         aboutCard.getChildren().addAll(aboutIcon, aboutTxt);

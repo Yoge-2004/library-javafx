@@ -2,6 +2,7 @@ package com.example.application.ui;
 
 import com.example.entities.AppConfiguration;
 import com.example.services.AppConfigurationService;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.animation.*;
 import javafx.application.Platform;
 import javafx.beans.property.StringProperty;
@@ -28,6 +29,8 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
 
+import java.awt.Taskbar;
+import java.awt.image.BufferedImage;
 import java.net.URL;
 import java.util.Collection;
 import java.util.Objects;
@@ -216,15 +219,12 @@ public final class AppTheme {
         if (stage == null) {
             return;
         }
-        // Always use programmatically-generated canvas icons.
-        // JavaFX's Image class cannot decode SVG natively; attempting to load
-        // an SVG as a window icon silently fails and leaves cachedLargeIcon null,
-        // so subsequent dialog stages never receive icons either.
         if (cachedLargeIcon == null) {
-            cachedLargeIcon  = createAppIcon(256);
+            cachedLargeIcon = createAppIcon(256);
             cachedMediumIcon = createAppIcon(128);
-            cachedSmallIcon  = createAppIcon(64);
-            cachedTinyIcon   = createAppIcon(32);
+            cachedSmallIcon = createAppIcon(64);
+            cachedTinyIcon = createAppIcon(32);
+            applyTaskbarIcon(cachedLargeIcon);
         }
         stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
     }
@@ -247,11 +247,28 @@ public final class AppTheme {
         Button button = new Button();
         button.setGraphic(createIcon(iconPath));
         if (tooltip != null && !tooltip.isEmpty()) {
-            button.setTooltip(new Tooltip(tooltip));
+            button.setTooltip(createTooltip(tooltip));
         }
         button.getStyleClass().addAll("app-button", "icon-button", style.getStyleClass());
         installButtonAnimation(button);
         return button;
+    }
+
+    public static Tooltip createTooltip(String text) {
+        Tooltip tooltip = new Tooltip(text);
+        configureTooltip(tooltip);
+        return tooltip;
+    }
+
+    public static void configureTooltip(Tooltip tooltip) {
+        if (tooltip == null) {
+            return;
+        }
+        tooltip.setShowDelay(Duration.millis(500));
+        tooltip.setShowDuration(Duration.hours(8));
+        tooltip.setHideDelay(Duration.seconds(1));
+        tooltip.setWrapText(true);
+        tooltip.setMaxWidth(300);
     }
 
     public static Button createIconTextButton(String text, String iconPath, ButtonStyle style) {
@@ -423,33 +440,33 @@ public final class AppTheme {
     }
 
     public static void shake(Node node) {
-        TranslateTransition left = new TranslateTransition(Duration.millis(50), node);
-        left.setToX(-10);
-
-        TranslateTransition right = new TranslateTransition(Duration.millis(50), node);
-        right.setToX(10);
-
-        TranslateTransition center = new TranslateTransition(Duration.millis(50), node);
-        center.setToX(0);
-
-        SequentialTransition shake = new SequentialTransition(left, right, left, right, center);
-        shake.play();
+        // Each child of SequentialTransition MUST be a unique object instance.
+        TranslateTransition t1 = new TranslateTransition(Duration.millis(50), node); t1.setToX(-10);
+        TranslateTransition t2 = new TranslateTransition(Duration.millis(50), node); t2.setToX(10);
+        TranslateTransition t3 = new TranslateTransition(Duration.millis(50), node); t3.setToX(-10);
+        TranslateTransition t4 = new TranslateTransition(Duration.millis(50), node); t4.setToX(10);
+        TranslateTransition t5 = new TranslateTransition(Duration.millis(50), node); t5.setToX(0);
+        new SequentialTransition(t1, t2, t3, t4, t5).play();
     }
 
     private static void installButtonAnimation(Button button) {
-        button.hoverProperty().addListener((obs, wasHover, isHover) -> {
-            if (isHover) {
-                animateScale(button, 1.02, 150);
-            } else {
-                animateScale(button, 1.0, 150);
-            }
-        });
+        boolean hoverScaleEnabled = !button.getStyleClass().contains("icon-button");
+
+        if (hoverScaleEnabled) {
+            button.hoverProperty().addListener((obs, wasHover, isHover) -> {
+                if (isHover) {
+                    animateScale(button, 1.01, 140);
+                } else {
+                    animateScale(button, 1.0, 140);
+                }
+            });
+        }
 
         button.pressedProperty().addListener((obs, wasPressed, isPressed) -> {
             if (isPressed) {
                 animateScale(button, 0.98, 80);
             } else {
-                animateScale(button, button.isHover() ? 1.02 : 1.0, 80);
+                animateScale(button, hoverScaleEnabled && button.isHover() ? 1.01 : 1.0, 80);
             }
         });
     }
@@ -563,5 +580,21 @@ public final class AppTheme {
         WritableImage image = new WritableImage(size, size);
         canvas.snapshot(new SnapshotParameters(), image);
         return image;
+    }
+
+    private static void applyTaskbarIcon(Image image) {
+        try {
+            if (!Taskbar.isTaskbarSupported()) {
+                return;
+            }
+            Taskbar taskbar = Taskbar.getTaskbar();
+            if (!taskbar.isSupported(Taskbar.Feature.ICON_IMAGE) || image == null) {
+                return;
+            }
+            BufferedImage awtImage = SwingFXUtils.fromFXImage(image, null);
+            taskbar.setIconImage(awtImage);
+        } catch (UnsupportedOperationException ignored) {
+        } catch (Exception ignored) {
+        }
     }
 }

@@ -145,7 +145,7 @@ public class CirculationView extends BorderPane {
     private TableView<IssueRecord> buildIssuesTable() {
         TableView<IssueRecord> t = new TableView<>();
         t.getStyleClass().add("table-view");
-        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         t.setPlaceholder(new Label("No active issues"));
 
         TableColumn<IssueRecord, String> titleC = col("Book Title",
@@ -226,7 +226,7 @@ public class CirculationView extends BorderPane {
     private TableView<BorrowRequest> buildRequestsTable() {
         TableView<BorrowRequest> t = new TableView<>();
         t.getStyleClass().add("table-view");
-        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         t.setPlaceholder(new Label("No borrow requests"));
 
         TableColumn<BorrowRequest, String> titleC = col2("Book Title",
@@ -272,7 +272,7 @@ public class CirculationView extends BorderPane {
                 preview.setWrapText(true);
                 preview.setMaxWidth(160);
 
-                Tooltip tip = new Tooltip(s);
+                Tooltip tip = AppTheme.createTooltip(s);
                 tip.setWrapText(true);
                 tip.setMaxWidth(300);
                 tip.setStyle("-fx-font-size:13px;");
@@ -349,7 +349,7 @@ public class CirculationView extends BorderPane {
 
         TableView<IssueRecord> ot = new TableView<>();
         ot.getStyleClass().add("table-view");
-        ot.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        ot.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         ot.setPlaceholder(new Label("No overdue books! 🎉"));
 
         ot.getColumns().addAll(
@@ -366,11 +366,16 @@ public class CirculationView extends BorderPane {
         ot.setItems(overdueData);
         VBox.setVgrow(ot, Priority.ALWAYS);
 
-        // Export button
+        // Export + Print buttons
         Button exportBtn = AppTheme.createIconTextButton(
                 "Export Overdue CSV", AppTheme.ICON_DOWNLOAD, AppTheme.ButtonStyle.OUTLINE);
         exportBtn.setOnAction(e -> exportOverdueReport(overdueData));
-        HBox bar2 = new HBox(exportBtn);
+
+        Button printBtn = AppTheme.createIconTextButton(
+                "Print Report", AppTheme.ICON_PRINT, AppTheme.ButtonStyle.OUTLINE);
+        printBtn.setOnAction(e -> printOverdueReport(ot));
+
+        HBox bar2 = new HBox(8, printBtn, exportBtn);
         bar2.setAlignment(Pos.CENTER_RIGHT);
 
         p.getChildren().addAll(banner, bar2, ot);
@@ -614,14 +619,54 @@ public class CirculationView extends BorderPane {
         });
     }
 
-    private void exportOverdueReport(ObservableList<IssueRecord> data) {
-        try {
-            java.nio.file.Path p = com.example.services.ReportExportService
-                    .exportOverdueReportCsv(data);
-            if (toast != null) toast.showSuccess("Exported to: " + p.toAbsolutePath());
-        } catch (Exception ex) {
-            if (toast != null) toast.showError("Export failed: " + ex.getMessage());
+    /** Opens the OS print dialog and prints the overdue TableView. */
+    private void printOverdueReport(javafx.scene.control.TableView<IssueRecord> table) {
+        java.util.Set<javafx.print.Printer> printers = javafx.print.Printer.getAllPrinters();
+        if (printers == null || printers.isEmpty()) {
+            if (toast != null) toast.showError("No print service is available on this system.");
+            return;
         }
+
+        javafx.print.Printer selectedPrinter = javafx.print.Printer.getDefaultPrinter();
+        if (selectedPrinter == null) {
+            selectedPrinter = printers.iterator().next();
+        }
+
+        javafx.print.PrinterJob job = javafx.print.PrinterJob.createPrinterJob(selectedPrinter);
+        if (job == null) {
+            if (toast != null) toast.showError("Could not start the system print dialog.");
+            return;
+        }
+
+        boolean proceed = job.showPrintDialog(getScene().getWindow());
+        if (!proceed) return;
+
+        // Scale table to fit page width
+        javafx.print.PageLayout layout = job.getJobSettings().getPageLayout();
+        double printW = layout.getPrintableWidth();
+        double tableW = table.getBoundsInParent().getWidth();
+        double scale  = printW / tableW;
+
+        javafx.scene.transform.Scale scaleT = new javafx.scene.transform.Scale(scale, scale);
+        table.getTransforms().add(scaleT);
+        boolean printed = job.printPage(table);
+        table.getTransforms().remove(scaleT);
+
+        if (printed) {
+            job.endJob();
+            if (toast != null) toast.showSuccess("Overdue report sent to printer.");
+        } else {
+            if (toast != null) toast.showError("Printing failed.");
+        }
+    }
+
+    private void exportOverdueReport(ObservableList<IssueRecord> data) {        try {
+        java.nio.file.Path p = com.example.services.ReportExportService
+                .exportOverdueReportCsv(data);
+        if (toast != null) toast.showSuccess("Exported to: " + p.toAbsolutePath());
+    } catch (Exception ex) {
+        if (toast != null) toast.showError("Export failed: " + ex.getMessage());
+    }
     }
 
     private TableColumn<IssueRecord, Void> overdueActionColumn() {
@@ -634,7 +679,7 @@ public class CirculationView extends BorderPane {
 
             {
                 box.setAlignment(Pos.CENTER);
-                emailBtn.setOnAction(event -> sendOverdueReminder(getTableView().getItems().get(getIndex())));
+                emailBtn.setOnAction(event -> sendOverdueReminder(getTableView().getItems().get(getIndex()), emailBtn));
                 contactBtn.setOnAction(event -> showBorrowerContact(getTableView().getItems().get(getIndex())));
             }
 
@@ -655,7 +700,11 @@ public class CirculationView extends BorderPane {
         return actionColumn;
     }
 
-    private void sendOverdueReminder(IssueRecord record) {
+    private void sendOverdueReminder(IssueRecord record, Button triggerButton) {
+        if (toast != null) {
+            toast.showInfo("Sending reminder email…");
+        }
+        Platform.runLater(() -> triggerButton.setDisable(true));
         new Thread(() -> {
             try {
                 User user = UserService.getUserById(record.getUserId());
@@ -665,14 +714,16 @@ public class CirculationView extends BorderPane {
 
                 ReminderService.sendOverdueReminder(user, List.of(record));
                 Platform.runLater(() -> {
+                    triggerButton.setDisable(false);
                     if (toast != null) {
                         toast.showSuccess("Reminder sent to " + user.getEmail());
                     }
                 });
             } catch (Exception ex) {
                 Platform.runLater(() -> {
+                    triggerButton.setDisable(false);
                     if (toast != null) {
-                        toast.showError("Reminder failed: " + ex.getMessage());
+                        toast.showError("Reminder failed: " + ReminderService.toUserMessage(ex));
                     }
                 });
             }
@@ -732,7 +783,7 @@ public class CirculationView extends BorderPane {
         var icon = AppTheme.createIcon(iconPath, 14);
         icon.setStyle("-fx-fill:white;");
         b.setGraphic(icon);
-        b.setTooltip(new Tooltip(tooltip));
+        b.setTooltip(AppTheme.createTooltip(tooltip));
         b.setStyle("-fx-background-color:" + color + "; -fx-background-radius:8px; " +
                 "-fx-cursor:hand; -fx-padding:5; -fx-min-width:28px; -fx-pref-width:28px; " +
                 "-fx-max-width:28px; -fx-min-height:28px; -fx-pref-height:28px; -fx-max-height:28px;");

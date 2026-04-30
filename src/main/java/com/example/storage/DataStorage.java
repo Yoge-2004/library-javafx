@@ -1,5 +1,7 @@
 package com.example.storage;
 
+import com.example.services.DatabaseConnectionService;
+
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
@@ -44,7 +46,12 @@ public final class DataStorage {
 
         Path filePath = Paths.get(filename);
         if (!Files.exists(filePath)) {
-            LOGGER.log(Level.FINE, "Serialized file does not exist: {0}", filename);
+            byte[] snapshot = DatabaseConnectionService.loadSnapshot(snapshotKey(filePath));
+            if (snapshot != null) {
+                LOGGER.log(Level.INFO, "Recovered {0} from database snapshot", filename);
+                return clazz.cast(deserialize(snapshot, clazz));
+            }
+            LOGGER.log(Level.INFO, "File does not exist: {0}", filename);
             return null;
         }
 
@@ -53,7 +60,7 @@ public final class DataStorage {
                 new BufferedInputStream(Files.newInputStream(filePath)))) {
 
             Object obj = ois.readObject();
-            LOGGER.log(Level.FINE, "Read serialized object from {0}", filename);
+            LOGGER.log(Level.FINE, "Successfully read object from: {0}", filename);
             return clazz.cast(obj);
 
         } catch (ClassCastException e) {
@@ -87,7 +94,7 @@ public final class DataStorage {
             Files.createDirectories(parentDir);
         }
 
-        String tempFileName = filename + ".tmp." + System.currentTimeMillis() + "." + Thread.currentThread().getId();
+        String tempFileName = filename + ".tmp." + System.currentTimeMillis() + "." + Thread.currentThread().threadId();
         Path tempPath = Paths.get(tempFileName);
 
         lock.writeLock().lock();
@@ -112,14 +119,14 @@ public final class DataStorage {
                         StandardCopyOption.REPLACE_EXISTING,
                         StandardCopyOption.ATOMIC_MOVE);
                 moveSuccessful = true;
-                LOGGER.log(Level.FINE, "Wrote serialized object atomically to {0}", filename);
+                LOGGER.log(Level.FINE, "Successfully wrote object to: {0} (atomic)", filename);
 
             } catch (AtomicMoveNotSupportedException e1) {
                 // Strategy 2: Try non-atomic move with replace
                 try {
                     Files.move(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
                     moveSuccessful = true;
-                    LOGGER.log(Level.FINE, "Wrote serialized object with non-atomic replace to {0}", filename);
+                    LOGGER.log(Level.FINE, "Successfully wrote object to: {0} (non-atomic)", filename);
 
                 } catch (IOException e2) {
                     // Strategy 3: Delete existing file first, then move
@@ -129,7 +136,7 @@ public final class DataStorage {
                         }
                         Files.move(tempPath, filePath);
                         moveSuccessful = true;
-                        LOGGER.log(Level.FINE, "Wrote serialized object using delete-first strategy to {0}", filename);
+                        LOGGER.log(Level.FINE, "Successfully wrote object to: {0} (delete-first)", filename);
 
                     } catch (IOException e3) {
                         // Strategy 4: Copy and delete (last resort)
@@ -137,10 +144,10 @@ public final class DataStorage {
                             Files.copy(tempPath, filePath, StandardCopyOption.REPLACE_EXISTING);
                             Files.delete(tempPath);
                             moveSuccessful = true;
-                            LOGGER.log(Level.FINE, "Wrote serialized object using copy-delete strategy to {0}", filename);
+                            LOGGER.log(Level.FINE, "Successfully wrote object to: {0} (copy-delete)", filename);
 
                         } catch (IOException e4) {
-                            LOGGER.log(Level.SEVERE, "All write strategies failed for {0}", filename);
+                            LOGGER.log(Level.SEVERE, "All write strategies failed for: {0}", filename);
                             throw new IOException("Failed to write file after trying all strategies. " +
                                     "Original error: " + e1.getMessage() +
                                     ". Final error: " + e4.getMessage(), e4);
@@ -149,8 +156,11 @@ public final class DataStorage {
                 }
             }
 
+            if (moveSuccessful) {
+                mirrorSnapshot(filePath, obj);
+            }
         } catch (IOException e) {
-            LOGGER.log(Level.SEVERE, "Failed to write temporary serialized file " + tempFileName, e);
+            LOGGER.log(Level.SEVERE, "Failed to write to temporary file: " + tempFileName, e);
             throw new IOException("Failed to create temporary file for writing", e);
         } finally {
             // Clean up temporary file if it still exists
@@ -159,7 +169,7 @@ public final class DataStorage {
                     Files.delete(tempPath);
                 }
             } catch (IOException cleanupException) {
-                LOGGER.log(Level.WARNING, "Failed to clean up temporary serialized file " + tempPath, cleanupException);
+                LOGGER.log(Level.WARNING, "Failed to clean up temporary file: " + tempPath, cleanupException);
             }
             lock.writeLock().unlock();
         }
@@ -266,7 +276,7 @@ public final class DataStorage {
         try {
             return Files.deleteIfExists(Paths.get(filename));
         } catch (IOException e) {
-            System.err.println("Failed to delete file: " + filename + " - " + e.getMessage());
+            LOGGER.log(Level.WARNING, "Failed to delete file: " + filename, e);
             return false;
         }
     }
@@ -291,10 +301,10 @@ public final class DataStorage {
             String backupFileName = filename + ".backup." + System.currentTimeMillis();
             Path backupPath = Paths.get(backupFileName);
             Files.copy(originalPath, backupPath, StandardCopyOption.REPLACE_EXISTING);
-            LOGGER.log(Level.INFO, "Created backup file {0}", backupFileName);
+            System.out.println("Created backup: " + backupFileName);
             return true;
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to create backup for " + filename, e);
+            System.err.println("Failed to create backup for: " + filename + " - " + e.getMessage());
             return false;
         }
     }
@@ -314,7 +324,7 @@ public final class DataStorage {
             Path filePath = Paths.get(filename);
             return Files.exists(filePath) ? Files.size(filePath) : -1;
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to get file size for " + filename, e);
+            System.err.println("Failed to get file size for: " + filename + " - " + e.getMessage());
             return -1;
         }
     }
@@ -334,12 +344,43 @@ public final class DataStorage {
             Path dirPath = Paths.get(directoryPath);
             if (!Files.exists(dirPath)) {
                 Files.createDirectories(dirPath);
-                LOGGER.log(Level.INFO, "Created directory {0}", directoryPath);
+                System.out.println("Created directory: " + directoryPath);
             }
             return true;
         } catch (IOException e) {
-            LOGGER.log(Level.WARNING, "Failed to create directory " + directoryPath, e);
+            System.err.println("Failed to create directory: " + directoryPath + " - " + e.getMessage());
             return false;
         }
+    }
+
+    private static void mirrorSnapshot(Path filePath, Object obj) {
+        try {
+            DatabaseConnectionService.saveSnapshot(snapshotKey(filePath), serialize(obj));
+        } catch (IOException ex) {
+            LOGGER.log(Level.WARNING, "Failed to serialize snapshot for database mirror: " + filePath, ex);
+        }
+    }
+
+    private static byte[] serialize(Object obj) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+            oos.writeObject(obj);
+            oos.flush();
+            return baos.toByteArray();
+        }
+    }
+
+    private static <T> T deserialize(byte[] payload, Class<T> clazz) throws IOException, ClassNotFoundException {
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(payload);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+            return clazz.cast(ois.readObject());
+        } catch (ClassCastException ex) {
+            throw new IOException("Object in snapshot cannot be cast to " + clazz.getSimpleName(), ex);
+        }
+    }
+
+    private static String snapshotKey(Path filePath) {
+        Path fileName = filePath.getFileName();
+        return fileName != null ? fileName.toString() : filePath.toString();
     }
 }
