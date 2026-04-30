@@ -126,12 +126,13 @@
 .sidebar-logo-accent { -fx-text-fill: #14B8A6; }
 
 .sidebar-section-label {
-    -fx-font-size: 10px; -fx-font-weight: 700;
-    -fx-text-fill: #CAD5E1; -fx-padding: 16 8 6 8;
+    -fx-font-size: 11px; -fx-font-weight: 700;
+    -fx-text-fill: #E2E8F0; -fx-padding: 16 8 6 8;
+    -fx-letter-spacing: 0.8;
 }
 .sidebar-btn {
     -fx-background-color: transparent;
-    -fx-text-fill: #B0BEC5;
+    -fx-text-fill: #CBD5E1;
     -fx-font-size: 14px; -fx-font-weight: 500;
     -fx-alignment: CENTER_LEFT;
     -fx-padding: 10 12; -fx-background-radius: 10px;
@@ -146,9 +147,9 @@
     -fx-background-color: transparent;
     -fx-border-color: transparent;
 }
-.sidebar-btn .icon-svg { -fx-fill: #90A4AE; }
-.sidebar-btn:hover { -fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: #FFFFFF; }
-.sidebar-btn:hover .icon-svg { -fx-fill: #E0E0E0; }
+.sidebar-btn .icon-svg { -fx-fill: #94A3B8; }
+.sidebar-btn:hover { -fx-background-color: rgba(255,255,255,0.1); -fx-text-fill: #F1F5F9; }
+.sidebar-btn:hover .icon-svg { -fx-fill: #F1F5F9; }
 .sidebar-btn.active { -fx-background-color: rgba(20,184,166,0.2); -fx-text-fill: #4FD1C7; }
 .sidebar-btn.active .icon-svg { -fx-fill: #4FD1C7; }
 
@@ -156,8 +157,8 @@
     -fx-padding: 14 8 0 8;
     -fx-border-color: #1E293B; -fx-border-width: 1 0 0 0;
 }
-.sidebar-profile-name { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #FFFFFF; }
-.sidebar-profile-role { -fx-font-size: 12px; -fx-text-fill: #B0BEC5; }
+.sidebar-profile-name { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #F1F5F9; }
+.sidebar-profile-role { -fx-font-size: 12px; -fx-text-fill: #CBD5E1; }
 
 /* ─── HEADER ──────────────────────────────────────────────────── */
 .app-header {
