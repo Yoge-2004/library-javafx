@@ -461,13 +461,18 @@ public class LoginView extends StackPane {
                 .toList();
 
         librarySuggestionMenu.getItems().clear();
-        for (String library : filtered.stream().limit(6).toList()) {
+        for (String library : filtered.stream().limit(15).toList()) {
             Label label = new Label(library);
             label.setWrapText(true);
             label.setMaxWidth(360);
             CustomMenuItem item = new CustomMenuItem(label, true);
             item.setOnAction(event -> selectLibrary(library));
             librarySuggestionMenu.getItems().add(item);
+        }
+        
+        // Set max height to show ~3 items at a time with scrolling
+        if (!librarySuggestionMenu.getItems().isEmpty()) {
+            librarySuggestionMenu.setPrefHeight(150);
         }
 
         if (libraryField.isFocused() && !filtered.isEmpty()) {

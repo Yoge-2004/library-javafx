@@ -264,9 +264,9 @@ public final class AppTheme {
         if (tooltip == null) {
             return;
         }
-        tooltip.setShowDelay(Duration.millis(500));
-        tooltip.setShowDuration(Duration.hours(8));
-        tooltip.setHideDelay(Duration.seconds(1));
+        tooltip.setShowDelay(Duration.millis(300));
+        tooltip.setShowDuration(Duration.hours(24));
+        tooltip.setHideDelay(Duration.seconds(5));
         tooltip.setWrapText(true);
         tooltip.setMaxWidth(300);
     }

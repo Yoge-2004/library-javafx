@@ -746,12 +746,12 @@
     -fx-text-fill: #F1F5F9;
 }
 
-/* ─── TOAST NOTIFICATIONS (compact) ──────────────────────────── */
+/* ─── TOAST NOTIFICATIONS (compact horizontal) ────────────────────────── */
 .toast-notification {
     -fx-background-radius: 8px; -fx-border-radius: 8px;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 3);
-    -fx-spacing: 8; -fx-alignment: CENTER;
-    -fx-padding: 0; -fx-max-width: use-pref-size;
+    -fx-spacing: 10; -fx-alignment: CENTER;
+    -fx-padding: 10 16 10 16; -fx-max-width: 500;
 }
 .toast-success {
     -fx-background-color: #DCFCE7; -fx-border-color: #86EFAC; -fx-border-width: 1;
