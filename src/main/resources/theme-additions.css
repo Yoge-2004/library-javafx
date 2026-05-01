@@ -81,12 +81,34 @@
 
 /* ══════════════════════════════════════════════════════════════════
    LIGHT MODE — sidebar contrast
+   The sidebar background is always dark (#0F172A → #1A2942).
+   These rules use `.sidebar .classname` (specificity 0,2,0) so they
+   beat the generic `.label { -fx-text-fill: #374151 }` rule in
+   theme.css — which also has specificity 0,1,0 but appears later and
+   would otherwise win and render sidebar labels invisible.
    ══════════════════════════════════════════════════════════════════ */
 
+.sidebar .sidebar-logo         { -fx-text-fill: #F8FAFC; -fx-font-weight: 800; }
+.sidebar .sidebar-logo-accent  { -fx-text-fill: #14B8A6; }
+.sidebar .sidebar-section-label {
+    -fx-text-fill: #B0BEC5;
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+    -fx-padding: 12 0 4 8;
+    -fx-opacity: 1;
+}
+.sidebar .sidebar-btn          { -fx-text-fill: #CBD5E1; }
+.sidebar .sidebar-btn:hover    { -fx-text-fill: #F1F5F9; }
+.sidebar .sidebar-btn.active   { -fx-text-fill: #4FD1C7; }
+.sidebar .sidebar-profile-name { -fx-text-fill: #F8FAFC; -fx-font-size: 14px; -fx-font-weight: 600; }
+.sidebar .sidebar-profile-role { -fx-text-fill: #CBD5E1; -fx-font-size: 12px; }
+
+/* Also keep the old standalone selectors for any sidebar items rendered outside
+   the .sidebar container (e.g. during a theme rebuild transition) */
 .sidebar-logo         { -fx-text-fill: #F8FAFC; -fx-font-weight: 800; }
 .sidebar-logo-accent  { -fx-text-fill: #0D9488; }
 .sidebar-section-label {
-    -fx-text-fill: #94A3B8;
+    -fx-text-fill: #B0BEC5;
     -fx-font-size: 10px;
     -fx-font-weight: 700;
     -fx-padding: 12 0 4 8;
@@ -99,6 +121,12 @@
    DARK MODE — sidebar
    ══════════════════════════════════════════════════════════════════ */
 
+.dark-mode .sidebar .sidebar-logo         { -fx-text-fill: #F1F5F9; }
+.dark-mode .sidebar .sidebar-logo-accent  { -fx-text-fill: #14B8A6; }
+.dark-mode .sidebar .sidebar-section-label { -fx-text-fill: #94A3B8; }
+.dark-mode .sidebar .sidebar-profile-name  { -fx-text-fill: #F1F5F9; }
+.dark-mode .sidebar .sidebar-profile-role  { -fx-text-fill: #94A3B8; }
+/* Fallbacks */
 .dark-mode .sidebar-logo         { -fx-text-fill: #F1F5F9; }
 .dark-mode .sidebar-logo-accent  { -fx-text-fill: #14B8A6; }
 .dark-mode .sidebar-section-label { -fx-text-fill: #94A3B8; }

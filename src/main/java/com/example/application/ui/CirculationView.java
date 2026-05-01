@@ -621,18 +621,8 @@ public class CirculationView extends BorderPane {
 
     /** Opens the OS print dialog and prints the overdue TableView. */
     private void printOverdueReport(javafx.scene.control.TableView<IssueRecord> table) {
-        java.util.Set<javafx.print.Printer> printers = javafx.print.Printer.getAllPrinters();
-        if (printers == null || printers.isEmpty()) {
-            if (toast != null) toast.showError("No print service is available on this system.");
-            return;
-        }
-
-        javafx.print.Printer selectedPrinter = javafx.print.Printer.getDefaultPrinter();
-        if (selectedPrinter == null) {
-            selectedPrinter = printers.iterator().next();
-        }
-
-        javafx.print.PrinterJob job = javafx.print.PrinterJob.createPrinterJob(selectedPrinter);
+        // Create job for default printer (null = let dialog pick); avoids false "no printers" errors
+        javafx.print.PrinterJob job = javafx.print.PrinterJob.createPrinterJob();
         if (job == null) {
             if (toast != null) toast.showError("Could not start the system print dialog.");
             return;
@@ -645,7 +635,7 @@ public class CirculationView extends BorderPane {
         javafx.print.PageLayout layout = job.getJobSettings().getPageLayout();
         double printW = layout.getPrintableWidth();
         double tableW = table.getBoundsInParent().getWidth();
-        double scale  = printW / tableW;
+        double scale  = (tableW > 0) ? printW / tableW : 1.0;
 
         javafx.scene.transform.Scale scaleT = new javafx.scene.transform.Scale(scale, scale);
         table.getTransforms().add(scaleT);
@@ -656,7 +646,7 @@ public class CirculationView extends BorderPane {
             job.endJob();
             if (toast != null) toast.showSuccess("Overdue report sent to printer.");
         } else {
-            if (toast != null) toast.showError("Printing failed.");
+            if (toast != null) toast.showError("Printing failed — check printer status.");
         }
     }
 

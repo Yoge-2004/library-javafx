@@ -61,13 +61,12 @@ public class LibraryApp extends Application implements ToastDisplay {
         LoggingConfigurator.configure();
         this.primaryStage = stage;
         stage.setTitle("Library OS");
-        stage.setMinWidth(1200);
-        stage.setMinHeight(800);
-
+        javafx.geometry.Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+        double w = screen.getWidth() * 0.95;
+        double h = screen.getHeight() * 0.95;
+        stage.setMinWidth(Math.min(900, w));
+        stage.setMinHeight(Math.min(600, h));
         rootStack = new StackPane();
-
-        double w = Screen.getPrimary().getVisualBounds().getWidth() * 0.95;
-        double h = Screen.getPrimary().getVisualBounds().getHeight() * 0.95;
 
         Scene scene = AppTheme.createScene(rootStack, w, h);
         stage.setScene(scene);
@@ -189,6 +188,75 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         VBox databaseBox = new VBox(8, dbConfigBtn, dbStatus);
         form.getChildren().add(wRow("Database", databaseBox));
+
+        // ── Import existing data (optional) ───────────────────────────────
+        Label importHint = new Label("Optionally restore data from a previous backup or a database.");
+        importHint.setStyle("-fx-font-size:12px; -fx-text-fill:#64748B;");
+        importHint.setWrapText(true);
+
+        Button importFileBtn = AppTheme.createIconTextButton(
+                "Import from Backup File", AppTheme.ICON_SAVE, AppTheme.ButtonStyle.OUTLINE);
+        Button importDbBtn = AppTheme.createIconTextButton(
+                "Import from Database", AppTheme.ICON_SYNC, AppTheme.ButtonStyle.OUTLINE);
+        importFileBtn.setMaxWidth(Double.MAX_VALUE);
+        importDbBtn.setMaxWidth(Double.MAX_VALUE);
+
+        Label importStatus = new Label();
+        importStatus.setWrapText(true);
+        importStatus.setStyle("-fx-font-size:12px;");
+
+        importFileBtn.setOnAction(ev -> {
+            javafx.stage.FileChooser fc = new javafx.stage.FileChooser();
+            fc.setTitle("Select a .ser backup file from the backup folder");
+            fc.getExtensionFilters().add(
+                    new javafx.stage.FileChooser.ExtensionFilter("Serialized backup (*.ser)", "*.ser"));
+            java.io.File chosen = fc.showOpenDialog(primaryStage);
+            if (chosen == null) return;
+            try {
+                java.nio.file.Path backupDir = chosen.getParentFile().toPath();
+                java.nio.file.Path dataDir   = com.example.storage.AppPaths.resolveDataDirectory();
+                java.nio.file.Files.createDirectories(dataDir);
+                try (var stream = java.nio.file.Files.list(backupDir)) {
+                    stream.filter(p -> p.toString().endsWith(".ser"))
+                            .forEach(p -> {
+                                try {
+                                    java.nio.file.Files.copy(p, dataDir.resolve(p.getFileName()),
+                                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                                } catch (Exception ignored) {}
+                            });
+                }
+                importStatus.setText("✓ Files restored from: " + backupDir.getFileName());
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A;");
+                AppTheme.pulse(importFileBtn, 1);
+            } catch (Exception ex) {
+                importStatus.setText("✗ Import failed: " + ex.getMessage());
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#DC2626;");
+            }
+        });
+
+        importDbBtn.setOnAction(ev -> {
+            DatabaseConfiguration dbCfg = databaseConfigHolder[0];
+            if (dbCfg == null || !dbCfg.isConfigured()) {
+                importStatus.setText("⚠ Configure a database connection above first.");
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#D97706;");
+                AppTheme.shake(importDbBtn);
+                return;
+            }
+            boolean connected = com.example.services.DatabaseConnectionService.connect(dbCfg);
+            if (!connected) {
+                importStatus.setText("✗ Could not connect to the database. Check settings.");
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#DC2626;");
+                AppTheme.shake(importDbBtn);
+                return;
+            }
+            importStatus.setText("✓ Connected to " + dbCfg.getEngine().getDisplayName() +
+                    ". Data will be loaded from the database on startup.");
+            importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A;");
+            AppTheme.pulse(importDbBtn, 1);
+        });
+
+        VBox importBox = new VBox(8, importHint, importFileBtn, importDbBtn, importStatus);
+        form.getChildren().add(wRow("Restore / Import", importBox));
 
         root.getChildren().addAll(hero, form);
         dp.setContent(root);
@@ -512,6 +580,7 @@ public class LibraryApp extends Application implements ToastDisplay {
         bar.setPadding(new Insets(8, 20, 8, 20));
         bar.getStyleClass().add("status-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
+        bar.setMinHeight(36); bar.setPrefHeight(36); bar.setMaxHeight(36);
 
         loadingIndicator = new ProgressIndicator(); loadingIndicator.setMaxSize(14, 14); loadingIndicator.setVisible(false);
         statusLabel = new Label("Ready"); statusLabel.setStyle("-fx-font-size:12px; -fx-text-fill:#64748B;");
@@ -551,8 +620,11 @@ public class LibraryApp extends Application implements ToastDisplay {
         showView(circulationView);
     }
     private void showView(Region view) {
-        contentArea.getChildren().setAll(view);
-        AppTheme.slideUp(view, 0);
+        Region outgoing = contentArea.getChildren().isEmpty()
+                ? null : (Region) contentArea.getChildren().get(0);
+        if (outgoing == view) return;
+        // Use crossfade for smooth page transitions
+        AppTheme.crossfadeViews(outgoing, view, contentArea);
         if (view instanceof AnalyticsDashboard dashboard) {
             Platform.runLater(dashboard::refreshLayout);
         }
@@ -700,32 +772,40 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private void toast(String message, String style, String icon) {
         Platform.runLater(() -> {
-            HBox t = new HBox(8);
-            t.setAlignment(Pos.CENTER);
+            // Each new toast stacks 56px above the previous one
+            final int slot = toastSlot++;
+
+            HBox t = new HBox(10);
+            t.setAlignment(Pos.CENTER_LEFT);
             t.getStyleClass().addAll("toast-notification", style);
-            t.setPadding(new Insets(10, 16, 10, 16));
-            t.setMaxWidth(Region.USE_PREF_SIZE);
-            t.setMinWidth(Region.USE_PREF_SIZE);
+            // Let the HBox size itself, but cap at 500 px so long messages don't span the screen
+            t.setMaxWidth(500);
+            t.setMinWidth(220);
 
             Label ico = new Label(icon);
-            ico.setStyle("-fx-font-size:14px; -fx-min-width:20px; -fx-max-width:20px; -fx-alignment:center;");
+            ico.setStyle("-fx-font-size:14px; -fx-min-width:18px; -fx-max-width:18px; " +
+                    "-fx-alignment:center; -fx-font-weight:600;");
             Label msg = new Label(message);
-            msg.setStyle("-fx-font-size:12px; -fx-font-weight:500;");
-            msg.setWrapText(true);
-            msg.setMinHeight(Region.USE_PREF_SIZE);
+            msg.setStyle("-fx-font-size:13px; -fx-font-weight:500;");
+            msg.setWrapText(false);          // stay on one line
+            msg.setEllipsisString("…");
             t.getChildren().addAll(ico, msg);
 
-            StackPane.setAlignment(t, Pos.TOP_CENTER);
-            StackPane.setMargin(t, new Insets(16, 0, 0, 0));
+            // Bottom-centre, stacked if multiple toasts appear together
+            StackPane.setAlignment(t, Pos.BOTTOM_CENTER);
+            StackPane.setMargin(t, new Insets(0, 0, 28 + slot * 56, 0));
             rootStack.getChildren().add(t);
             t.setOpacity(0);
-            t.setTranslateY(-5);
+            t.setTranslateY(12);
 
-            FadeTransition     fi = new FadeTransition(Duration.millis(250), t);     fi.setToValue(1);
-            TranslateTransition si = new TranslateTransition(Duration.millis(250), t); si.setToY(0);
+            FadeTransition      fi = new FadeTransition(Duration.millis(200), t);      fi.setToValue(1);
+            TranslateTransition si = new TranslateTransition(Duration.millis(200), t); si.setToY(0);
             PauseTransition     pa = new PauseTransition(Duration.seconds(3.5));
-            FadeTransition      fo = new FadeTransition(Duration.millis(250), t);    fo.setToValue(0);
-            fo.setOnFinished(e -> rootStack.getChildren().remove(t));
+            FadeTransition      fo = new FadeTransition(Duration.millis(200), t);      fo.setToValue(0);
+            fo.setOnFinished(e -> {
+                rootStack.getChildren().remove(t);
+                toastSlot = Math.max(0, toastSlot - 1);
+            });
             new SequentialTransition(new ParallelTransition(fi, si), pa, fo).play();
         });
     }
@@ -733,12 +813,14 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- Dark mode ---
 
     private void applyDarkMode(boolean dark) {
-        AppTheme.darkMode = dark;  // propagate to all future dialogs
+        AppTheme.darkMode = dark;
         Scene s = primaryStage != null ? primaryStage.getScene() : null;
         if (s == null) return;
-        if (dark) { if (!s.getRoot().getStyleClass().contains("dark-mode")) s.getRoot().getStyleClass().add("dark-mode"); }
-        else        s.getRoot().getStyleClass().remove("dark-mode");
-        rebuildCurrentViewForTheme();
+        AppTheme.animateThemeChange(s.getRoot(), () -> {
+            if (dark) { if (!s.getRoot().getStyleClass().contains("dark-mode")) s.getRoot().getStyleClass().add("dark-mode"); }
+            else        s.getRoot().getStyleClass().remove("dark-mode");
+            rebuildCurrentViewForTheme();
+        });
     }
 
     private void rebuildCurrentViewForTheme() {

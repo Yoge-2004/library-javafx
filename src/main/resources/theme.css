@@ -126,9 +126,9 @@
 .sidebar-logo-accent { -fx-text-fill: #14B8A6; }
 
 .sidebar-section-label {
-    -fx-font-size: 11px; -fx-font-weight: 700;
-    -fx-text-fill: #E2E8F0; -fx-padding: 16 8 6 8;
-    -fx-letter-spacing: 0.8;
+    -fx-font-size: 11px; -fx-font-weight: 800;
+    -fx-text-fill: #FFFFFF; -fx-padding: 16 8 6 8;
+    -fx-letter-spacing: 0.8; -fx-opacity: 0.75;
 }
 .sidebar-btn {
     -fx-background-color: transparent;
@@ -138,6 +138,7 @@
     -fx-padding: 10 12; -fx-background-radius: 10px;
     -fx-cursor: hand; -fx-graphic-text-gap: 12;
     -fx-border-color: transparent;
+    -fx-transition: -fx-background-color 150ms ease;
 }
 .sidebar-btn:focused {
     -fx-background-color: transparent;
@@ -192,7 +193,19 @@
     -fx-border-radius: 10px;
     -fx-cursor: hand;
     -fx-font-weight: 600;
+    -fx-font-size: 13px;
+    -fx-padding: 8 16;
+    -fx-background-color: #E2E8F0;
+    -fx-text-fill: #1E293B;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 3, 0, 0, 1);
 }
+.button:hover {
+    -fx-background-color: #CBD5E1;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.13), 5, 0, 0, 2);
+}
+.button:pressed { -fx-background-color: #94A3B8; }
+.dark-mode .button { -fx-background-color: #334155; -fx-text-fill: #F1F5F9; }
+.dark-mode .button:hover { -fx-background-color: #475569; }
 .button:focused {
     -fx-focus-color: transparent;
     -fx-faint-focus-color: transparent;
@@ -279,6 +292,7 @@
     -fx-padding: 16 14;
     -fx-cursor: hand;
     -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.06), 8, 0, 0, 2);
+    -fx-transition: -fx-effect 200ms ease, -fx-border-color 200ms ease;
 }
 .metric-card:hover {
     -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.14), 18, 0, 0, 6);
@@ -746,12 +760,12 @@
     -fx-text-fill: #F1F5F9;
 }
 
-/* ─── TOAST NOTIFICATIONS (compact horizontal) ────────────────────────── */
+/* ─── TOAST NOTIFICATIONS (compact horizontal pill) ──────────────────────── */
 .toast-notification {
-    -fx-background-radius: 8px; -fx-border-radius: 8px;
-    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 10, 0, 0, 3);
-    -fx-spacing: 10; -fx-alignment: CENTER;
-    -fx-padding: 10 16 10 16; -fx-max-width: 500;
+    -fx-background-radius: 50px; -fx-border-radius: 50px;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.28), 16, 0, 0, 4);
+    -fx-spacing: 10; -fx-alignment: CENTER_LEFT;
+    -fx-padding: 10 20 10 14;
 }
 .toast-success {
     -fx-background-color: #DCFCE7; -fx-border-color: #86EFAC; -fx-border-width: 1;

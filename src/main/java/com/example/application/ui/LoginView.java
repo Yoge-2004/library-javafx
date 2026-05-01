@@ -17,6 +17,7 @@ import javafx.scene.control.*;
 import javafx.scene.effect.DropShadow;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.*;
+import javafx.stage.Popup;
 import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
@@ -45,7 +46,8 @@ public class LoginView extends StackPane {
     private ProgressIndicator loadingIndicator;
     private VBox loginForm;
     private TextField libraryField;
-    private ContextMenu librarySuggestionMenu;
+    private Popup           libraryPopup;
+    private ListView<String> libraryListView;
     private final List<String> availableLibraries = new ArrayList<>();
     private boolean updatingLibrarySuggestions;
 
@@ -327,9 +329,63 @@ public class LoginView extends StackPane {
         libraryField.setMaxWidth(Double.MAX_VALUE);
         libraryField.setStyle(getInputStyle());
 
-        librarySuggestionMenu = new ContextMenu();
-        librarySuggestionMenu.setAutoHide(true);
-        librarySuggestionMenu.setHideOnEscape(true);
+        libraryListView = new ListView<>();
+        libraryListView.setFocusTraversable(false);
+        // Apply inline styles so the popup (which is a separate window and cannot inherit
+        // the scene's .dark-mode CSS class) looks correct in both themes.
+        String lvBg     = AppTheme.darkMode ? "#1E293B" : "#FFFFFF";
+        String lvBorder = AppTheme.darkMode ? "#334155" : "#CBD5E1";
+        String lvText   = AppTheme.darkMode ? "#E2E8F0" : "#1E293B";
+        String lvHover  = AppTheme.darkMode ? "#334155" : "#F1F5F9";
+        libraryListView.setStyle(
+                "-fx-background-color: " + lvBg + "; " +
+                        "-fx-border-color: " + lvBorder + "; " +
+                        "-fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px; " +
+                        "-fx-font-size: 14px; " +
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.20), 12, 0, 0, 4);");
+        // Style each cell via a cell factory so dark mode text colour is applied
+        libraryListView.setCellFactory(lv -> new javafx.scene.control.ListCell<>() {
+            @Override protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                    setStyle("-fx-background-color: transparent;");
+                } else {
+                    setText(item);
+                    setStyle("-fx-background-color: transparent; " +
+                            "-fx-text-fill: " + lvText + "; " +
+                            "-fx-padding: 10 14; -fx-font-size: 14px;");
+                    setOnMouseEntered(e -> setStyle("-fx-background-color: " + lvHover + "; " +
+                            "-fx-text-fill: " + lvText + "; " +
+                            "-fx-padding: 10 14; -fx-font-size: 14px;"));
+                    setOnMouseExited(e  -> setStyle("-fx-background-color: transparent; " +
+                            "-fx-text-fill: " + lvText + "; " +
+                            "-fx-padding: 10 14; -fx-font-size: 14px;"));
+                }
+            }
+        });
+        // Fixed row height × 3 visible rows; ListView scrolls internally beyond 3
+        libraryListView.setFixedCellSize(44);
+        libraryListView.setPrefHeight(44 * 3 + 2); // 3 rows + border
+        libraryListView.setMaxHeight(44 * 3 + 2);
+
+        libraryListView.setOnMouseClicked(e -> {
+            String sel = libraryListView.getSelectionModel().getSelectedItem();
+            if (sel != null) selectLibrary(sel);
+        });
+        libraryListView.setOnKeyPressed(e -> {
+            if (e.getCode() == javafx.scene.input.KeyCode.ENTER) {
+                String sel = libraryListView.getSelectionModel().getSelectedItem();
+                if (sel != null) selectLibrary(sel);
+            } else if (e.getCode() == javafx.scene.input.KeyCode.ESCAPE) {
+                hideLibraryPopup();
+            }
+        });
+
+        libraryPopup = new Popup();
+        libraryPopup.setAutoHide(true);
+        libraryPopup.setHideOnEscape(true);
+        libraryPopup.getContent().add(libraryListView);
 
         libraryField.textProperty().addListener((obs, oldValue, newValue) -> {
             if (updatingLibrarySuggestions) {
@@ -340,8 +396,12 @@ public class LoginView extends StackPane {
         libraryField.focusedProperty().addListener((obs, oldValue, focused) -> {
             if (focused) {
                 filterLibraries(libraryField.getText());
-            } else if (librarySuggestionMenu != null) {
-                librarySuggestionMenu.hide();
+            } else {
+                // Small delay so a mouse-click on a list row registers before the popup closes
+                javafx.animation.PauseTransition delay =
+                        new javafx.animation.PauseTransition(javafx.util.Duration.millis(180));
+                delay.setOnFinished(e2 -> hideLibraryPopup());
+                delay.play();
             }
         });
 
@@ -448,42 +508,36 @@ public class LoginView extends StackPane {
     }
 
     private void filterLibraries(String query) {
-        if (libraryField == null || librarySuggestionMenu == null) {
-            return;
-        }
+        if (libraryField == null || libraryPopup == null) return;
 
-        String currentText = query == null ? "" : query;
-        String normalized = currentText.trim().toLowerCase();
-
+        String normalized = (query == null ? "" : query).trim().toLowerCase();
         List<String> filtered = availableLibraries.stream()
                 .filter(v -> normalized.isEmpty() || v.toLowerCase().contains(normalized))
-                .sorted(Comparator.naturalOrder())
+                .sorted(String.CASE_INSENSITIVE_ORDER)
                 .toList();
 
-        librarySuggestionMenu.getItems().clear();
-        for (String library : filtered.stream().limit(15).toList()) {
-            Label label = new Label(library);
-            label.setWrapText(true);
-            label.setMaxWidth(360);
-            CustomMenuItem item = new CustomMenuItem(label, true);
-            item.setOnAction(event -> selectLibrary(library));
-            librarySuggestionMenu.getItems().add(item);
-        }
-        
-        // Set max height to show ~3 items at a time with scrolling
-        if (!librarySuggestionMenu.getItems().isEmpty()) {
-            librarySuggestionMenu.setPrefHeight(150);
-        }
+        libraryListView.getItems().setAll(filtered);
+        // Adjust height: show min(size,3) rows
+        int visible = Math.min(filtered.size(), 3);
+        libraryListView.setPrefHeight(visible * 44 + 2);
 
-        if (libraryField.isFocused() && !filtered.isEmpty()) {
+        if (!filtered.isEmpty() && libraryField.isFocused()) {
             Platform.runLater(() -> {
-                if (libraryField.getScene() != null) {
-                    librarySuggestionMenu.show(libraryField, javafx.geometry.Side.BOTTOM, 0, 4);
-                }
+                if (libraryField.getScene() == null) return;
+                javafx.geometry.Bounds bounds =
+                        libraryField.localToScreen(libraryField.getBoundsInLocal());
+                if (bounds == null) return;
+                libraryListView.setPrefWidth(bounds.getWidth());
+                libraryPopup.show(libraryField,
+                        bounds.getMinX(), bounds.getMaxY() + 4);
             });
         } else {
-            librarySuggestionMenu.hide();
+            hideLibraryPopup();
         }
+    }
+
+    private void hideLibraryPopup() {
+        if (libraryPopup != null) libraryPopup.hide();
     }
 
     private String resolveSelectedLibrary() {
@@ -512,9 +566,7 @@ public class LoginView extends StackPane {
         } finally {
             updatingLibrarySuggestions = false;
         }
-        if (librarySuggestionMenu != null) {
-            librarySuggestionMenu.hide();
-        }
+        hideLibraryPopup();
     }
 
     private void shakeForm() {

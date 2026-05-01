@@ -220,7 +220,7 @@ public class UserAccountDialogs {
                 });
                 editBtn.setOnAction(e -> {
                     User u = getTableRow().getItem(); if (u == null) return;
-                    editUser(owner, u, currentUserId, isAdmin);
+                    editUser(owner, u, currentUserId, isAdmin, toastDisplay);
                     reload(table);
                 });
                 delBtn.setOnAction(e -> {
@@ -298,7 +298,7 @@ public class UserAccountDialogs {
 
     // ── Edit user (admin/librarian) ───────────────────────────────
 
-    private static void editUser(Stage owner, User user, String currentUserId, boolean isAdmin) {
+    private static void editUser(Stage owner, User user, String currentUserId, boolean isAdmin, ToastDisplay toastDisplay) {
         Dialog<Boolean> dlg = new Dialog<>();
         dlg.setTitle("Edit: " + user.getUserId());
         dlg.initOwner(owner);
@@ -349,21 +349,30 @@ public class UserAccountDialogs {
 
         pane.setContent(grid);
         pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
-        styleOkBtn(pane, "Save");
+        Button okBtn = styleOkBtn(pane, "Save");
         styleSecondaryBtn(pane, ButtonType.CANCEL, "Cancel");
 
-        dlg.setResultConverter(bt -> {
-            if (bt != ButtonType.OK) return false;
+        // Prevent dialog from closing if validation fails
+        okBtn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
             try {
                 user.setFirstName(firstField.getText());
                 user.setLastName(lastField.getText());
                 user.setEmail(emailField.getText());
                 user.setContactNumber(contactField.getText());
-                if (!isSelf) { user.setRole(roleBox.getValue()); user.setActive(activeCheck.isSelected()); }
+                if (!isSelf) {
+                    user.setRole(roleBox.getValue());
+                    user.setActive(activeCheck.isSelected());
+                }
                 UserService.updateUser(user);
-                return true;
-            } catch (Exception e) { err.setText(e.getMessage()); return false; }
+                notifySuccess(toastDisplay, "User \"" + user.getUserId() + "\" updated successfully.");
+            } catch (Exception e) {
+                err.setText(e.getMessage());
+                err.setVisible(true);
+                ev.consume(); // keep dialog open
+            }
         });
+
+        dlg.setResultConverter(bt -> bt == ButtonType.OK);
         dlg.showAndWait();
     }
 
@@ -395,8 +404,13 @@ public class UserAccountDialogs {
 
     private static Label bold(String t) {
         Label l = new Label(t);
-        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:#374151;");
+        l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:"
+                + (AppTheme.darkMode ? "#E2E8F0" : "#374151") + ";");
         return l;
+    }
+
+    private static String textPrimary() {
+        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
     }
 
     private static TextField field(String val) {

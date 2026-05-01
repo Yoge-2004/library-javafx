@@ -126,6 +126,46 @@ public final class AppTheme {
     /** Set by LibraryApp when dark mode toggles; used to apply dark-mode to dialogs. */
     public static boolean darkMode = false;
 
+    /**
+     * Custom cubic-bezier interpolators replacing deprecated Interpolator.SPLINE().
+     * Equivalent to common CSS easing functions.
+     */
+    // Spring overshoot: cubic-bezier(0.34, 1.56, 0.64, 1.0)
+    public static final Interpolator SPRING_INTERPOLATOR = new Interpolator() {
+        @Override protected double curve(double t) {
+            // Approximation of cubic-bezier(0.34,1.56,0.64,1.0) — overshoots then settles
+            double p1x=0.34,p1y=1.56,p2x=0.64,p2y=1.0;
+            return cubicBezier(t,p1x,p1y,p2x,p2y);
+        }
+    };
+    // Ease-out-quart: cubic-bezier(0.25, 0.46, 0.45, 0.94)
+    public static final Interpolator EASE_OUT_QUART = new Interpolator() {
+        @Override protected double curve(double t) {
+            return cubicBezier(t,0.25,0.46,0.45,0.94);
+        }
+    };
+    // Ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1.0)
+    public static final Interpolator EASE_STANDARD = new Interpolator() {
+        @Override protected double curve(double t) {
+            return cubicBezier(t,0.4,0.0,0.2,1.0);
+        }
+    };
+
+    /** Evaluate a cubic Bézier with control points (p1x,p1y) and (p2x,p2y) at t in [0,1]. */
+    private static double cubicBezier(double t, double p1x, double p1y, double p2x, double p2y) {
+        // Newton-Raphson solve for x, then return y
+        double x = t; // initial guess
+        for (int i = 0; i < 8; i++) {
+            double cx = 3*p1x, bx = 3*(p2x-p1x)-cx, ax = 1-cx-bx;
+            double xVal = ((ax*x+bx)*x+cx)*x;
+            double dx = (3*ax*x+2*bx)*x+cx;
+            if (Math.abs(dx) < 1e-6) break;
+            x -= (xVal - t) / dx;
+        }
+        double cy = 3*p1y, by_ = 3*(p2y-p1y)-cy, ay = 1-cy-by_;
+        return ((ay*x+by_)*x+cy)*x;
+    }
+
     private AppTheme() {}
 
     // === SCENE CREATION ===
@@ -159,11 +199,35 @@ public final class AppTheme {
         pane.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null && newScene.getWindow() instanceof Stage stage) {
                 applyWindowIcon(stage);
+                enableOsWindowControls(stage);
+                stage.setOnShown(e -> popIn(pane, 0));
             }
         });
         if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage stage) {
             applyWindowIcon(stage);
+            enableOsWindowControls(stage);
         }
+    }
+
+    /**
+     * Enables OS minimize / maximize / restore buttons on a dialog stage.
+     * JavaFX Dialog stages are DECORATED but some platforms (GTK) suppress
+     * maximize unless explicitly allowed via the stage's resizable flag and
+     * a platform-specific hint set through AWT.
+     */
+    private static void enableOsWindowControls(Stage stage) {
+        if (stage == null) return;
+        // Ensure the stage is resizable so maximize button is active
+        if (!stage.isResizable()) stage.setResizable(true);
+        // On Linux/GTK, force the window manager to show all title-bar buttons
+        try {
+            java.awt.Window[] awtWindows = java.awt.Window.getWindows();
+            for (java.awt.Window w : awtWindows) {
+                if (w instanceof java.awt.Frame f && w.isShowing()) {
+                    f.setResizable(true);
+                }
+            }
+        } catch (Exception ignored) { }
     }
 
     private static String getStylesheetUrl() {
@@ -264,9 +328,9 @@ public final class AppTheme {
         if (tooltip == null) {
             return;
         }
-        tooltip.setShowDelay(Duration.millis(300));
-        tooltip.setShowDuration(Duration.hours(24));
-        tooltip.setHideDelay(Duration.seconds(5));
+        tooltip.setShowDelay(Duration.millis(400));
+        tooltip.setShowDuration(Duration.INDEFINITE);
+        tooltip.setHideDelay(Duration.millis(100));
         tooltip.setWrapText(true);
         tooltip.setMaxWidth(300);
     }
@@ -386,118 +450,241 @@ public final class AppTheme {
     }
 
     // === ANIMATIONS ===
+
+    // ── Fade ─────────────────────────────────────────────────────────────
     public static void fadeIn(Node node, double delayMillis) {
         if (node == null) return;
         node.setOpacity(0);
-
-        PauseTransition delay = new PauseTransition(Duration.millis(delayMillis));
-        FadeTransition fade = new FadeTransition(Duration.millis(300), node);
-        fade.setToValue(1);
-
-        delay.setOnFinished(e -> fade.play());
-        delay.play();
+        PauseTransition d = new PauseTransition(Duration.millis(delayMillis));
+        FadeTransition f  = new FadeTransition(Duration.millis(260), node);
+        f.setToValue(1); f.setInterpolator(Interpolator.EASE_OUT);
+        d.setOnFinished(e -> f.play()); d.play();
     }
 
+    public static void fadeOut(Node node, Runnable onDone) {
+        if (node == null) { if (onDone != null) onDone.run(); return; }
+        FadeTransition f = new FadeTransition(Duration.millis(200), node);
+        f.setToValue(0); f.setInterpolator(Interpolator.EASE_IN);
+        if (onDone != null) f.setOnFinished(e -> onDone.run());
+        f.play();
+    }
+
+    // ── Slide up (enter from below) ───────────────────────────────────────
     public static void slideUp(Node node, double delayMillis) {
+        slideUp(node, delayMillis, 28, 360);
+    }
+
+    public static void slideUp(Node node, double delayMillis, double fromY, int ms) {
         if (node == null) return;
-        node.setOpacity(0);
-        node.setTranslateY(20);
-
-        PauseTransition delay = new PauseTransition(Duration.millis(delayMillis));
-
-        FadeTransition fade = new FadeTransition(Duration.millis(350), node);
-        fade.setToValue(1);
-
-        TranslateTransition slide = new TranslateTransition(Duration.millis(350), node);
-        slide.setToY(0);
-
-        ParallelTransition parallel = new ParallelTransition(fade, slide);
-
-        delay.setOnFinished(e -> parallel.play());
-        delay.play();
+        node.setOpacity(0); node.setTranslateY(fromY);
+        PauseTransition d  = new PauseTransition(Duration.millis(delayMillis));
+        FadeTransition f   = new FadeTransition(Duration.millis(ms), node);
+        f.setToValue(1); f.setInterpolator(Interpolator.EASE_OUT);
+        TranslateTransition s = new TranslateTransition(Duration.millis(ms), node);
+        s.setToY(0); s.setInterpolator(EASE_OUT_QUART);
+        d.setOnFinished(e -> new ParallelTransition(f, s).play()); d.play();
     }
 
-    public static void staggeredEntrance(Collection<? extends Node> nodes, double initialDelay, double stepDelay) {
+    // ── Staggered list entrance ───────────────────────────────────────────
+    public static void staggeredEntrance(Collection<? extends Node> nodes,
+                                         double initialDelay, double stepDelay) {
         double delay = initialDelay;
-        for (Node node : nodes) {
-            slideUp(node, delay);
-            delay += stepDelay;
-        }
+        for (Node node : nodes) { slideUp(node, delay); delay += stepDelay; }
     }
 
+    // ── Pop-in: spring scale 0.82 → 1.04 → 1.0, fade in ─────────────────
+    public static void popIn(Node node, double delayMillis) {
+        if (node == null) return;
+        node.setOpacity(0); node.setScaleX(0.82); node.setScaleY(0.82);
+        PauseTransition pause = new PauseTransition(Duration.millis(delayMillis));
+        ScaleTransition spring = new ScaleTransition(Duration.millis(300), node);
+        spring.setToX(1.04); spring.setToY(1.04);
+        spring.setInterpolator(SPRING_INTERPOLATOR);
+        ScaleTransition settle = new ScaleTransition(Duration.millis(130), node);
+        settle.setToX(1.0); settle.setToY(1.0);
+        settle.setInterpolator(Interpolator.EASE_OUT);
+        FadeTransition fi = new FadeTransition(Duration.millis(220), node);
+        fi.setToValue(1.0); fi.setInterpolator(Interpolator.EASE_OUT);
+        pause.setOnFinished(e ->
+                new ParallelTransition(new SequentialTransition(spring, settle), fi).play());
+        pause.play();
+    }
+
+    // ── Pop-out: shrink + fade, then callback ─────────────────────────────
+    public static void popOut(Node node, Runnable onDone) {
+        if (node == null) { if (onDone != null) onDone.run(); return; }
+        node.setCache(true); node.setCacheHint(CacheHint.SCALE);
+        ScaleTransition s = new ScaleTransition(Duration.millis(180), node);
+        s.setToX(0.88); s.setToY(0.88); s.setInterpolator(Interpolator.EASE_IN);
+        FadeTransition f  = new FadeTransition(Duration.millis(180), node);
+        f.setToValue(0); f.setInterpolator(Interpolator.EASE_IN);
+        ParallelTransition p = new ParallelTransition(s, f);
+        p.setOnFinished(e -> { node.setCache(false); if (onDone != null) onDone.run(); });
+        p.play();
+    }
+
+    // ── View crossfade: outgoing slides left, incoming slides in from right
+    public static void crossfadeViews(Region outgoing, Region incoming,
+                                      javafx.scene.layout.Pane container) {
+        if (incoming == null || container == null) return;
+        incoming.setOpacity(0); incoming.setTranslateX(32);
+        container.getChildren().add(incoming);
+
+        if (outgoing != null) {
+            FadeTransition fo = new FadeTransition(Duration.millis(150), outgoing);
+            fo.setToValue(0); fo.setInterpolator(Interpolator.EASE_IN);
+            TranslateTransition to = new TranslateTransition(Duration.millis(150), outgoing);
+            to.setToX(-22); to.setInterpolator(Interpolator.EASE_IN);
+            ParallelTransition out = new ParallelTransition(fo, to);
+            out.setOnFinished(e -> container.getChildren().remove(outgoing));
+            out.play();
+        }
+        FadeTransition fi = new FadeTransition(Duration.millis(260), incoming);
+        fi.setToValue(1); fi.setInterpolator(Interpolator.EASE_OUT);
+        TranslateTransition ti = new TranslateTransition(Duration.millis(260), incoming);
+        ti.setToX(0); ti.setInterpolator(EASE_OUT_QUART);
+        new ParallelTransition(fi, ti).play();
+    }
+
+    // ── Pulse: scale up → down, n times ──────────────────────────────────
     public static void pulse(Node node, int cycles) {
-        ScaleTransition scaleUp = new ScaleTransition(Duration.millis(150), node);
-        scaleUp.setToX(1.05);
-        scaleUp.setToY(1.05);
-
-        ScaleTransition scaleDown = new ScaleTransition(Duration.millis(150), node);
-        scaleDown.setToX(1.0);
-        scaleDown.setToY(1.0);
-
-        SequentialTransition pulse = new SequentialTransition(scaleUp, scaleDown);
-        pulse.setCycleCount(cycles);
-        pulse.play();
+        if (node == null) return;
+        ScaleTransition up   = new ScaleTransition(Duration.millis(160), node);
+        up.setToX(1.08); up.setToY(1.08); up.setInterpolator(Interpolator.EASE_OUT);
+        ScaleTransition down = new ScaleTransition(Duration.millis(160), node);
+        down.setToX(1.0); down.setToY(1.0); down.setInterpolator(Interpolator.EASE_IN);
+        SequentialTransition seq = new SequentialTransition(up, down);
+        seq.setCycleCount(cycles); seq.play();
     }
 
+    // ── Shake: elastic horizontal oscillation ─────────────────────────────
     public static void shake(Node node) {
-        // Each child of SequentialTransition MUST be a unique object instance.
-        TranslateTransition t1 = new TranslateTransition(Duration.millis(50), node); t1.setToX(-10);
-        TranslateTransition t2 = new TranslateTransition(Duration.millis(50), node); t2.setToX(10);
-        TranslateTransition t3 = new TranslateTransition(Duration.millis(50), node); t3.setToX(-10);
-        TranslateTransition t4 = new TranslateTransition(Duration.millis(50), node); t4.setToX(10);
-        TranslateTransition t5 = new TranslateTransition(Duration.millis(50), node); t5.setToX(0);
-        new SequentialTransition(t1, t2, t3, t4, t5).play();
+        if (node == null) return;
+        double ox = node.getTranslateX();
+        Timeline tl = new Timeline(
+                new KeyFrame(Duration.ZERO,        new KeyValue(node.translateXProperty(), ox)),
+                new KeyFrame(Duration.millis(55),  new KeyValue(node.translateXProperty(), ox - 11, Interpolator.EASE_BOTH)),
+                new KeyFrame(Duration.millis(110), new KeyValue(node.translateXProperty(), ox + 9,  Interpolator.EASE_BOTH)),
+                new KeyFrame(Duration.millis(165), new KeyValue(node.translateXProperty(), ox - 7,  Interpolator.EASE_BOTH)),
+                new KeyFrame(Duration.millis(220), new KeyValue(node.translateXProperty(), ox + 5,  Interpolator.EASE_BOTH)),
+                new KeyFrame(Duration.millis(275), new KeyValue(node.translateXProperty(), ox - 3,  Interpolator.EASE_BOTH)),
+                new KeyFrame(Duration.millis(330), new KeyValue(node.translateXProperty(), ox,      Interpolator.EASE_BOTH))
+        );
+        tl.play();
     }
 
-    private static void installButtonAnimation(Button button) {
-        boolean hoverScaleEnabled = !button.getStyleClass().contains("icon-button");
+    // ── Flash success: green background for 750 ms ────────────────────────
+    public static void flashSuccess(Node node) {
+        if (node == null) return;
+        String orig = node.getStyle();
+        node.setStyle(orig + ";-fx-background-color:#D1FAE5;");
+        PauseTransition hold = new PauseTransition(Duration.millis(750));
+        hold.setOnFinished(e -> node.setStyle(orig));
+        hold.play();
+    }
 
-        if (hoverScaleEnabled) {
-            button.hoverProperty().addListener((obs, wasHover, isHover) -> {
-                if (isHover) {
-                    animateScale(button, 1.01, 140);
-                } else {
-                    animateScale(button, 1.0, 140);
-                }
-            });
+    // ── Flash error: red background + shake ──────────────────────────────
+    public static void flashError(Node node) {
+        if (node == null) return;
+        String orig = node.getStyle();
+        node.setStyle(orig + ";-fx-background-color:#FEE2E2;");
+        shake(node);
+        PauseTransition hold = new PauseTransition(Duration.millis(700));
+        hold.setOnFinished(e -> node.setStyle(orig));
+        hold.play();
+    }
+
+    // ── Animated number count-up (cubic ease-out) ─────────────────────────
+    public static void animateCount(Label label, int targetValue,
+                                    String prefix, String suffix) {
+        if (label == null) return;
+        int from = 0;
+        try {
+            String t = label.getText().replaceAll("[^0-9]", "");
+            if (!t.isEmpty()) from = Integer.parseInt(t);
+        } catch (NumberFormatException ignored) {}
+        final int f = from, to = targetValue;
+        Timeline tl = new Timeline();
+        int steps = 32, ms = 950;
+        for (int i = 1; i <= steps; i++) {
+            double t  = (double) i / steps;
+            double ez = 1 - Math.pow(1 - t, 3); // cubic ease-out
+            int val   = f + (int) Math.round((to - f) * ez);
+            tl.getKeyFrames().add(new KeyFrame(Duration.millis((double) ms / steps * i),
+                    e -> label.setText(prefix + val + suffix)));
         }
-
-        button.pressedProperty().addListener((obs, wasPressed, isPressed) -> {
-            if (isPressed) {
-                animateScale(button, 0.98, 80);
-            } else {
-                animateScale(button, hoverScaleEnabled && button.isHover() ? 1.01 : 1.0, 80);
-            }
-        });
+        tl.play();
     }
 
+    // ── Theme transition: quick fade-out, apply, fade-in ─────────────────
+    public static void animateThemeChange(Node root, Runnable applyTheme) {
+        if (root == null) { if (applyTheme != null) applyTheme.run(); return; }
+        FadeTransition out = new FadeTransition(Duration.millis(140), root);
+        out.setToValue(0.12); out.setInterpolator(Interpolator.EASE_IN);
+        out.setOnFinished(e -> {
+            if (applyTheme != null) applyTheme.run();
+            FadeTransition in = new FadeTransition(Duration.millis(200), root);
+            in.setToValue(1); in.setInterpolator(Interpolator.EASE_OUT);
+            in.play();
+        });
+        out.play();
+    }
+
+    // ── Shimmer loading skeleton ─────────────────────────────────────────
+    public static Timeline shimmer(Region target) {
+        if (target == null) return new Timeline();
+        String base = darkMode ? "#1E293B" : "#E2E8F0";
+        String glow = darkMode ? "#334155" : "#F1F5F9";
+        target.setStyle("-fx-background-color:" + base + ";-fx-background-radius:8px;");
+        Timeline tl = new Timeline(
+                new KeyFrame(Duration.ZERO,        e -> target.setStyle("-fx-background-color:"+base+";-fx-background-radius:8px;")),
+                new KeyFrame(Duration.millis(600), e -> target.setStyle("-fx-background-color:"+glow+";-fx-background-radius:8px;")),
+                new KeyFrame(Duration.millis(1200),e -> target.setStyle("-fx-background-color:"+base+";-fx-background-radius:8px;"))
+        );
+        tl.setCycleCount(Animation.INDEFINITE); tl.play();
+        return tl;
+    }
+
+    // ── Internal: scale a node smoothly ─────────────────────────────────
+    private static void animateScale(Node node, double scale, int ms) {
+        node.setCache(true); node.setCacheHint(CacheHint.SCALE);
+        ScaleTransition t = new ScaleTransition(Duration.millis(ms), node);
+        t.setToX(scale); t.setToY(scale);
+        t.setInterpolator(EASE_OUT_QUART);
+        t.setOnFinished(e -> node.setCache(false));
+        t.play();
+    }
+
+    // ── Button hover: scale 1.02 + press 0.95 + focus ring ──────────────
+    private static void installButtonAnimation(Button button) {
+        boolean scaleable = !button.getStyleClass().contains("icon-button");
+        if (scaleable) {
+            button.hoverProperty().addListener((obs, was, isHover) ->
+                    animateScale(button, isHover ? 1.025 : 1.0, 130));
+        }
+        button.pressedProperty().addListener((obs, was, isPressed) ->
+                animateScale(button, isPressed ? 0.95 : (scaleable && button.isHover() ? 1.025 : 1.0), isPressed ? 55 : 100));
+        button.focusedProperty().addListener((obs, was, isFocused) ->
+                animateScale(button, isFocused ? 1.015 : 1.0, 160));
+    }
+
+    // ── Card hover: lift shadow + scale 1.02 ────────────────────────────
     private static void installCardHoverEffect(Region card) {
-        DropShadow hoverShadow = new DropShadow();
-        hoverShadow.setColor(Color.web("#0F172A", 0.12));
-        hoverShadow.setRadius(15);
-        hoverShadow.setOffsetY(5);
+        DropShadow lift = new DropShadow();
+        lift.setColor(Color.web("#0F172A", 0.14));
+        lift.setRadius(20); lift.setOffsetY(6);
 
-        card.hoverProperty().addListener((obs, wasHover, isHover) -> {
-            if (isHover) {
-                animateScale(card, 1.01, 200);
-                card.setEffect(hoverShadow);
-            } else {
-                animateScale(card, 1.0, 200);
-                card.setEffect(null);
-            }
+        DropShadow rest = new DropShadow();
+        rest.setColor(Color.web("#0F172A", 0.06));
+        rest.setRadius(8); rest.setOffsetY(2);
+
+        card.setEffect(rest);
+        card.hoverProperty().addListener((obs, was, isHover) -> {
+            animateScale(card, isHover ? 1.02 : 1.0, 180);
+            card.setEffect(isHover ? lift : rest);
         });
     }
 
-    private static void animateScale(Node node, double scale, int durationMillis) {
-        node.setCache(true);
-        node.setCacheHint(CacheHint.SCALE);
-
-        ScaleTransition transition = new ScaleTransition(Duration.millis(durationMillis), node);
-        transition.setToX(scale);
-        transition.setToY(scale);
-        transition.setOnFinished(e -> node.setCache(false));
-        transition.play();
-    }
 
     // === UTILITY METHODS ===
     public static void runLater(Runnable action) {

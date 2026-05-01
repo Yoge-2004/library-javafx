@@ -160,7 +160,23 @@ public final class ReminderService {
         multipart.addBodyPart(htmlPart);
 
         message.setContent(multipart);
-        Transport.send(message);
+        try {
+            Transport.send(message);
+        } catch (MessagingException ex) {
+            Throwable cause = ex.getCause();
+            if (cause instanceof java.net.ConnectException
+                    || cause instanceof java.net.UnknownHostException
+                    || cause instanceof java.net.NoRouteToHostException
+                    || cause instanceof java.net.SocketException) {
+                throw new MessagingException(
+                        "No network connectivity — check your internet connection and try again.", ex);
+            }
+            if (cause instanceof java.net.SocketTimeoutException) {
+                throw new MessagingException(
+                        "Connection to mail server timed out — check your SMTP settings.", ex);
+            }
+            throw ex;
+        }
     }
 
     private static String buildOverdueBody(AppConfiguration config, User user, List<IssueRecord> records) {

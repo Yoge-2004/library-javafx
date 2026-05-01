@@ -53,6 +53,7 @@ import java.util.stream.Collectors;
  * Staff users see configurable charts built from real issue history.
  * Regular users see a lighter borrowing snapshot.
  */
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class AnalyticsDashboard extends BorderPane {
 
     private enum TrendGrouping {
@@ -417,6 +418,7 @@ public class AnalyticsDashboard extends BorderPane {
         }
 
         AppTheme.staggeredEntrance(statsPane.getChildren(), 25, 35);
+        Platform.runLater(this::updateResponsiveSections);
     }
 
     private VBox statCard(String iconPath, String label, String value, String subText,
@@ -424,10 +426,12 @@ public class AnalyticsDashboard extends BorderPane {
         VBox card = new VBox(12);
         card.getStyleClass().add("metric-card");
         card.setPadding(new Insets(18));
-        // Responsive: min 200px, no fixed pref so FlowPane distributes space evenly
+        // Set a sensible initial width; responsive layout will override later
         card.setMinWidth(200);
-        card.setPrefWidth(USE_COMPUTED_SIZE);
+        card.setPrefWidth(240);
         card.setMaxWidth(Double.MAX_VALUE);
+        card.setScaleX(1.0);
+        card.setScaleY(1.0);
 
         HBox header = new HBox(12);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -448,6 +452,15 @@ public class AnalyticsDashboard extends BorderPane {
 
         Label valueText = new Label(value);
         valueText.setStyle("-fx-font-size: 28px; -fx-font-weight: 800; -fx-text-fill:" + accentColor + ";");
+
+        // Animate count-up for pure numeric values
+        try {
+            int numericValue = Integer.parseInt(value.replaceAll("[^0-9]", ""));
+            if (!value.contains(".") && !value.startsWith("$") && !value.startsWith("£")) {
+                valueText.setText("0");
+                AppTheme.animateCount(valueText, numericValue, "", "");
+            }
+        } catch (NumberFormatException ignored) { }
 
         Label subLabel = new Label(subText);
         subLabel.setStyle("-fx-font-size: 12px; -fx-text-fill:" + textSoft() + ";");
@@ -500,14 +513,33 @@ public class AnalyticsDashboard extends BorderPane {
         categoryChart.setData(data);
         Platform.runLater(() -> {
             applyCategoryChartPalette();
+            applyPieLegendColors();
             refreshLayout();
         });
+        // Second pass after scene has rendered nodes
+        javafx.animation.PauseTransition colorDelay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(120));
+        colorDelay.setOnFinished(e -> Platform.runLater(() -> {
+            applyCategoryChartPalette();
+            applyPieLegendColors();
+        }));
+        colorDelay.play();
     }
 
     private void applyCategoryChartPalette() {
         ObservableList<PieChart.Data> pieData = categoryChart.getData();
         for (int i = 0; i < pieData.size(); i++) {
             applyPieColor(pieData.get(i).getNode(), i);
+        }
+    }
+
+    private void applyPieLegendColors() {
+        if (categoryChart == null) return;
+        java.util.Set<Node> symbols = categoryChart.lookupAll(".chart-legend-item-symbol");
+        int i = 0;
+        for (Node sym : symbols) {
+            sym.setStyle("-fx-background-color: " + CATEGORY_CHART_COLORS[i % CATEGORY_CHART_COLORS.length]
+                    + "; -fx-background-radius: 3px;");
+            i++;
         }
     }
 

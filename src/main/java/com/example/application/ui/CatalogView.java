@@ -620,6 +620,13 @@ class BookDialog {
         }));
         HBox categoryRow = new HBox(8, categoryField, addCategoryButton);
         HBox.setHgrow(categoryField, Priority.ALWAYS);
+        categoryRow.setAlignment(Pos.CENTER_LEFT);
+        addCategoryButton.setMinWidth(36);
+        addCategoryButton.setPrefWidth(36);
+        addCategoryButton.setMinHeight(36);
+        addCategoryButton.setPrefHeight(36);
+        addCategoryButton.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") +
+                ";-fx-background-radius:8px;-fx-cursor:hand;-fx-padding:0;-fx-border-width:0;");
 
         Spinner<Integer> quantityField = new Spinner<>(1, 1000, 1);
         quantityField.setEditable(true);
