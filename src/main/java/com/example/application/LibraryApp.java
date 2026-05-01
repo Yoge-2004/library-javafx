@@ -41,7 +41,8 @@ public class LibraryApp extends Application implements ToastDisplay {
     private String   currentUser;
     private UserRole currentUserRole = UserRole.USER;
     private Timeline autoRefreshTimer;
-    private int      toastSlot = 0;
+    private HBox     activeToast = null;  // track current visible toast
+    private SequentialTransition activeToastAnim = null;
 
     private enum SetupAccess {
         STAFF,
@@ -264,9 +265,6 @@ public class LibraryApp extends Application implements ToastDisplay {
         ButtonType doneBt = new ButtonType("Save & Continue", ButtonBar.ButtonData.OK_DONE);
         dp.getButtonTypes().add(doneBt);
         Button ok = (Button) dp.lookupButton(doneBt);
-        ok.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
-                "-fx-font-weight:700; -fx-font-size:14px; " +
-                "-fx-background-radius:10px; -fx-padding:10 24;");
         ok.addEventFilter(javafx.event.ActionEvent.ACTION, event -> {
             if (libNameField.getText().trim().isEmpty()) {
                 showError("Library name is required.");
@@ -390,7 +388,7 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     private void showRegistrationDialog() {
-        RegistrationDialog.show(primaryStage, !UserService.hasRegisteredUsers())
+        RegistrationDialog.show(primaryStage, !UserService.hasRegisteredUsers(), false)
                 .ifPresent(req -> {
                     try {
                         // Check username uniqueness before creating
@@ -432,7 +430,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
         sidebar     = buildSidebar();
         contentArea = new StackPane();
-        contentArea.setPadding(new Insets(24, 24, 0, 24));
+        contentArea.setPadding(new Insets(24, 0, 0, 24));
         contentArea.getStyleClass().add("content-area");
 
         layout.setLeft(sidebar);
@@ -600,8 +598,7 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private void navigateToDashboard() {
         if (analyticsDashboard == null) {
-            analyticsDashboard = new AnalyticsDashboard(
-                    this::refreshAllData, currentUser, currentUserRole.isStaff(), this);
+            analyticsDashboard = new AnalyticsDashboard(currentUser, currentUserRole.isStaff(), this);
             analyticsDashboard.setNavigationCallbacks(
                     this::navigateToCirculation, this::navigateToCatalog);
         }
@@ -633,12 +630,11 @@ public class LibraryApp extends Application implements ToastDisplay {
     // --- Settings dialogs ---
 
     private void showUserManagement() {
-        UserAccountDialogs.showUserManagement(primaryStage, currentUser, this);
-        refreshAllData();
+        showView(new UserManagementView(currentUser, this));
     }
 
     private void showSettings() {
-        SettingsDialog.show(primaryStage, currentUserRole, new SettingsDialog.Actions() {
+        SettingsView settingsView = new SettingsView(currentUserRole, new SettingsView.Actions() {
             @Override public void openProfile() {
                 if (UserAccountDialogs.showProfileEditor(primaryStage, currentUser)) {
                     showSuccess("Profile updated.");
@@ -655,53 +651,32 @@ public class LibraryApp extends Application implements ToastDisplay {
             @Override public void openDataManagement() { showDataManagement(); }
             @Override public void openAnalytics() { navigateToDashboard(); }
         });
+        showView(settingsView);
     }
 
     private void showLibraryConfig() {
-        if (!currentUserRole.isStaff()) {
-            showInfo("Library Configuration is only accessible to library staff.");
-            return;
-        }
         try {
             AppConfiguration cfg = AppConfigurationService.getConfiguration();
-            DatabaseConfiguration previousDatabaseConfiguration = cfg.getDatabaseConfiguration().copy();
-            LibraryConfigurationDialog.show(primaryStage, cfg,
-                            BookService.getMaxBorrowLimit(),
-                            BookService.getLoanPeriodDays(),
-                            BookService.getFinePerDay())
-                    .ifPresent(data -> {
-                        try {
-                            BookService.updateLibraryConfiguration(
-                                    data.maxBorrowLimit(), data.loanDays(), data.finePerDay());
-                            cfg.setDataDirectory(data.dataDirectory());
-                            cfg.setExportDirectory(data.exportDirectory());
-                            cfg.setFinePerDay(data.finePerDay());
-                            cfg.setCurrencySymbol(data.currencySymbol());
-                            cfg.setCurrencyCode(data.currencyCode());
-                            cfg.setSmtpHost(data.smtpHost()); cfg.setSmtpPort(data.smtpPort());
-                            cfg.setSmtpUsername(data.smtpUsername()); cfg.setSmtpPassword(data.smtpPassword());
-                            cfg.setFromAddress(data.fromAddress());
-                            cfg.setSmtpAuth(data.smtpAuth()); cfg.setStartTlsEnabled(data.startTlsEnabled());
-                            cfg.setLibraryName(data.libraryName());
-                            cfg.setBranchName(data.branchName());
-                            cfg.setDatabaseConfiguration(data.databaseConfiguration());
-                            AppConfigurationService.updateConfiguration(cfg);
-                            showConfigurationSavedToast(previousDatabaseConfiguration, data.databaseConfiguration());
-                        } catch (Exception ex) { showError("Save failed: " + ex.getMessage()); }
-                    });
-        } catch (Exception ex) { showError("Could not load config: " + ex.getMessage()); }
+            showView(new LibraryConfigurationView(cfg, msg -> {
+                showSuccess(msg);
+                refreshAllData();
+            }));
+        } catch (Exception ex) {
+            showError("Could not load config: " + ex.getMessage());
+        }
     }
 
     private void showDataManagement() {
         try {
             Map<String,Object> s = BookService.getLibraryStatistics();
             AppConfiguration cfg = AppConfigurationService.getConfiguration();
-            DataManagementDialog.show(primaryStage, new DataManagementDialog.Snapshot(
+            DataManagementView view = new DataManagementView(primaryStage, new DataManagementView.Snapshot(
                     n(s,"totalBooks"), n(s,"totalCopies"), n(s,"availableCopies"),
                     n(s,"issuedCopies"), n(s,"overdueBooks"), UserService.getAllUsers().size(),
                     n(s,"pendingRequests"),
                     ((Number) s.getOrDefault("totalFines", 0.0)).doubleValue(),
                     cfg.getExportDirectory(), cfg.isEmailConfigured()), this);
+            showView(view);
         } catch (Exception ex) { showError("Data management error: " + ex.getMessage()); }
     }
 
@@ -772,41 +747,48 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private void toast(String message, String style, String icon) {
         Platform.runLater(() -> {
-            // Each new toast stacks 56px above the previous one
-            final int slot = toastSlot++;
+            // Dismiss any existing toast immediately so they don't stack
+            if (activeToast != null) {
+                if (activeToastAnim != null) activeToastAnim.stop();
+                rootStack.getChildren().remove(activeToast);
+                activeToast = null;
+                activeToastAnim = null;
+            }
 
-            HBox t = new HBox(10);
+            HBox t = new HBox(8);
             t.setAlignment(Pos.CENTER_LEFT);
             t.getStyleClass().addAll("toast-notification", style);
-            // Let the HBox size itself, but cap at 500 px so long messages don't span the screen
-            t.setMaxWidth(500);
-            t.setMinWidth(220);
+            // Keep toast compact — max 420px, min content width
+            t.setMaxWidth(420);
+            t.setMaxHeight(Region.USE_PREF_SIZE);
 
             Label ico = new Label(icon);
-            ico.setStyle("-fx-font-size:14px; -fx-min-width:18px; -fx-max-width:18px; " +
-                    "-fx-alignment:center; -fx-font-weight:600;");
+            ico.setStyle("-fx-font-size:13px; -fx-min-width:16px; -fx-max-width:16px; " +
+                    "-fx-alignment:center; -fx-font-weight:700;");
             Label msg = new Label(message);
             msg.setStyle("-fx-font-size:13px; -fx-font-weight:500;");
-            msg.setWrapText(false);          // stay on one line
+            msg.setWrapText(false);
             msg.setEllipsisString("…");
             t.getChildren().addAll(ico, msg);
 
-            // Bottom-centre, stacked if multiple toasts appear together
-            StackPane.setAlignment(t, Pos.BOTTOM_CENTER);
-            StackPane.setMargin(t, new Insets(0, 0, 28 + slot * 56, 0));
+            StackPane.setAlignment(t, Pos.TOP_CENTER);
+            StackPane.setMargin(t, new Insets(84, 0, 0, 0));
             rootStack.getChildren().add(t);
             t.setOpacity(0);
-            t.setTranslateY(12);
+            t.setTranslateY(-15);
+            activeToast = t;
 
-            FadeTransition      fi = new FadeTransition(Duration.millis(200), t);      fi.setToValue(1);
-            TranslateTransition si = new TranslateTransition(Duration.millis(200), t); si.setToY(0);
-            PauseTransition     pa = new PauseTransition(Duration.seconds(3.5));
-            FadeTransition      fo = new FadeTransition(Duration.millis(200), t);      fo.setToValue(0);
+            FadeTransition      fi = new FadeTransition(Duration.millis(180), t); fi.setToValue(1);
+            TranslateTransition si = new TranslateTransition(Duration.millis(180), t); si.setToY(0);
+            PauseTransition     pa = new PauseTransition(Duration.seconds(3.0));
+            FadeTransition      fo = new FadeTransition(Duration.millis(200), t); fo.setToValue(0);
             fo.setOnFinished(e -> {
                 rootStack.getChildren().remove(t);
-                toastSlot = Math.max(0, toastSlot - 1);
+                if (activeToast == t) { activeToast = null; activeToastAnim = null; }
             });
-            new SequentialTransition(new ParallelTransition(fi, si), pa, fo).play();
+            SequentialTransition seq = new SequentialTransition(new ParallelTransition(fi, si), pa, fo);
+            activeToastAnim = seq;
+            seq.play();
         });
     }
 

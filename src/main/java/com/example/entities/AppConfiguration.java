@@ -278,18 +278,21 @@ public final class AppConfiguration implements Serializable {
     }
 
     private static final List<String> SEED_LIBRARIES = List.of(
-            "City Central Library | Main Branch",
-            "City Central Library | East Wing",
-            "Green Valley Public Library | Main Branch",
-            "Green Valley Public Library | North Campus",
-            "Sunrise University Library | Academic Block",
-            "Sunrise University Library | Research Wing",
-            "Westside Community Library | Main Branch",
-            "Westside Community Library | Children's Section",
-            "Lakewood District Library | Downtown",
-            "Lakewood District Library | Suburban Branch",
-            "Hilltop School Library | Senior Block",
-            "Hilltop School Library | Junior Block"
+            "City Central Library - Main Branch",
+            "City Central Library - East Wing",
+            "Green Valley Public Library - Main Branch",
+            "Green Valley Public Library - North Campus",
+            "Sunrise University Library - Academic Block",
+            "Sunrise University Library - Research Wing",
+            "Westside Community Library - Main Branch",
+            "Westside Community Library - Children's Section",
+            "Lakewood District Library - Downtown",
+            "Lakewood District Library - Suburban Branch",
+            "Hilltop School Library - Senior Block",
+            "Hilltop School Library - Junior Block",
+            "Heritage Archive - History Wing",
+            "Tech Park Library - Innovation Hub",
+            "Seaside Public Library - Marina Branch"
     );
 
     private void ensureKnownLibraries() {

@@ -220,6 +220,7 @@ public class CatalogView extends BorderPane {
 
         if (filteredBooks.isEmpty()) {
             VBox emptyState = createEmptyState();
+            emptyState.prefWidthProperty().bind(booksGrid.widthProperty());
             booksGrid.getChildren().add(emptyState);
         }
 
@@ -299,9 +300,11 @@ public class CatalogView extends BorderPane {
             actions.setStyle("-fx-background-color: " + cardSurface() + ";");
 
             Button editBtn = AppTheme.createIconButton(AppTheme.ICON_EDIT, "Edit", AppTheme.ButtonStyle.GHOST);
+            editBtn.getStyleClass().add("action-edit");
             editBtn.setOnAction(e -> showEditBookDialog(book));
 
             Button deleteBtn = AppTheme.createIconButton(AppTheme.ICON_DELETE, "Delete", AppTheme.ButtonStyle.GHOST);
+            deleteBtn.getStyleClass().add("action-delete");
             deleteBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: #DC2626;");
             deleteBtn.setOnAction(e -> showDeleteBookConfirmation(book));
 
@@ -327,11 +330,12 @@ public class CatalogView extends BorderPane {
         card.setOnMouseEntered(e -> {
             card.setStyle("-fx-background-color: " + cardSurface() + "; -fx-background-radius: 12px; " +
                     "-fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.15), 20, 0, 0, 8); " +
-                    "-fx-translate-y: -4px;");
+                    "-fx-translate-y: -2px;");
         });
         card.setOnMouseExited(e -> {
             card.setStyle("-fx-background-color: " + cardSurface() + "; -fx-background-radius: 12px; " +
-                    "-fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.06), 8, 0, 0, 2);");
+                    "-fx-effect: dropshadow(gaussian, rgba(15, 23, 42, 0.06), 8, 0, 0, 2); " +
+                    "-fx-translate-y: 0;");
         });
 
         return card;

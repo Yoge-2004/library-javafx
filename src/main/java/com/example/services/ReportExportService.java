@@ -17,6 +17,8 @@ import java.util.List;
 
 public final class ReportExportService {
     private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final DateTimeFormatter CSV_DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final DateTimeFormatter CSV_DATETIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private ReportExportService() {
     }
@@ -26,7 +28,7 @@ public final class ReportExportService {
                 .map(record -> csv(
                         record.getBookTitle(),
                         record.getUserId(),
-                        record.getDueDate().toString(),
+                        record.getDueDate().format(CSV_DATE),
                         String.valueOf(record.getDaysOverdue()),
                         String.format("%.2f", record.calculateFine())
                 ))
@@ -39,8 +41,8 @@ public final class ReportExportService {
                 .map(record -> csv(
                         record.getBookTitle(),
                         record.getUserId(),
-                        record.getIssueDate().toString(),
-                        record.getDueDate().toString(),
+                        record.getIssueDate().format(CSV_DATE),
+                        record.getDueDate().format(CSV_DATE),
                         String.valueOf(record.getQuantity()),
                         String.valueOf(record.isReturned())
                 ))
@@ -54,7 +56,7 @@ public final class ReportExportService {
                         request.getBookTitle(),
                         request.getUserId(),
                         String.valueOf(request.getQuantity()),
-                        request.getRequestedAt().toString(),
+                        request.getRequestedAt().format(CSV_DATETIME),
                         request.getStatus().name(),
                         request.getProcessedBy(),
                         request.getNote()

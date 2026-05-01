@@ -3,9 +3,8 @@ package com.example.application.ui;
 import com.example.application.ToastDisplay;
 import com.example.entities.Book;
 import com.example.entities.BorrowRequest;
-import com.example.entities.BooksDB;
-import com.example.entities.BooksDB.IssueRecord;
 import com.example.entities.User;
+import com.example.entities.BooksDB.IssueRecord;
 import com.example.services.BookService;
 import com.example.services.ReminderService;
 import com.example.services.UserService;
@@ -20,9 +19,12 @@ import javafx.scene.layout.*;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.stream.Collectors;
+
+import com.example.services.InvoiceService;
 
 /**
  * Circulation view — issues, returns, renewals, and borrow-request approval.
@@ -202,9 +204,20 @@ public class CirculationView extends BorderPane {
         });
 
         if (isStaff) {
-            t.getColumns().addAll(titleC, userC, issueC, dueC, qtyC, statusC, actC);
+            t.getColumns().add(titleC);
+            t.getColumns().add(userC);
+            t.getColumns().add(issueC);
+            t.getColumns().add(dueC);
+            t.getColumns().add(qtyC);
+            t.getColumns().add(statusC);
+            t.getColumns().add(actC);
         } else {
-            t.getColumns().addAll(titleC, issueC, dueC, qtyC, statusC, actC);
+            t.getColumns().add(titleC);
+            t.getColumns().add(issueC);
+            t.getColumns().add(dueC);
+            t.getColumns().add(qtyC);
+            t.getColumns().add(statusC);
+            t.getColumns().add(actC);
         }
         return t;
     }
@@ -294,7 +307,12 @@ public class CirculationView extends BorderPane {
             }
         });
 
-        t.getColumns().addAll(titleC, userC, qtyC, dateC, statusC, noteC);
+        t.getColumns().add(titleC);
+        t.getColumns().add(userC);
+        t.getColumns().add(qtyC);
+        t.getColumns().add(dateC);
+        t.getColumns().add(statusC);
+        t.getColumns().add(noteC);
 
         if (isStaff) {
             TableColumn<BorrowRequest, Void> actC = new TableColumn<>("Actions");
@@ -345,21 +363,60 @@ public class CirculationView extends BorderPane {
         VBox txt = new VBox(2,
                 styledLabel("Overdue Books Alert", 16, overdueBannerTitle(), true),
                 styledLabel("These records have exceeded their due date.", 13, overdueBannerText(), false));
-        banner.getChildren().addAll(icon, txt);
+        
+        Button remindAllBtn = AppTheme.createIconTextButton("Remind All Overdue", AppTheme.ICON_MAIL, AppTheme.ButtonStyle.PRIMARY);
+        remindAllBtn.setOnAction(e -> bulkRemindOverdue());
+        
+        Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
+        banner.getChildren().addAll(icon, txt, sp, remindAllBtn);
+        p.getChildren().add(banner);
 
+        buildOverdueTable(p, banner);
+        return p;
+    }
+
+    private void bulkRemindOverdue() {
+        List<IssueRecord> overdue = issueRecords.stream().filter(IssueRecord::isOverdue).collect(java.util.stream.Collectors.toList());
+        if (overdue.isEmpty()) {
+            if (toast != null) toast.showInfo("No overdue books found.");
+            return;
+        }
+
+        Alert a = new Alert(Alert.AlertType.CONFIRMATION);
+        a.setTitle("Bulk Reminders");
+        a.setHeaderText("Send reminders to " + overdue.size() + " borrowers?");
+        a.setContentText("This will send automated email reminders to all users with overdue books.");
+        AppTheme.applyTheme(a.getDialogPane());
+        
+        a.showAndWait().filter(bt -> bt == ButtonType.OK).ifPresent(bt -> {
+            if (toast != null) toast.showInfo("Sending " + overdue.size() + " reminders...");
+            new Thread(() -> {
+                try {
+                    com.example.services.ReminderService.sendOverdueReminders(overdue);
+                    Platform.runLater(() -> {
+                        if (toast != null) toast.showSuccess("Bulk reminders sent.");
+                    });
+                } catch (Exception ex) {
+                    Platform.runLater(() -> {
+                        if (toast != null) toast.showError("Bulk reminder failed: " + ex.getMessage());
+                    });
+                }
+            }, "bulk-reminders").start();
+        });
+    }
+
+    private void buildOverdueTable(VBox p, HBox banner) {
         TableView<IssueRecord> ot = new TableView<>();
         ot.getStyleClass().add("table-view");
         ot.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         ot.setPlaceholder(new Label("No overdue books! 🎉"));
 
-        ot.getColumns().addAll(
-                colIR("Book Title",    r -> r.getBookTitle(), 200),
-                colIR("Borrower",      r -> r.getUserId(), 120),
-                colIR("Due Date",      r -> r.getDueDate().format(DATE_FMT), 110),
-                colIR("Days Overdue",  r -> String.valueOf(r.getDaysOverdue()), 100),
-                colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110),
-                overdueActionColumn()
-        );
+        ot.getColumns().add(colIR("Book Title",    r -> r.getBookTitle(), 200));
+        ot.getColumns().add(colIR("Borrower",      r -> r.getUserId(), 120));
+        ot.getColumns().add(colIR("Due Date",      r -> r.getDueDate().format(DATE_FMT), 110));
+        ot.getColumns().add(colIR("Days Overdue",  r -> String.valueOf(r.getDaysOverdue()), 100));
+        ot.getColumns().add(colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110));
+        ot.getColumns().add(overdueActionColumn());
 
         ObservableList<IssueRecord> overdueData =
                 FXCollections.observableArrayList(BookService.getAllOverdueBooks());
@@ -368,18 +425,17 @@ public class CirculationView extends BorderPane {
 
         // Export + Print buttons
         Button exportBtn = AppTheme.createIconTextButton(
-                "Export Overdue CSV", AppTheme.ICON_DOWNLOAD, AppTheme.ButtonStyle.OUTLINE);
+                "Export CSV", AppTheme.ICON_UPLOAD, AppTheme.ButtonStyle.GHOST);
         exportBtn.setOnAction(e -> exportOverdueReport(overdueData));
 
         Button printBtn = AppTheme.createIconTextButton(
-                "Print Report", AppTheme.ICON_PRINT, AppTheme.ButtonStyle.OUTLINE);
+                "Print Report", AppTheme.ICON_PRINT, AppTheme.ButtonStyle.GHOST);
         printBtn.setOnAction(e -> printOverdueReport(ot));
 
         HBox bar2 = new HBox(8, printBtn, exportBtn);
         bar2.setAlignment(Pos.CENTER_RIGHT);
 
-        p.getChildren().addAll(banner, bar2, ot);
-        return p;
+        p.getChildren().addAll(bar2, ot);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -435,11 +491,50 @@ public class CirculationView extends BorderPane {
         };
         refreshBooks.run();
         bookSearch.textProperty().addListener((o, old, v) -> refreshBooks.run());
-        bookList.getSelectionModel().selectedItemProperty().addListener((o, old, b) -> {
-            if (b != null) {
-                bookAvail.setText(b.getQuantity() + " cop" +
-                        (b.getQuantity() == 1 ? "y" : "ies") + " available");
+        bookList.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+        // ── Selected Books List ──────────────────────────────────
+        Label selectedHdr = fieldLabel("Selected Books & Quantities");
+        VBox selectedBooksBox = new VBox(10);
+        selectedBooksBox.setPadding(new Insets(10));
+        selectedBooksBox.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#1E293B" : "#F8FAFC") +
+                "; -fx-background-radius:8px; -fx-border-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") +
+                "; -fx-border-width:1;");
+
+        Map<String, Spinner<Integer>> quantityMap = new HashMap<>();
+
+        bookList.getSelectionModel().getSelectedItems().addListener((javafx.collections.ListChangeListener<Book>) c -> {
+            selectedBooksBox.getChildren().clear();
+            quantityMap.clear();
+            var selected = bookList.getSelectionModel().getSelectedItems();
+
+            if (selected.isEmpty()) {
+                Label placeholder = new Label("No books selected");
+                placeholder.setStyle("-fx-text-fill:" + textMuted() + "; -fx-font-style:italic;");
+                selectedBooksBox.getChildren().add(placeholder);
+                bookAvail.setText("");
+            } else {
+                bookAvail.setText(selected.size() + " book(s) selected");
                 bookAvail.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A; -fx-font-weight:600;");
+
+                for (Book sb : selected) {
+                    HBox row = new HBox(12);
+                    row.setAlignment(Pos.CENTER_LEFT);
+
+                    Label title = new Label(sb.getTitle());
+                    title.setStyle("-fx-font-size:13px; -fx-text-fill:" + textPrimary() + "; -fx-font-weight:600;");
+                    HBox.setHgrow(title, Priority.ALWAYS);
+
+                    Spinner<Integer> qSpin = new Spinner<>(1, sb.getQuantity(), 1);
+                    qSpin.setEditable(true);
+                    qSpin.setPrefWidth(90);
+                    qSpin.getStyleClass().add("themed-spinner");
+                    qSpin.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
+
+                    quantityMap.put(sb.getIsbn(), qSpin);
+                    row.getChildren().addAll(title, qSpin);
+                    selectedBooksBox.getChildren().add(row);
+                }
             }
         });
 
@@ -472,23 +567,20 @@ public class CirculationView extends BorderPane {
         refreshUsers.run();
         userSearch.textProperty().addListener((o, old, v) -> refreshUsers.run());
 
-        // ── Quantity ─────────────────────────────────────────────
-        Label qtyLbl = fieldLabel("Quantity");
-        Spinner<Integer> qtySpin = new Spinner<>(1, 20, 1);
-        qtySpin.setEditable(true);
-        qtySpin.setPrefWidth(90);
-
         Label issueDateLbl = fieldLabel("Issue Date");
         DatePicker issueDatePicker = new DatePicker(LocalDate.now());
         issueDatePicker.setEditable(false);
+        issueDatePicker.setMaxWidth(Double.MAX_VALUE);
         issueDatePicker.setStyle(inputStyle());
 
-        Label loanDaysLbl = fieldLabel("Loan Period");
+        Label loanDaysLbl = fieldLabel("Loan Period (Days)");
         Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, BookService.getLoanPeriodDays());
         loanDaysSpin.setEditable(true);
-        loanDaysSpin.setPrefWidth(110);
+        loanDaysSpin.getStyleClass().add("themed-spinner");
+        loanDaysSpin.setPrefWidth(140);
+        loanDaysSpin.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
 
-        Label testingHint = new Label("Use an earlier issue date to create overdue records from the UI.");
+        Label testingHint = new Label("Multiple books can be selected using Ctrl/Shift + Click.");
         testingHint.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         testingHint.setWrapText(true);
 
@@ -500,9 +592,9 @@ public class CirculationView extends BorderPane {
         root.getChildren().addAll(
                 heading,
                 bookLbl, bookSearch, bookList, bookAvail,
+                selectedHdr, selectedBooksBox,
                 userLbl, userSearch, userListView,
                 new HBox(12,
-                        new VBox(6, qtyLbl, qtySpin),
                         new VBox(6, issueDateLbl, issueDatePicker),
                         new VBox(6, loanDaysLbl, loanDaysSpin)),
                 testingHint,
@@ -517,31 +609,28 @@ public class CirculationView extends BorderPane {
         ButtonType issueType = new ButtonType("Issue", ButtonBar.ButtonData.OK_DONE);
         dp.getButtonTypes().addAll(ButtonType.CANCEL, issueType);
         Button issueBtn = (Button) dp.lookupButton(issueType);
-        issueBtn.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
-                "-fx-font-weight:600; -fx-font-size:14px; " +
-                "-fx-background-radius:10px; -fx-padding:10 24;");
+        issueBtn.getStyleClass().add("btn-primary");
+        ((Button) dp.lookupButton(ButtonType.CANCEL)).getStyleClass().add("btn-secondary");
 
         issueBtn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
-            Book book = bookList.getSelectionModel().getSelectedItem();
+            var selected = bookList.getSelectionModel().getSelectedItems();
             User user = userListView.getSelectionModel().getSelectedItem();
-            int qty   = qtySpin.getValue();
+            LocalDate date = issueDatePicker.getValue();
 
-            if (book == null) { showErr(errLbl, "Please select a book."); ev.consume(); return; }
-            if (user == null) { showErr(errLbl, "Please select a user."); ev.consume(); return; }
-            if (book.getQuantity() < qty) {
-                showErr(errLbl, "Only " + book.getQuantity() + " copies available."); ev.consume(); return;
-            }
-            if (issueDatePicker.getValue() == null) {
-                showErr(errLbl, "Please choose an issue date."); ev.consume(); return;
-            }
+            if (selected.isEmpty()) { errLbl.setText("Please select at least one book."); errLbl.setVisible(true); ev.consume(); return; }
+            if (user == null)       { errLbl.setText("Please select a user."); errLbl.setVisible(true); ev.consume(); return; }
+            if (date == null)       { errLbl.setText("Please choose an issue date."); errLbl.setVisible(true); ev.consume(); return; }
+
             errLbl.setVisible(false);
             try {
-                BookService.issueBookToUser(
-                        book.getIsbn(), user.getUserId(), qty, issueDatePicker.getValue(), loanDaysSpin.getValue());
-                if (toast != null) toast.showSuccess("Issued: " + book.getTitle() + " to " + user.getUserId());
-                if (onRefresh != null) onRefresh.run();
+                for (Book b : selected) {
+                    int qty = quantityMap.get(b.getIsbn()).getValue();
+                    BookService.issueBookToUser(b.getIsbn(), user.getUserId(), qty, date, loanDaysSpin.getValue());
+                }
+                toast.showSuccess("Successfully issued " + selected.size() + " book(s) to " + user.getUserId());
+                onRefresh.run();
             } catch (Exception ex) {
-                if (toast != null) toast.showError("Issue failed: " + ex.getMessage());
+                errLbl.setText(ex.getMessage()); errLbl.setVisible(true); ev.consume();
             }
         });
 
@@ -563,13 +652,49 @@ public class CirculationView extends BorderPane {
         AppTheme.applyTheme(a.getDialogPane());
         a.showAndWait().filter(bt -> bt == ButtonType.OK).ifPresent(bt -> {
             try {
+                // Calculate fine before returning (or we can get it from the record after return)
+                double calculatedFine = r.calculateFine();
                 BookService.returnBookFromUser(r.getIsbn(), r.getUserId(), r.getQuantity());
-                if (toast != null) toast.showSuccess("Book returned successfully.");
+                
+                if (calculatedFine > 0) {
+                    showFinePaymentDialog(r, calculatedFine);
+                } else {
+                    if (toast != null) toast.showSuccess("Book returned successfully.");
+                }
                 if (onRefresh != null) onRefresh.run();
             } catch (Exception ex) {
                 if (toast != null) toast.showError("Return failed: " + ex.getMessage());
             }
         });
+    }
+
+    private void showFinePaymentDialog(IssueRecord r, double fine) {
+        Alert a = new Alert(Alert.AlertType.INFORMATION);
+        a.setTitle("Fine Payment");
+        a.setHeaderText("Fine Outstanding: " + AppTheme.formatCurrency(fine));
+        a.setContentText("The book has been returned. Would you like to process the fine payment and generate an invoice?");
+        
+        ButtonType payBtn = new ButtonType("Pay & Invoice", ButtonBar.ButtonData.OK_DONE);
+        ButtonType laterBtn = new ButtonType("Pay Later", ButtonBar.ButtonData.CANCEL_CLOSE);
+        a.getButtonTypes().setAll(payBtn, laterBtn);
+        
+        AppTheme.applyTheme(a.getDialogPane());
+        a.showAndWait().ifPresent(type -> {
+            if (type == payBtn) {
+                processFinePayment(r, fine);
+            }
+        });
+    }
+
+    private void processFinePayment(IssueRecord r, double fine) {
+        try {
+            User user = UserService.getUserById(r.getUserId());
+            // 1. Generate Invoice (Internal Record - maybe just a log for now or a dedicated DB table if needed)
+            // 2. Offer to Print/Email
+            InvoiceService.generateAndHandleInvoice(user, r, fine, toast);
+        } catch (Exception e) {
+            if (toast != null) toast.showError("Payment processing failed: " + e.getMessage());
+        }
     }
 
     private void renewBook(IssueRecord r) {
@@ -621,33 +746,96 @@ public class CirculationView extends BorderPane {
 
     /** Opens the OS print dialog and prints the overdue TableView. */
     private void printOverdueReport(javafx.scene.control.TableView<IssueRecord> table) {
-        // Create job for default printer (null = let dialog pick); avoids false "no printers" errors
         javafx.print.PrinterJob job = javafx.print.PrinterJob.createPrinterJob();
         if (job == null) {
-            if (toast != null) toast.showError("Could not start the system print dialog.");
+            if (toast != null) toast.showWarning(
+                    "No printer found. Install a printer driver, or use the Export CSV button instead.");
             return;
         }
 
         boolean proceed = job.showPrintDialog(getScene().getWindow());
-        if (!proceed) return;
+        if (!proceed) {
+            job.cancelJob();
+            return;
+        }
 
-        // Scale table to fit page width
         javafx.print.PageLayout layout = job.getJobSettings().getPageLayout();
         double printW = layout.getPrintableWidth();
-        double tableW = table.getBoundsInParent().getWidth();
-        double scale  = (tableW > 0) ? printW / tableW : 1.0;
+        double printH = layout.getPrintableHeight();
 
-        javafx.scene.transform.Scale scaleT = new javafx.scene.transform.Scale(scale, scale);
-        table.getTransforms().add(scaleT);
-        boolean printed = job.printPage(table);
-        table.getTransforms().remove(scaleT);
+        java.util.List<javafx.scene.Node> pages = new java.util.ArrayList<>();
+        VBox currentPage = createPrintPage(printW, printH);
+        double currentHeight = 100; // Initial header height estimation
 
-        if (printed) {
+        for (IssueRecord r : table.getItems()) {
+            HBox row = createPrintRow(r, printW);
+            double rowH = 30; // Estimated row height
+            if (currentHeight + rowH > printH - 50) {
+                pages.add(currentPage);
+                currentPage = createPrintPage(printW, printH);
+                currentHeight = 100;
+            }
+            currentPage.getChildren().add(row);
+            currentHeight += rowH;
+        }
+        if (currentPage.getChildren().size() > 2) { // 2 = title + header row
+            pages.add(currentPage);
+        }
+
+        boolean success = true;
+        for (javafx.scene.Node page : pages) {
+            success &= job.printPage(page);
+        }
+
+        if (success) {
             job.endJob();
             if (toast != null) toast.showSuccess("Overdue report sent to printer.");
         } else {
-            if (toast != null) toast.showError("Printing failed — check printer status.");
+            job.cancelJob();
+            if (toast != null) toast.showError("Printing failed or was cancelled.");
         }
+    }
+
+    private VBox createPrintPage(double width, double height) {
+        VBox page = new VBox(10);
+        page.setPadding(new Insets(20));
+        page.setPrefSize(width, height);
+        page.setStyle("-fx-background-color: white;");
+        
+        Label title = new Label("Overdue Books Report - " + java.time.LocalDate.now());
+        title.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: black;");
+        
+        HBox headerRow = new HBox(10);
+        headerRow.setStyle("-fx-border-color: black; -fx-border-width: 0 0 1 0; -fx-padding: 0 0 5 0;");
+        headerRow.getChildren().addAll(
+            createPrintCell("Book Title", width * 0.4, true),
+            createPrintCell("Borrower", width * 0.2, true),
+            createPrintCell("Due Date", width * 0.2, true),
+            createPrintCell("Fine", width * 0.15, true)
+        );
+        
+        page.getChildren().addAll(title, headerRow);
+        return page;
+    }
+    
+    private HBox createPrintRow(IssueRecord r, double width) {
+        HBox row = new HBox(10);
+        row.setStyle("-fx-border-color: #EEEEEE; -fx-border-width: 0 0 1 0; -fx-padding: 5 0 5 0;");
+        row.getChildren().addAll(
+            createPrintCell(r.getBookTitle(), width * 0.4, false),
+            createPrintCell(r.getUserId(), width * 0.2, false),
+            createPrintCell(r.getDueDate().format(DATE_FMT), width * 0.2, false),
+            createPrintCell(AppTheme.formatCurrency(r.calculateFine()), width * 0.15, false)
+        );
+        return row;
+    }
+    
+    private Label createPrintCell(String text, double width, boolean bold) {
+        Label l = new Label(text);
+        l.setPrefWidth(width);
+        l.setWrapText(true);
+        l.setStyle("-fx-font-size: 11px; -fx-text-fill: black;" + (bold ? " -fx-font-weight: bold;" : ""));
+        return l;
     }
 
     private void exportOverdueReport(ObservableList<IssueRecord> data) {        try {
@@ -665,12 +853,22 @@ public class CirculationView extends BorderPane {
         actionColumn.setCellFactory(col -> new TableCell<>() {
             final Button emailBtn = actionIconBtn(AppTheme.ICON_MAIL, "Send overdue reminder", "#0D9488");
             final Button contactBtn = actionIconBtn(AppTheme.ICON_USER, "View borrower contact", "#64748B");
-            final HBox box = new HBox(4, emailBtn, contactBtn);
+            final Button invBtn = actionIconBtn(AppTheme.ICON_SAVE, "Generate early invoice", "#F59E0B");
+            final HBox box = new HBox(4, emailBtn, contactBtn, invBtn);
 
             {
                 box.setAlignment(Pos.CENTER);
                 emailBtn.setOnAction(event -> sendOverdueReminder(getTableView().getItems().get(getIndex()), emailBtn));
                 contactBtn.setOnAction(event -> showBorrowerContact(getTableView().getItems().get(getIndex())));
+                invBtn.setOnAction(event -> {
+                    IssueRecord r = getTableView().getItems().get(getIndex());
+                    try {
+                        User user = UserService.getUserById(r.getUserId());
+                        InvoiceService.generateAndHandleInvoice(user, r, r.calculateFine(), toast);
+                    } catch (Exception ex) {
+                        if (toast != null) toast.showError("Failed to load user: " + ex.getMessage());
+                    }
+                });
             }
 
             @Override protected void updateItem(Void item, boolean empty) {
@@ -774,9 +972,21 @@ public class CirculationView extends BorderPane {
         icon.setStyle("-fx-fill:white;");
         b.setGraphic(icon);
         b.setTooltip(AppTheme.createTooltip(tooltip));
-        b.setStyle("-fx-background-color:" + color + "; -fx-background-radius:8px; " +
+        String baseStyle = "-fx-background-color:" + color + "; -fx-background-radius:8px; " +
                 "-fx-cursor:hand; -fx-padding:5; -fx-min-width:28px; -fx-pref-width:28px; " +
-                "-fx-max-width:28px; -fx-min-height:28px; -fx-pref-height:28px; -fx-max-height:28px;");
+                "-fx-max-width:28px; -fx-min-height:28px; -fx-pref-height:28px; -fx-max-height:28px;";
+        b.setStyle(baseStyle);
+        // By adding app-button and an empty class, we can prevent .button:hover from overriding the inline background.
+        // Even better, manually manage hover opacity or brightness.
+        b.setOnMouseEntered(e -> {
+            b.setStyle(baseStyle + " -fx-opacity: 0.85;");
+            b.getStyleClass().remove("button"); // prevent theme hover interference
+        });
+        b.setOnMouseExited(e -> {
+            b.setStyle(baseStyle);
+            if (!b.getStyleClass().contains("button")) b.getStyleClass().add("button");
+        });
+        AppTheme.installButtonAnimation(b);
         return b;
     }
 

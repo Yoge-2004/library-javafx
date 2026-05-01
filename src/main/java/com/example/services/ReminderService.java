@@ -14,6 +14,8 @@ import jakarta.mail.internet.InternetAddress;
 import jakarta.mail.internet.MimeBodyPart;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.internet.MimeMultipart;
+import jakarta.activation.DataHandler;
+import jakarta.mail.util.ByteArrayDataSource;
 
 import java.io.InputStream;
 import java.net.ConnectException;
@@ -22,7 +24,9 @@ import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import com.example.application.ui.AppTheme;
 import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
@@ -108,6 +112,22 @@ public final class ReminderService {
                 buildTemporaryPasswordHtmlBody(config, user, temporaryPassword));
     }
 
+    public static void sendPaymentInvoice(User user, IssueRecord record, double amount, String invoiceId) throws MessagingException {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new MessagingException("Valid user email is required.");
+        }
+
+        AppConfiguration config = AppConfigurationService.getConfiguration();
+        validateConfiguration(config);
+        Session session = createSession(config);
+        
+        String subject = "Invoice " + invoiceId + " - Fine Payment Receipt";
+        String plain = "Fine Payment Receipt\n\nInvoice: " + invoiceId + "\nAmount: " + amount + "\nBook: " + record.getBookTitle();
+        String html = buildPaymentInvoiceHtmlBody(config, user, record, amount, invoiceId);
+        
+        sendMessage(session, config, user.getEmail(), subject, plain, html);
+    }
+
     /**
      * FIXED: Added null checks for SMTP credentials to prevent NullPointerException
      * in PasswordAuthentication constructor.
@@ -155,11 +175,26 @@ public final class ReminderService {
         MimeBodyPart htmlPart = new MimeBodyPart();
         htmlPart.setContent(htmlBody, "text/html; charset=UTF-8");
 
-        MimeMultipart multipart = new MimeMultipart("alternative");
-        multipart.addBodyPart(plainPart);
-        multipart.addBodyPart(htmlPart);
+        MimeMultipart alternative = new MimeMultipart("alternative");
+        alternative.addBodyPart(plainPart);
+        alternative.addBodyPart(htmlPart);
 
-        message.setContent(multipart);
+        MimeBodyPart alternativeBodyPart = new MimeBodyPart();
+        alternativeBodyPart.setContent(alternative);
+
+        MimeMultipart related = new MimeMultipart("related");
+        related.addBodyPart(alternativeBodyPart);
+
+        if (!APP_ICON_SVG.isBlank()) {
+            MimeBodyPart logoPart = new MimeBodyPart();
+            logoPart.setDataHandler(new DataHandler(new ByteArrayDataSource(
+                    APP_ICON_SVG.getBytes(StandardCharsets.UTF_8), "image/svg+xml")));
+            logoPart.setContentID("<app_logo>");
+            logoPart.setDisposition(MimeBodyPart.INLINE);
+            related.addBodyPart(logoPart);
+        }
+
+        message.setContent(related);
         try {
             Transport.send(message);
         } catch (MessagingException ex) {
@@ -295,7 +330,7 @@ public final class ReminderService {
     private static String buildEmailShell(AppConfiguration config, String heading, String subtitle, String body) {
         String logoBlock = APP_ICON_SVG.isBlank()
                 ? "<div style=\"display:block;width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#0F172A,#14B8A6);\"></div>"
-                : "<div style=\"display:block;width:56px;height:56px;line-height:0;\">" + APP_ICON_SVG + "</div>";
+                : "<img src=\"cid:app_logo\" width=\"56\" height=\"56\" style=\"display:block;border-radius:18px;\">";
 
         return """
                 <!DOCTYPE html>
@@ -476,6 +511,31 @@ public final class ReminderService {
 
         void addFailure(String userId, String reason) {
             failures.put(userId, reason);
+        }
+    }
+    private static String buildPaymentInvoiceHtmlBody(AppConfiguration config, User user, IssueRecord record, double amount, String invoiceId) {
+        String template = loadHtmlTemplate("invoice-template.html");
+        if (template == null) return "<h1>Invoice " + invoiceId + "</h1><p>Amount: " + amount + "</p>";
+
+        return template
+                .replace("{{LIBRARY_NAME}}", config.getLibraryName())
+                .replace("{{INVOICE_ID}}", invoiceId)
+                .replace("{{DATE}}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy HH:mm")))
+                .replace("{{USER_NAME}}", user.getDisplayName())
+                .replace("{{USER_ID}}", user.getUserId())
+                .replace("{{BOOK_TITLE}}", record.getBookTitle())
+                .replace("{{ISBN}}", record.getIsbn())
+                .replace("{{DAYS}}", String.valueOf(record.getDaysOverdue()))
+                .replace("{{AMOUNT}}", AppTheme.formatCurrency(amount))
+                .replace("{{YEAR}}", String.valueOf(java.time.Year.now().getValue()));
+    }
+
+    private static String loadHtmlTemplate(String name) {
+        try (InputStream is = ReminderService.class.getResourceAsStream("/templates/" + name)) {
+            if (is == null) return null;
+            return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

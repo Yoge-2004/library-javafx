@@ -8,22 +8,27 @@
 @import "theme-additions.css";
 /* ─── SCROLLPANE ──────────────────────────────────────────────── */
 .scroll-pane,
-.scroll-pane > .viewport { -fx-background-color: transparent; }
-.scroll-pane .scroll-bar:vertical .thumb,
-.scroll-pane .scroll-bar:horizontal .thumb {
+.scroll-pane > .viewport { 
+    -fx-background-color: transparent; 
+    -fx-background-insets: 0; 
+    -fx-padding: 0; 
+}
+.scroll-pane:focused { -fx-background-insets: 0; }
+.scroll-bar:vertical .thumb,
+.scroll-bar:horizontal .thumb {
     -fx-background-color: #CBD5E1;
     -fx-background-radius: 4px;
 }
-.dark-mode .scroll-pane .scroll-bar:vertical .thumb,
-.dark-mode .scroll-pane .scroll-bar:horizontal .thumb {
+.dark-mode .scroll-bar:vertical .thumb,
+.dark-mode .scroll-bar:horizontal .thumb {
     -fx-background-color: #334155;
 }
-.scroll-pane .scroll-bar:vertical .track,
-.scroll-pane .scroll-bar:horizontal .track,
-.scroll-pane .increment-button,
-.scroll-pane .decrement-button { -fx-background-color: transparent; }
-.scroll-pane .increment-arrow,
-.scroll-pane .decrement-arrow  { -fx-shape: ""; -fx-padding: 0; }
+.scroll-bar:vertical .track,
+.scroll-bar:horizontal .track,
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button { -fx-background-color: transparent; }
+.scroll-bar .increment-arrow,
+.scroll-bar .decrement-arrow  { -fx-shape: ""; -fx-padding: 0; }
 
 /* ─── CHECKBOX ────────────────────────────────────────────────── */
 .check-box {
@@ -83,20 +88,16 @@
     -fx-text-fill: #14B8A6;
 }
 .radio-button .radio {
-    -fx-border-color: #0D9488;
-    -fx-border-width: 2.5;
-    -fx-padding: 4px;
+    -fx-border-color: #D1D5DB;
+    -fx-border-width: 1.5;
+    -fx-padding: 3px;
     -fx-background-color: white;
     -fx-background-radius: 50%;
     -fx-border-radius: 50%;
-    -fx-min-width: 22px;
-    -fx-min-height: 22px;
-    -fx-pref-width: 22px;
-    -fx-pref-height: 22px;
 }
 .dark-mode .radio-button .radio {
-    -fx-border-color: #14B8A6;
-    -fx-background-color: #0F172A;
+    -fx-border-color: #475569;
+    -fx-background-color: #1E293B;
 }
 .radio-button:selected .radio {
     -fx-background-color: #0D9488;
@@ -108,11 +109,19 @@
 }
 .radio-button:selected .dot {
     -fx-background-color: white;
-    -fx-min-width: 10px;
-    -fx-min-height: 10px;
+    -fx-min-width: 8px;
+    -fx-max-width: 8px;
+    -fx-min-height: 8px;
+    -fx-max-height: 8px;
+    -fx-background-radius: 50%;
+    -fx-background-insets: 0;
+}
+.dark-mode .radio-button:selected .dot {
+    -fx-background-color: white;
 }
 .sidebar {
-    -fx-background-color: linear-gradient(from 0% 0% to 100% 100%, #0F172A, #1A2942);
+    -fx-background-color: #F8FAFC;
+    -fx-border-color: #E2E8F0; -fx-border-width: 0 1 0 0;
     -fx-padding: 24 12 16 12;
     -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.25), 10, 0, 2, 0);
 }
@@ -123,16 +132,16 @@
 .sidebar-logo {
     -fx-font-size: 20px; -fx-font-weight: 800; -fx-text-fill: #FFFFFF;
 }
-.sidebar-logo-accent { -fx-text-fill: #14B8A6; }
+.sidebar-logo-accent { -fx-text-fill: #2DD4BF; }
 
 .sidebar-section-label {
     -fx-font-size: 11px; -fx-font-weight: 800;
-    -fx-text-fill: #FFFFFF; -fx-padding: 16 8 6 8;
-    -fx-letter-spacing: 0.8; -fx-opacity: 0.75;
+    -fx-text-fill: #F8FAFC; -fx-padding: 16 8 6 8;
+    -fx-letter-spacing: 0.8; -fx-opacity: 1.0;
 }
 .sidebar-btn {
     -fx-background-color: transparent;
-    -fx-text-fill: #CBD5E1;
+    -fx-text-fill: #E2E8F0;
     -fx-font-size: 14px; -fx-font-weight: 500;
     -fx-alignment: CENTER_LEFT;
     -fx-padding: 10 12; -fx-background-radius: 10px;
@@ -156,10 +165,10 @@
 
 .sidebar-profile {
     -fx-padding: 14 8 0 8;
-    -fx-border-color: #1E293B; -fx-border-width: 1 0 0 0;
+    -fx-border-color: rgba(255,255,255,0.1); -fx-border-width: 1 0 0 0;
 }
-.sidebar-profile-name { -fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: #F1F5F9; }
-.sidebar-profile-role { -fx-font-size: 12px; -fx-text-fill: #CBD5E1; }
+.sidebar-profile-name { -fx-font-size: 14px; -fx-font-weight: 700; -fx-text-fill: #FFFFFF; }
+.sidebar-profile-role { -fx-font-size: 12px; -fx-text-fill: #E2E8F0; -fx-font-weight: 500; }
 
 /* ─── HEADER ──────────────────────────────────────────────────── */
 .app-header {
@@ -252,6 +261,8 @@
 .dark-mode .btn-ghost:hover { -fx-background-color: #1E293B; -fx-text-fill: #E2E8F0; }
 .btn-ghost .icon-svg { -fx-fill: #64748B; }
 .btn-ghost:hover .icon-svg { -fx-fill: #1E293B; }
+.dark-mode .btn-ghost .icon-svg { -fx-fill: #94A3B8; }
+.dark-mode .btn-ghost:hover .icon-svg { -fx-fill: #F1F5F9; }
 
 .btn-outline {
     -fx-background-color: transparent; -fx-text-fill: #0D9488;
@@ -285,8 +296,8 @@
 /* ─── CARDS ───────────────────────────────────────────────────── */
 .metric-card {
     -fx-background-color: white;
-    -fx-background-radius: 14px;
-    -fx-border-radius: 14px;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
     -fx-border-color: #E2E8F0;
     -fx-border-width: 1;
     -fx-padding: 16 14;
@@ -304,7 +315,7 @@
 
 .surface-card {
     -fx-background-color: white;
-    -fx-background-radius: 14px; -fx-border-radius: 14px;
+    -fx-background-radius: 4px; -fx-border-radius: 4px;
     -fx-border-color: #E2E8F0; -fx-border-width: 1;
     -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.06), 8, 0, 0, 2);
 }
@@ -314,7 +325,7 @@
 
 .book-card {
     -fx-background-color: white;
-    -fx-background-radius: 14px; -fx-border-radius: 14px;
+    -fx-background-radius: 4px; -fx-border-radius: 4px;
     -fx-border-color: #E2E8F0; -fx-border-width: 1;
     -fx-effect: dropshadow(gaussian, rgba(15,23,42,0.06), 8, 0, 0, 2);
     -fx-cursor: hand;
@@ -549,18 +560,7 @@
 .check-box:selected .mark { -fx-background-color: white; }
 .dark-mode .check-box .box { -fx-background-color: #1E293B; -fx-border-color: #475569; }
 
-.radio-button {
-    -fx-text-fill: #374151;
-}
-.radio-button .text {
-    -fx-fill: #374151;
-}
-.radio-button .radio { -fx-border-color: #D1D5DB; -fx-border-width: 1.5; }
-.radio-button:selected .radio { -fx-border-color: #0D9488; }
-.radio-button:selected .dot { -fx-background-color: #0D9488; }
-.dark-mode .radio-button { -fx-text-fill: #E2E8F0; }
-.dark-mode .radio-button .text { -fx-fill: #E2E8F0; }
-.dark-mode .radio-button .radio { -fx-border-color: #475569; }
+
 
 .input-with-icon {
     -fx-background-color: #F9FAFB; -fx-border-color: #D1D5DB;
@@ -720,6 +720,10 @@
 
 .tab-pane .tab-content-area { -fx-background-color: transparent; -fx-padding: 20 0 0 0; }
 
+.tab-pane:focused, .tab-pane .tab:focused, .tab-pane .tab-header-area:focused {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
 /* ─── DIALOG ──────────────────────────────────── */
 .dialog-pane-modern {
     -fx-background-color: white;
@@ -739,6 +743,39 @@
 .dialog-pane-modern .button-bar .button {
     -fx-background-radius: 10px; -fx-border-radius: 10px;
     -fx-font-size: 13px; -fx-font-weight: 600; -fx-cursor: hand; -fx-padding: 9 18;
+    -fx-background-color: #E2E8F0; -fx-text-fill: #1E293B;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.08), 3, 0, 0, 1);
+}
+.dialog-pane-modern .button-bar .button:hover {
+    -fx-background-color: #CBD5E1;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.13), 5, 0, 0, 2);
+}
+.dialog-pane-modern .button-bar .button:default {
+    -fx-background-color: #0D9488; -fx-text-fill: white;
+}
+.dialog-pane-modern .button-bar .button:default:hover { -fx-background-color: #0F766E; }
+.dialog-pane-modern .button-bar .button:cancel {
+    -fx-background-color: transparent; -fx-text-fill: #64748B;
+    -fx-border-color: transparent; -fx-effect: none;
+}
+.dialog-pane-modern .button-bar .button:cancel:hover {
+    -fx-background-color: #F1F5F9; -fx-text-fill: #1E293B;
+}
+.dark-mode .dialog-pane-modern .button-bar .button {
+    -fx-background-color: #334155; -fx-text-fill: #F1F5F9;
+}
+.dark-mode .dialog-pane-modern .button-bar .button:hover {
+    -fx-background-color: #475569;
+}
+.dark-mode .dialog-pane-modern .button-bar .button:default {
+    -fx-background-color: #14B8A6; -fx-text-fill: white;
+}
+.dark-mode .dialog-pane-modern .button-bar .button:default:hover { -fx-background-color: #0D9488; }
+.dark-mode .dialog-pane-modern .button-bar .button:cancel {
+    -fx-background-color: transparent; -fx-text-fill: #94A3B8;
+}
+.dark-mode .dialog-pane-modern .button-bar .button:cancel:hover {
+    -fx-background-color: #1E293B; -fx-text-fill: #E2E8F0;
 }
 
 /* Ensure dialog content is properly sized and wrapped */
@@ -1050,4 +1087,28 @@
 /* Remove extra outer border that appears around table containers in dark mode */
 .dark-mode .tab-content-area .table-view {
     -fx-border-width: 0;
+}
+
+/* ─── Dark mode: password container inner fields ────────────── */
+/* Override global .dark-mode .text-field / .password-field rules
+   to prevent double borders inside .input-with-icon containers */
+.dark-mode .input-with-icon .text-field,
+.dark-mode .input-with-icon .password-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-effect: none;
+}
+.dark-mode .input-with-icon .text-field:focused,
+.dark-mode .input-with-icon .password-field:focused {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-effect: none;
+}
+
+/* ─── Dark mode: auth password toggle separator ─────────────── */
+.dark-mode .password-toggle {
+    -fx-border-color: transparent transparent transparent #475569;
 }

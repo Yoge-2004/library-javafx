@@ -88,20 +88,24 @@
    would otherwise win and render sidebar labels invisible.
    ══════════════════════════════════════════════════════════════════ */
 
-.sidebar .sidebar-logo         { -fx-text-fill: #F8FAFC; -fx-font-weight: 800; }
-.sidebar .sidebar-logo-accent  { -fx-text-fill: #14B8A6; }
+.sidebar .sidebar-logo         { -fx-text-fill: #1E293B; -fx-font-weight: 800; }
+.sidebar .sidebar-logo-accent  { -fx-text-fill: #0D9488; }
 .sidebar .sidebar-section-label {
-    -fx-text-fill: #B0BEC5;
+    -fx-text-fill: #475569;
     -fx-font-size: 10px;
-    -fx-font-weight: 700;
+    -fx-font-weight: 800;
     -fx-padding: 12 0 4 8;
     -fx-opacity: 1;
 }
-.sidebar .sidebar-btn          { -fx-text-fill: #CBD5E1; }
-.sidebar .sidebar-btn:hover    { -fx-text-fill: #F1F5F9; }
-.sidebar .sidebar-btn.active   { -fx-text-fill: #4FD1C7; }
-.sidebar .sidebar-profile-name { -fx-text-fill: #F8FAFC; -fx-font-size: 14px; -fx-font-weight: 600; }
-.sidebar .sidebar-profile-role { -fx-text-fill: #CBD5E1; -fx-font-size: 12px; }
+.sidebar .sidebar-btn          { -fx-text-fill: #334155; }
+.sidebar .sidebar-btn .label   { -fx-text-fill: #334155; }
+.sidebar .sidebar-btn:hover    { -fx-background-color: rgba(15, 23, 42, 0.05); -fx-text-fill: #0F172A; }
+.sidebar .sidebar-btn:hover .label { -fx-text-fill: #0F172A; }
+.sidebar .sidebar-btn.active   { -fx-background-color: rgba(13, 148, 136, 0.1); -fx-text-fill: #0D9488; }
+.sidebar .sidebar-btn.active .label { -fx-text-fill: #0D9488; }
+.sidebar .sidebar-profile-name { -fx-text-fill: #0F172A; -fx-font-size: 14px; -fx-font-weight: 700; }
+.sidebar .sidebar-profile-role { -fx-text-fill: #64748B; -fx-font-size: 12px; }
+.sidebar .label                { -fx-text-fill: #334155; }
 
 /* Also keep the old standalone selectors for any sidebar items rendered outside
    the .sidebar container (e.g. during a theme rebuild transition) */
@@ -372,6 +376,15 @@
 .dark-mode .dialog-pane .button.btn-ghost:hover,
 .dark-mode.dialog-pane .button.btn-ghost:hover { -fx-background-color: rgba(255,255,255,0.07); -fx-text-fill: #F1F5F9; }
 
+/* FIX: Edit/Delete action icons disappearing on hover in dark mode */
+.action-delete .icon-svg { -fx-fill: #DC2626; }
+.action-delete:hover .icon-svg { -fx-fill: #EF4444; }
+.dark-mode .action-delete .icon-svg { -fx-fill: #EF4444; }
+.dark-mode .action-delete:hover .icon-svg { -fx-fill: #FCA5A5; }
+
+.dark-mode .action-edit:hover .icon-svg { -fx-fill: #F1F5F9; }
+
+
 
 /* ══════════════════════════════════════════════════════════════════
    DARK MODE — ScrollPane + ScrollBar
@@ -467,4 +480,96 @@
     -fx-min-width: 200px;
     -fx-pref-width: -1;
     -fx-max-width: infinity;
+    -fx-background-radius: 4px;
+    -fx-border-radius: 4px;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════
+   FIX: Editable ComboBox inner text field — no double border
+   The inner text-field should be transparent since the ComboBox
+   container already draws the outer border.
+   ══════════════════════════════════════════════════════════════════ */
+
+.combo-box:editable > .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+.dark-mode .combo-box:editable > .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+    -fx-text-fill: #F1F5F9;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   FIX: DatePicker dark mode styling
+   ══════════════════════════════════════════════════════════════════ */
+
+.dark-mode .date-picker {
+    -fx-background-color: #0F172A;
+    -fx-border-color: #475569;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
+}
+.dark-mode .date-picker > .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-text-fill: #F1F5F9;
+}
+.dark-mode .date-picker > .arrow-button {
+    -fx-background-color: transparent;
+}
+.dark-mode .date-picker > .arrow-button > .arrow {
+    -fx-background-color: #94A3B8;
+}
+/* Date Picker popup dark mode */
+.dark-mode .date-picker-popup {
+    -fx-background-color: #1E293B;
+    -fx-border-color: #475569;
+}
+.dark-mode .date-picker-popup .month-year-pane {
+    -fx-background-color: #0F172A;
+}
+.dark-mode .date-picker-popup .month-year-pane .label {
+    -fx-text-fill: #F1F5F9;
+    -fx-font-weight: 700;
+}
+.dark-mode .date-picker-popup .month-year-pane .button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #CBD5E1;
+}
+.dark-mode .date-picker-popup .month-year-pane .button:hover {
+    -fx-background-color: #334155;
+    -fx-text-fill: white;
+}
+.dark-mode .date-picker-popup .day-name-cell, .dark-mode .date-picker-popup .week-number-cell {
+    -fx-text-fill: #94A3B8;
+}
+.dark-mode .date-picker-popup .day-cell {
+    -fx-background-color: #1E293B;
+    -fx-text-fill: #F1F5F9;
+}
+.dark-mode .date-picker-popup .day-cell:hover {
+    -fx-background-color: #334155;
+}
+.dark-mode .date-picker-popup .day-cell.selected {
+    -fx-background-color: #0D9488;
+    -fx-text-fill: #F1F5F9;
+}
+
+/* Fix double borders on DatePicker when styled */
+.date-picker > .text-field {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-background-insets: 0;
+    -fx-border-insets: 0;
 }

@@ -37,28 +37,26 @@ public final class AppConfigurationService {
     }
 
     private static AppConfiguration loadConfiguration() {
-        boolean loadedFromLegacy = false;
         try {
             AppConfiguration loaded = DataStorage.readSerialized(CONFIG_FILE.toString(), AppConfiguration.class);
             if (loaded == null && Files.exists(LEGACY_CONFIG_FILE)) {
-                loadedFromLegacy = true;
                 loaded = DataStorage.readSerialized(LEGACY_CONFIG_FILE.toString(), AppConfiguration.class);
             }
 
-            AppConfiguration configuration = loaded != null ? loaded : new AppConfiguration();
-            configuration.normalize();
-            configuration.rememberCurrentLibrary();
-            migrateLegacyStorage(configuration);
-            persistSilently(configuration);
-            return configuration;
+            AppConfiguration config = loaded != null ? loaded : new AppConfiguration();
+            config.normalize();
+            config.rememberCurrentLibrary();
+            migrateLegacyStorage(config);
+            persistSilently(config);
+            return config;
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to load app configuration, using defaults", e);
-            AppConfiguration configuration = new AppConfiguration();
-            configuration.normalize();
-            configuration.rememberCurrentLibrary();
-            migrateLegacyStorage(configuration);
-            persistSilently(configuration);
-            return configuration;
+            AppConfiguration fallback = new AppConfiguration();
+            fallback.normalize();
+            fallback.rememberCurrentLibrary();
+            migrateLegacyStorage(fallback);
+            persistSilently(fallback);
+            return fallback;
         }
     }
 
@@ -115,17 +113,17 @@ public final class AppConfigurationService {
         }
     }
 
-    private static void migrateLegacyStorage(AppConfiguration configuration) {
-        if (configuration == null) {
+    private static void migrateLegacyStorage(AppConfiguration config) {
+        if (config == null) {
             return;
         }
-        AppPaths.migrateLegacyDirectoryIfNeeded(LEGACY_DIRECTORIES[0], Path.of(configuration.getDataDirectory()));
-        AppPaths.migrateLegacyDirectoryIfNeeded(LEGACY_DIRECTORIES[1], Path.of(configuration.getExportDirectory()));
+        AppPaths.migrateLegacyDirectoryIfNeeded(LEGACY_DIRECTORIES[0], Path.of(config.getDataDirectory()));
+        AppPaths.migrateLegacyDirectoryIfNeeded(LEGACY_DIRECTORIES[1], Path.of(config.getExportDirectory()));
     }
 
-    private static void persistSilently(AppConfiguration configuration) {
+    private static void persistSilently(AppConfiguration config) {
         try {
-            updateConfiguration(configuration);
+            updateConfiguration(config);
         } catch (IOException e) {
             LOGGER.log(Level.WARNING, "Failed to persist normalized app configuration", e);
         }

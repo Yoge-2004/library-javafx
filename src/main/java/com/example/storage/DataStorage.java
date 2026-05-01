@@ -45,12 +45,13 @@ public final class DataStorage {
         }
 
         Path filePath = Paths.get(filename);
+        byte[] snapshot = DatabaseConnectionService.loadSnapshot(snapshotKey(filePath));
+        if (snapshot != null) {
+            LOGGER.log(Level.INFO, "Loaded {0} from database snapshot", filename);
+            return clazz.cast(deserialize(snapshot, clazz));
+        }
+
         if (!Files.exists(filePath)) {
-            byte[] snapshot = DatabaseConnectionService.loadSnapshot(snapshotKey(filePath));
-            if (snapshot != null) {
-                LOGGER.log(Level.INFO, "Recovered {0} from database snapshot", filename);
-                return clazz.cast(deserialize(snapshot, clazz));
-            }
             LOGGER.log(Level.INFO, "File does not exist: {0}", filename);
             return null;
         }

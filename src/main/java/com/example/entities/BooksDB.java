@@ -67,6 +67,7 @@ public final class BooksDB implements Serializable {
         private boolean returned;
         private LocalDate returnDate;
         private double fineAmount;
+        private boolean finePaid;
         private int renewalCount;
         private String notes;
         private double finePerDayRate;
@@ -87,6 +88,7 @@ public final class BooksDB implements Serializable {
             this.returned = false;
             this.returnDate = null;
             this.fineAmount = 0.0;
+            this.finePaid = false;
             this.renewalCount = 0;
             this.notes = null;
             this.finePerDayRate = Math.max(0.0, finePerDayRate);
@@ -103,6 +105,7 @@ public final class BooksDB implements Serializable {
         public boolean isReturned() { return returned; }
         public LocalDate getReturnDate() { return returnDate; }
         public double getFineAmount() { return fineAmount; }
+        public boolean isFinePaid() { return finePaid; }
         public int getRenewalCount() { return renewalCount; }
         public String getNotes() { return notes; }
         public double getFinePerDayRate() { return finePerDayRate > 0.0 ? finePerDayRate : FINE_PER_DAY; }
@@ -117,6 +120,7 @@ public final class BooksDB implements Serializable {
 
         public void setReturnDate(LocalDate returnDate) { this.returnDate = returnDate; }
         public void setFineAmount(double fineAmount) { this.fineAmount = Math.max(0.0, fineAmount); }
+        public void setFinePaid(boolean finePaid) { this.finePaid = finePaid; }
         public void setQuantity(int quantity) { this.quantity = Math.max(1, quantity); }
         public void setNotes(String notes) { this.notes = notes; }
         public void setDueDate(LocalDate dueDate) { this.currentDueDate = Objects.requireNonNull(dueDate, "Due date cannot be null"); }

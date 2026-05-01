@@ -1,8 +1,6 @@
 package com.example.entities;
 
-import java.io.Serializable;
-
-public enum UserRole implements Serializable {
+public enum UserRole {
     USER("User"),
     ADMIN("Administrator"),
     LIBRARIAN("Librarian");

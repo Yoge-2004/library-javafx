@@ -26,7 +26,7 @@ public class RegistrationDialog {
     private record PasswordRow(PasswordField hiddenField, TextField visibleField,
                                Button toggleButton, HBox container) {}
 
-    public static Optional<RegistrationRequest> show(Stage owner, boolean isFirstUser) {
+    public static Optional<RegistrationRequest> show(Stage owner, boolean isFirstUser, boolean allowRoleSelection) {
         Dialog<RegistrationRequest> dialog = new Dialog<>();
         dialog.setTitle(isFirstUser ? "Create Administrator Account" : "Create Account");
         dialog.initOwner(owner);
@@ -120,7 +120,7 @@ public class RegistrationDialog {
         VBox roleBox = null;
         Label librarianNotice = new Label();
 
-        if (!isFirstUser) {
+        if (!isFirstUser && allowRoleSelection) {
             Label rLbl = fieldLabel("Account Type");
             RadioButton userRb = new RadioButton();
             userRb.setToggleGroup(roleGroup);
@@ -197,8 +197,8 @@ public class RegistrationDialog {
         pane.getButtonTypes().addAll(ButtonType.CANCEL, createBt);
         Button okBtn = (Button) pane.lookupButton(createBt);
         Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
-        stylePrimaryButton(okBtn, "Create Account");
-        styleSecondaryButton(cancelBtn, "Cancel");
+        if (okBtn != null) okBtn.setText("Create Account");
+        if (cancelBtn != null) cancelBtn.setText("Cancel");
 
         dialog.setOnShown(event -> {
             if (pane.getScene() == null) {
@@ -247,7 +247,7 @@ public class RegistrationDialog {
         dialog.setResultConverter(bt -> {
             if (bt == createBt) {
                 UserRole role = isFirstUser ? UserRole.ADMIN
-                        : (roleGroup == null ? UserRole.USER
+                        : (!allowRoleSelection ? UserRole.USER
                            : (UserRole) roleGroup.getSelectedToggle().getUserData());
                 return new RegistrationRequest(
                         usernameField.getText().trim(),
@@ -436,24 +436,7 @@ public class RegistrationDialog {
         return AppTheme.darkMode ? "#94A3B8" : "#64748B";
     }
 
-    private static void stylePrimaryButton(Button button, String text) {
-        if (button == null) {
-            return;
-        }
-        button.setText(text);
-        button.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; " +
-                "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 24;");
-    }
 
-    private static void styleSecondaryButton(Button button, String text) {
-        if (button == null) {
-            return;
-        }
-        button.setText(text);
-        button.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + "; " +
-                "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
-                "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 22;");
-    }
 
     public record RegistrationRequest(
             String username, String password, UserRole role, boolean pendingApproval,

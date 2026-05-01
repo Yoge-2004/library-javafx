@@ -3,7 +3,6 @@ package com.example.application.ui;
 import com.example.application.ToastDisplay;
 import com.example.entities.User;
 import com.example.entities.UserRole;
-import com.example.exceptions.UserException;
 import com.example.services.UserService;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -25,8 +24,11 @@ public class UserAccountDialogs {
 
     public static boolean showProfileEditor(Stage owner, String userId) {
         User user;
-        try { user = UserService.getUserById(userId); }
-        catch (Exception e) { return false; }
+        try {
+            user = UserService.getUserById(userId);
+        } catch (Exception e) {
+            return false;
+        }
 
         Dialog<Boolean> dlg = new Dialog<>();
         dlg.setTitle("Edit Profile");
@@ -39,18 +41,23 @@ public class UserAccountDialogs {
         pane.setPrefHeight(380);
 
         GridPane grid = new GridPane();
-        grid.setHgap(14); grid.setVgap(14);
+        grid.setHgap(14);
+        grid.setVgap(14);
         grid.setPadding(new Insets(20));
 
-        TextField firstField   = field(user.getFirstName());
-        TextField lastField    = field(user.getLastName());
-        TextField emailField   = field(user.getEmail());
+        TextField firstField = field(user.getFirstName());
+        TextField lastField = field(user.getLastName());
+        TextField emailField = field(user.getEmail());
         TextField contactField = field(user.getContactNumber());
 
-        grid.add(bold("First Name"),  0, 0); grid.add(firstField,   1, 0);
-        grid.add(bold("Last Name"),   0, 1); grid.add(lastField,    1, 1);
-        grid.add(bold("Email"),       0, 2); grid.add(emailField,   1, 2);
-        grid.add(bold("Contact"),     0, 3); grid.add(contactField, 1, 3);
+        grid.add(bold("First Name"), 0, 0);
+        grid.add(firstField, 1, 0);
+        grid.add(bold("Last Name"), 0, 1);
+        grid.add(lastField, 1, 1);
+        grid.add(bold("Email"), 0, 2);
+        grid.add(emailField, 1, 2);
+        grid.add(bold("Contact"), 0, 3);
+        grid.add(contactField, 1, 3);
 
         Label err = errorLabel();
         grid.add(err, 0, 4, 2, 1);
@@ -66,7 +73,8 @@ public class UserAccountDialogs {
         styleSecondaryBtn(pane, ButtonType.CANCEL, "Cancel");
 
         dlg.setResultConverter(bt -> {
-            if (bt != ButtonType.OK) return false;
+            if (bt != ButtonType.OK)
+                return false;
             try {
                 user.setFirstName(firstField.getText());
                 user.setLastName(lastField.getText());
@@ -75,7 +83,8 @@ public class UserAccountDialogs {
                 UserService.updateUser(user);
                 return true;
             } catch (Exception e) {
-                err.setText(e.getMessage()); err.setVisible(true);
+                err.setText(e.getMessage());
+                err.setVisible(true);
                 return false;
             }
         });
@@ -96,21 +105,26 @@ public class UserAccountDialogs {
         pane.setPrefHeight(340);
 
         GridPane grid = new GridPane();
-        grid.setHgap(14); grid.setVgap(14);
+        grid.setHgap(14);
+        grid.setVgap(14);
         grid.setPadding(new Insets(20));
 
-        PasswordField curField  = passField("Current password");
-        PasswordField newField  = passField("New password (min 4 chars)");
+        PasswordField curField = passField("Current password");
+        PasswordField newField = passField("New password (min 4 chars)");
         PasswordField confField = passField("Re-enter new password");
         Label err = errorLabel();
 
-        grid.add(bold("Current Password"), 0, 0); grid.add(curField,  1, 0);
-        grid.add(bold("New Password"),     0, 1); grid.add(newField,  1, 1);
-        grid.add(bold("Confirm"),          0, 2); grid.add(confField, 1, 2);
-        grid.add(err,                      0, 3, 2, 1);
+        grid.add(bold("Current Password"), 0, 0);
+        grid.add(curField, 1, 0);
+        grid.add(bold("New Password"), 0, 1);
+        grid.add(newField, 1, 1);
+        grid.add(bold("Confirm"), 0, 2);
+        grid.add(confField, 1, 2);
+        grid.add(err, 0, 3, 2, 1);
 
         ColumnConstraints c0 = new ColumnConstraints(140);
-        ColumnConstraints c1 = new ColumnConstraints(); c1.setHgrow(Priority.ALWAYS);
+        ColumnConstraints c1 = new ColumnConstraints();
+        c1.setHgrow(Priority.ALWAYS);
         grid.getColumnConstraints().addAll(c0, c1);
 
         pane.setContent(grid);
@@ -122,25 +136,41 @@ public class UserAccountDialogs {
             try {
                 User u = UserService.getUserById(userId);
                 if (!u.getPassword().equals(curField.getText())) {
-                    err.setText("Current password is incorrect"); err.setVisible(true); ev.consume(); return;
+                    err.setText("Current password is incorrect");
+                    err.setVisible(true);
+                    ev.consume();
+                    return;
                 }
                 if (newField.getText().length() < 4) {
-                    err.setText("New password needs 4+ characters"); err.setVisible(true); ev.consume(); return;
+                    err.setText("New password needs 4+ characters");
+                    err.setVisible(true);
+                    ev.consume();
+                    return;
                 }
                 if (!newField.getText().equals(confField.getText())) {
-                    err.setText("Passwords do not match"); err.setVisible(true); ev.consume(); return;
+                    err.setText("Passwords do not match");
+                    err.setVisible(true);
+                    ev.consume();
+                    return;
                 }
-            } catch (Exception e) { err.setText(e.getMessage()); err.setVisible(true); ev.consume(); }
+            } catch (Exception e) {
+                err.setText(e.getMessage());
+                err.setVisible(true);
+                ev.consume();
+            }
         });
 
         dlg.setResultConverter(bt -> {
-            if (bt != ButtonType.OK) return false;
+            if (bt != ButtonType.OK)
+                return false;
             try {
                 User u = UserService.getUserById(userId);
                 u.setPassword(newField.getText());
                 UserService.updateUser(u);
                 return true;
-            } catch (Exception e) { return false; }
+            } catch (Exception e) {
+                return false;
+            }
         });
         return dlg.showAndWait().orElse(false);
     }
@@ -167,7 +197,8 @@ public class UserAccountDialogs {
         Label heading = new Label("User Management");
         heading.setStyle("-fx-font-size:18px;-fx-font-weight:700;-fx-text-fill:" +
                 (AppTheme.darkMode ? "#F8FAFC" : "#0F172A") + ";");
-        Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
+        Region sp = new Region();
+        HBox.setHgrow(sp, Priority.ALWAYS);
         Button addBtn = new Button("+ Add User");
         addBtn.setStyle("-fx-background-color:#0D9488;-fx-text-fill:white;" +
                 "-fx-font-weight:600;-fx-background-radius:8px;-fx-padding:8 18;-fx-cursor:hand;");
@@ -179,36 +210,44 @@ public class UserAccountDialogs {
         VBox.setVgrow(table, Priority.ALWAYS);
         table.setPrefHeight(400);
 
-        TableColumn<User, String> uCol = col("Username",  u -> u.getUserId(), 130);
-        TableColumn<User, String> nCol = col("Name",      u -> u.getFullName(), 160);
-        TableColumn<User, String> rCol = col("Role",      u -> u.getRole().getDisplayName(), 110);
+        TableColumn<User, String> uCol = col("Username", u -> u.getUserId(), 130);
+        TableColumn<User, String> nCol = col("Name", u -> u.getFullName(), 160);
+        TableColumn<User, String> rCol = col("Role", u -> u.getRole().getDisplayName(), 110);
 
         TableColumn<User, Void> sCol = new TableColumn<>("Status");
         sCol.setPrefWidth(140);
         sCol.setCellFactory(c -> new TableCell<>() {
-            @Override protected void updateItem(Void v, boolean empty) {
+            @Override
+            protected void updateItem(Void v, boolean empty) {
                 super.updateItem(v, empty);
-                if (empty || getTableRow() == null || getTableRow().getItem() == null)
-                { setGraphic(null); return; }
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setGraphic(null);
+                    return;
+                }
                 User u = getTableRow().getItem();
                 String txt = u.getUserId().equals(currentUserId) ? "Active (You)"
                         : u.isActive() ? "Active" : "Pending Approval";
                 Label chip = new Label(txt);
                 chip.setStyle("-fx-background-color:" + (u.isActive() ? "#16A34A" : "#D97706")
                         + ";-fx-text-fill:white;-fx-background-radius:20px;-fx-padding:3 10;-fx-font-size:12px;");
-                setGraphic(chip); setText(null);
+                setGraphic(chip);
+                setText(null);
             }
         });
 
         TableColumn<User, Void> aCol = new TableColumn<>("Actions");
-        aCol.setMinWidth(108); aCol.setPrefWidth(108); aCol.setMaxWidth(108);
+        aCol.setMinWidth(108);
+        aCol.setPrefWidth(108);
+        aCol.setMaxWidth(108);
         aCol.setCellFactory(c -> new TableCell<>() {
             final Button apprBtn = actionIconBtn(AppTheme.ICON_CHECK, "Approve account", "#16A34A");
             final Button editBtn = actionIconBtn(AppTheme.ICON_EDIT, "Edit user", "#3B82F6");
-            final Button delBtn  = actionIconBtn(AppTheme.ICON_DELETE, "Delete user", "#DC2626");
+            final Button delBtn = actionIconBtn(AppTheme.ICON_DELETE, "Delete user", "#DC2626");
             {
                 apprBtn.setOnAction(e -> {
-                    User u = getTableRow().getItem(); if (u == null) return;
+                    User u = getTableRow().getItem();
+                    if (u == null)
+                        return;
                     u.setActive(true);
                     try {
                         UserService.updateUser(u);
@@ -219,15 +258,19 @@ public class UserAccountDialogs {
                     }
                 });
                 editBtn.setOnAction(e -> {
-                    User u = getTableRow().getItem(); if (u == null) return;
+                    User u = getTableRow().getItem();
+                    if (u == null)
+                        return;
                     editUser(owner, u, currentUserId, isAdmin, toastDisplay);
                     reload(table);
                 });
                 delBtn.setOnAction(e -> {
                     User u = getTableRow().getItem();
-                    if (u == null || u.getUserId().equals(currentUserId)) return;
+                    if (u == null || u.getUserId().equals(currentUserId))
+                        return;
                     if (!isAdmin && u.getRole().isAdmin()) {
-                        notifyError(toastDisplay, "Only administrators can delete admin accounts."); return;
+                        notifyError(toastDisplay, "Only administrators can delete admin accounts.");
+                        return;
                     }
                     Alert conf = new Alert(Alert.AlertType.WARNING,
                             "Delete \"" + u.getUserId() + "\"?",
@@ -248,13 +291,18 @@ public class UserAccountDialogs {
                             });
                 });
             }
-            @Override protected void updateItem(Void v, boolean empty) {
+
+            @Override
+            protected void updateItem(Void v, boolean empty) {
                 super.updateItem(v, empty);
-                if (empty || getTableRow() == null || getTableRow().getItem() == null)
-                { setGraphic(null); return; }
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setGraphic(null);
+                    return;
+                }
                 User u = getTableRow().getItem();
                 HBox box = new HBox(2);
-                if (!u.isActive()) box.getChildren().add(apprBtn);
+                if (!u.isActive())
+                    box.getChildren().add(apprBtn);
                 box.getChildren().add(editBtn);
                 if (!u.getUserId().equals(currentUserId)
                         && (isAdmin || !u.getRole().isAdmin()))
@@ -268,13 +316,15 @@ public class UserAccountDialogs {
         reload(table);
 
         addBtn.setOnAction(e -> {
-            RegistrationDialog.show(owner, false).ifPresent(req -> {
+            RegistrationDialog.show(owner, false, true).ifPresent(req -> {
                 try {
                     if (UserService.userExists(req.username())) {
-                        notifyError(toastDisplay, "Username already taken."); return;
+                        notifyError(toastDisplay, "Username already taken.");
+                        return;
                     }
                     if (UserService.emailExists(req.email())) {
-                        notifyError(toastDisplay, "Email address already in use."); return;
+                        notifyError(toastDisplay, "Email address already in use.");
+                        return;
                     }
                     UserService.createUser(req.username(), req.password(), req.role());
                     User created = UserService.getUserById(req.username());
@@ -284,7 +334,9 @@ public class UserAccountDialogs {
                     UserService.updateUser(created);
                     reload(table);
                     notifySuccess(toastDisplay, "User created: " + req.username());
-                } catch (Exception ex) { notifyError(toastDisplay, ex.getMessage()); }
+                } catch (Exception ex) {
+                    notifyError(toastDisplay, ex.getMessage());
+                }
             });
         });
 
@@ -298,7 +350,8 @@ public class UserAccountDialogs {
 
     // ── Edit user (admin/librarian) ───────────────────────────────
 
-    private static void editUser(Stage owner, User user, String currentUserId, boolean isAdmin, ToastDisplay toastDisplay) {
+    public static void editUser(Stage owner, User user, String currentUserId, boolean isAdmin,
+            ToastDisplay toastDisplay) {
         Dialog<Boolean> dlg = new Dialog<>();
         dlg.setTitle("Edit: " + user.getUserId());
         dlg.initOwner(owner);
@@ -310,19 +363,20 @@ public class UserAccountDialogs {
         pane.setPrefHeight(420);
 
         GridPane grid = new GridPane();
-        grid.setHgap(14); grid.setVgap(14);
+        grid.setHgap(14);
+        grid.setVgap(14);
         grid.setPadding(new Insets(20));
 
-        TextField firstField   = field(user.getFirstName());
-        TextField lastField    = field(user.getLastName());
-        TextField emailField   = field(user.getEmail());
+        TextField firstField = field(user.getFirstName());
+        TextField lastField = field(user.getLastName());
+        TextField emailField = field(user.getEmail());
         TextField contactField = field(user.getContactNumber());
         boolean isSelf = user.getUserId().equals(currentUserId);
 
         ComboBox<UserRole> roleBox = new ComboBox<>();
         roleBox.getItems().addAll(isAdmin
-                ? new UserRole[]{UserRole.USER, UserRole.LIBRARIAN, UserRole.ADMIN}
-                : new UserRole[]{UserRole.USER, UserRole.LIBRARIAN});
+                ? new UserRole[] { UserRole.USER, UserRole.LIBRARIAN, UserRole.ADMIN }
+                : new UserRole[] { UserRole.USER, UserRole.LIBRARIAN });
         roleBox.setValue(user.getRole());
         roleBox.setMaxWidth(Double.MAX_VALUE);
 
@@ -333,18 +387,25 @@ public class UserAccountDialogs {
         Label err = errorLabel();
 
         int row = 0;
-        grid.add(bold("First Name"), 0, row); grid.add(firstField,   1, row++);
-        grid.add(bold("Last Name"),  0, row); grid.add(lastField,    1, row++);
-        grid.add(bold("Email"),      0, row); grid.add(emailField,   1, row++);
-        grid.add(bold("Contact"),    0, row); grid.add(contactField, 1, row++);
+        grid.add(bold("First Name"), 0, row);
+        grid.add(firstField, 1, row++);
+        grid.add(bold("Last Name"), 0, row);
+        grid.add(lastField, 1, row++);
+        grid.add(bold("Email"), 0, row);
+        grid.add(emailField, 1, row++);
+        grid.add(bold("Contact"), 0, row);
+        grid.add(contactField, 1, row++);
         if (!isSelf) {
-            grid.add(bold("Role"),   0, row); grid.add(roleBox,      1, row++);
-            grid.add(activeCheck,    0, row, 2, 1); row++;
+            grid.add(bold("Role"), 0, row);
+            grid.add(roleBox, 1, row++);
+            grid.add(activeCheck, 0, row, 2, 1);
+            row++;
         }
         grid.add(err, 0, row, 2, 1);
 
         ColumnConstraints c0 = new ColumnConstraints(120);
-        ColumnConstraints c1 = new ColumnConstraints(); c1.setHgrow(Priority.ALWAYS);
+        ColumnConstraints c1 = new ColumnConstraints();
+        c1.setHgrow(Priority.ALWAYS);
         grid.getColumnConstraints().addAll(c0, c1);
 
         pane.setContent(grid);
@@ -383,7 +444,7 @@ public class UserAccountDialogs {
     }
 
     private static TableColumn<User, String> col(String name,
-                                                 java.util.function.Function<User, String> fn, double w) {
+            java.util.function.Function<User, String> fn, double w) {
         TableColumn<User, String> c = new TableColumn<>(name);
         c.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(fn.apply(d.getValue())));
         c.setPrefWidth(w);
@@ -405,7 +466,7 @@ public class UserAccountDialogs {
     private static Label bold(String t) {
         Label l = new Label(t);
         l.setStyle("-fx-font-size:13px;-fx-font-weight:600;-fx-text-fill:"
-                + (AppTheme.darkMode ? "#E2E8F0" : "#374151") + ";");
+                + textPrimary() + ";");
         return l;
     }
 

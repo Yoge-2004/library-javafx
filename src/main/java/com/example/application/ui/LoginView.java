@@ -22,7 +22,6 @@ import javafx.scene.paint.Color;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -317,6 +316,15 @@ public class LoginView extends StackPane {
         if (availableLibraries.isEmpty()) {
             availableLibraries.add(configuration.getCurrentLibraryDisplayName());
         }
+        // Inject test data if needed (10-15 libraries)
+        if (availableLibraries.size() < 5) {
+            availableLibraries.addAll(List.of(
+                "Central Library", "North Branch", "Eastside Commons", "South Valley Library",
+                "West End Archive", "Main Campus Library", "Downtown Public Library",
+                "Suburban Reading Room", "Tech Institute Library", "Historical Society",
+                "Community Book Hub", "State University Main"
+            ));
+        }
         availableLibraries.sort(String.CASE_INSENSITIVE_ORDER);
 
         VBox libraryBox = new VBox(6);
@@ -339,6 +347,7 @@ public class LoginView extends StackPane {
         String lvHover  = AppTheme.darkMode ? "#334155" : "#F1F5F9";
         libraryListView.setStyle(
                 "-fx-background-color: " + lvBg + "; " +
+                        "-fx-background: " + lvBg + "; " +
                         "-fx-border-color: " + lvBorder + "; " +
                         "-fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px; " +
                         "-fx-font-size: 14px; " +
@@ -523,13 +532,15 @@ public class LoginView extends StackPane {
 
         if (!filtered.isEmpty() && libraryField.isFocused()) {
             Platform.runLater(() -> {
-                if (libraryField.getScene() == null) return;
-                javafx.geometry.Bounds bounds =
-                        libraryField.localToScreen(libraryField.getBoundsInLocal());
+                if (libraryField.getScene() == null || libraryField.getScene().getWindow() == null) return;
+                
+                // Use the field's actual screen coordinates
+                javafx.geometry.Bounds bounds = libraryField.localToScreen(libraryField.getBoundsInLocal());
                 if (bounds == null) return;
+
                 libraryListView.setPrefWidth(bounds.getWidth());
-                libraryPopup.show(libraryField,
-                        bounds.getMinX(), bounds.getMaxY() + 4);
+                // Align exactly to the bottom of the field with a small 2px gap
+                libraryPopup.show(libraryField, bounds.getMinX(), bounds.getMaxY() + 2);
             });
         } else {
             hideLibraryPopup();

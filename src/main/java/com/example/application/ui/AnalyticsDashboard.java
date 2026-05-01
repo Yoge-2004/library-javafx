@@ -24,7 +24,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -39,7 +38,6 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -53,7 +51,7 @@ import java.util.stream.Collectors;
  * Staff users see configurable charts built from real issue history.
  * Regular users see a lighter borrowing snapshot.
  */
-@SuppressWarnings({"unchecked", "rawtypes"})
+@SuppressWarnings({"unchecked"})
 public class AnalyticsDashboard extends BorderPane {
 
     private enum TrendGrouping {
@@ -62,7 +60,6 @@ public class AnalyticsDashboard extends BorderPane {
         MONTHLY
     }
 
-    private final Runnable onRefresh;
     private final String currentUser;
     private final boolean isStaff;
     private final ToastDisplay toastDisplay;
@@ -107,8 +104,7 @@ public class AnalyticsDashboard extends BorderPane {
             "#BAE6FD", "#B4E7FF", "#BFDBFE", "#99F6E4", "#86EFAC", "#BBF7D0"
     };
 
-    public AnalyticsDashboard(Runnable onRefresh, String currentUser, boolean isStaff, ToastDisplay toastDisplay) {
-        this.onRefresh = onRefresh;
+    public AnalyticsDashboard(String currentUser, boolean isStaff, ToastDisplay toastDisplay) {
         this.currentUser = currentUser;
         this.isStaff = isStaff;
         this.toastDisplay = toastDisplay;
@@ -1083,11 +1079,14 @@ public class AnalyticsDashboard extends BorderPane {
     private void updateResponsiveSections() {
         double availableWidth = Math.max(360, getWidth() - 112);
 
-        applyResponsiveWidths(statsPane, availableWidth, 3, 2, 1, 220, Double.MAX_VALUE);
+        // Stats: exactly 3 cards per row, occupying 1/3 viewport width regardless of size
+        applyResponsiveWidths(statsPane, availableWidth, 3, 3, 3, 0, Double.MAX_VALUE);
+        // Bottom panels: 2 columns on wide, 1 on narrow
         applyResponsiveWidths(bottomPane, availableWidth,
                 availableWidth >= 1080 ? 2 : 1,
                 availableWidth >= 1080 ? 2 : 1,
                 1, 320, Double.MAX_VALUE);
+        // Charts: always 1 per row — each chart occupies the full viewport width
         applyResponsiveWidths(chartsPane, availableWidth, 1, 1, 1, 320, Double.MAX_VALUE);
 
         if (trendChartHolder != null) {
@@ -1138,9 +1137,11 @@ public class AnalyticsDashboard extends BorderPane {
         for (Node child : pane.getChildren()) {
             if (child instanceof Region region) {
                 region.setPrefWidth(targetWidth);
-                region.setMaxWidth(Double.MAX_VALUE);
+                region.setMaxWidth(targetWidth); // Force 1/3 width
+                region.setMinWidth(targetWidth);
             }
         }
+        pane.requestLayout();
     }
 
     private static String safeCategory(String category) {

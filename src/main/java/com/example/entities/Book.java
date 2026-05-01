@@ -3,7 +3,6 @@ package com.example.entities;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.Objects;
-import java.util.regex.Pattern;
 
 /**
  * Enhanced Book entity with comprehensive validation, proper encapsulation,
@@ -11,11 +10,6 @@ import java.util.regex.Pattern;
  */
 public final class Book implements Serializable {
     private static final long serialVersionUID = 2L; // Incremented for version tracking
-
-    // Validation patterns
-    private static final Pattern ISBN_PATTERN = Pattern.compile(
-            "^(?:ISBN(?:-1[03])?:? )?(?=[0-9X]{10}$|(?=(?:[0-9]+[- ]){3})[- 0-9X]{13}$|97[89][0-9]{10}$|(?=(?:[0-9]+[- ]){4})[- 0-9]{17}$)(?:97[89][- ]?)?[0-9]{1,5}[- ]?[0-9]+[- ]?[0-9]+[- ]?[0-9X]$"
-    );
 
     // Validation constants
     private static final int MIN_TITLE_LENGTH = 1;
@@ -178,6 +172,12 @@ public final class Book implements Serializable {
         updateLastModified();
     }
 
+    public void setTableDescription(String description) {
+        this.description = (description != null && !description.trim().isEmpty()) ?
+                description.trim() : null;
+        updateLastModified();
+    }
+    
     public void setDescription(String description) {
         this.description = (description != null && !description.trim().isEmpty()) ?
                 description.trim() : null;
