@@ -9,62 +9,53 @@ import javafx.geometry.Insets;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
-import javafx.stage.Stage;
-
-import java.util.Optional;
 
 /**
- * Dialog for configuring optional database persistence.
- * Opened from Settings → Library Configuration → Database tab.
- *
- * Returns a {@link DatabaseConfiguration} on OK, or empty on Cancel.
+ * View component for database configuration.
+ * Extends VBox to be used within a Tab.
  */
-public final class DatabaseConfigurationDialog {
+public class DatabaseConfigurationView extends VBox {
 
-    private DatabaseConfigurationDialog() {}
+    private final DatabaseConfiguration cfg;
+    
+    private ComboBox<Engine> engineCombo;
+    private TextField sqliteFileField;
+    private TextField hostField;
+    private TextField portField;
+    private TextField dbField;
+    private TextField userField;
+    private PasswordField passField;
+    private CheckBox sslCheck;
+    private Spinner<Integer> timeoutSpin;
+    private Spinner<Integer> poolSpin;
+    private CheckBox dualWriteCheck;
+    
+    private Label statusLabel;
+    private Button testBtn;
 
-    public static Optional<DatabaseConfiguration> show(Stage owner, DatabaseConfiguration current) {
-        Dialog<DatabaseConfiguration> dialog = new Dialog<>();
-        dialog.setTitle("Database Configuration");
-        dialog.initOwner(owner);
-        dialog.setResizable(true);
+    public DatabaseConfigurationView(DatabaseConfiguration current) {
+        this.cfg = current != null ? current : new DatabaseConfiguration();
+        setSpacing(20);
+        setPadding(new Insets(24));
+        initUI();
+    }
 
-        DialogPane pane = dialog.getDialogPane();
-        AppTheme.applyTheme(pane);
-        pane.setPrefWidth(560);
-        pane.setMinWidth(480);
-
-        dialog.setOnShown(evt -> {
-            if (pane.getScene() != null && pane.getScene().getWindow() instanceof Stage st) {
-                AppTheme.applyWindowIcon(st);
-                st.setMinWidth(480);
-                st.setMinHeight(500);
-                st.sizeToScene();
-                st.centerOnScreen();
-            }
-        });
-
-        DatabaseConfiguration cfg = current != null ? current : new DatabaseConfiguration();
-
-        VBox root = new VBox(20);
-        root.setPadding(new Insets(24));
-
+    private void initUI() {
         // ── Title ────────────────────────────────────────────────────
         Label title = new Label("Database Persistence");
         title.setStyle("-fx-font-size: 18px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
 
         Label desc = new Label(
                 "Library OS stores data in local files by default. " +
-                        "Optionally connect to a database for shared or server-backed persistence. " +
-                        "When Dual-Write is enabled, both file and database are kept in sync.");
+                "Optionally connect to a database for shared or server-backed persistence. " +
+                "When Dual-Write is enabled, both file and database are kept in sync.");
         desc.setWrapText(true);
         desc.setStyle("-fx-font-size: 13px; -fx-text-fill: " + textMuted() + ";");
 
         // ── Engine picker ─────────────────────────────────────────────
         Label engineLabel = gridLabel("Database Engine:");
 
-        ComboBox<Engine> engineCombo = new ComboBox<>(
-                FXCollections.observableArrayList(Engine.values()));
+        engineCombo = new ComboBox<>(FXCollections.observableArrayList(Engine.values()));
         engineCombo.setMaxWidth(Double.MAX_VALUE);
         engineCombo.setStyle(inputStyle());
         engineCombo.setValue(cfg.getEngine());
@@ -74,15 +65,14 @@ public final class DatabaseConfigurationDialog {
         // ── SQLite section ────────────────────────────────────────────
         VBox sqliteSection = new VBox(10);
         Label sqliteFileLabel = gridLabel("SQLite File:");
-        TextField sqliteFileField = inputTF(cfg.getSqliteFile(), "library.db");
-        Button sqliteBrowse = browseFileBtn("Choose SQLite file", sqliteFileField, owner);
+        sqliteFileField = inputTF(cfg.getSqliteFile(), "library.db");
+        Button sqliteBrowse = browseFileBtn("Choose SQLite file", sqliteFileField);
         HBox sqliteRow = new HBox(8, sqliteFileField, sqliteBrowse);
         HBox.setHgrow(sqliteFileField, Priority.ALWAYS);
         sqliteSection.getChildren().addAll(sqliteFileLabel, sqliteRow);
 
         // ── Remote section ────────────────────────────────────────────
         VBox remoteSection = new VBox(12);
-
         GridPane remoteGrid = new GridPane();
         remoteGrid.setHgap(14);
         remoteGrid.setVgap(12);
@@ -91,15 +81,15 @@ public final class DatabaseConfigurationDialog {
         c1.setHgrow(Priority.ALWAYS);
         remoteGrid.getColumnConstraints().addAll(c0, c1);
 
-        TextField hostField = inputTF(cfg.getHost(), "localhost");
-        TextField portField = inputTF(cfg.getPort() > 0 ? String.valueOf(cfg.getPort()) : "", "3306");
-        TextField dbField   = inputTF(cfg.getDatabase(), "libraryos");
-        TextField userField = inputTF(cfg.getUsername(), "db_user");
-        PasswordField passField = new PasswordField();
+        hostField = inputTF(cfg.getHost(), "localhost");
+        portField = inputTF(cfg.getPort() > 0 ? String.valueOf(cfg.getPort()) : "", "3306");
+        dbField   = inputTF(cfg.getDatabase(), "libraryos");
+        userField = inputTF(cfg.getUsername(), "db_user");
+        passField = new PasswordField();
         passField.setStyle(inputStyle());
         passField.setText(cfg.getPassword());
         passField.setPromptText("Database password");
-        CheckBox sslCheck = new CheckBox("Require SSL/TLS");
+        sslCheck = new CheckBox("Require SSL/TLS");
         sslCheck.setSelected(cfg.isSslEnabled());
 
         remoteGrid.addRow(0, gridLabel("Host:"),     hostField);
@@ -108,7 +98,6 @@ public final class DatabaseConfigurationDialog {
         remoteGrid.addRow(3, gridLabel("Username:"), userField);
         remoteGrid.addRow(4, gridLabel("Password:"), passField);
         remoteGrid.add(sslCheck, 0, 5, 2, 1);
-
         remoteSection.getChildren().add(remoteGrid);
 
         // ── Connection options ─────────────────────────────────────────
@@ -121,17 +110,17 @@ public final class DatabaseConfigurationDialog {
         optGrid.setVgap(12);
         optGrid.getColumnConstraints().addAll(new ColumnConstraints(140), c1);
 
-        Spinner<Integer> timeoutSpin = new Spinner<>(1, 60, cfg.getConnectionTimeout());
+        timeoutSpin = new Spinner<>(1, 60, cfg.getConnectionTimeout());
         timeoutSpin.setEditable(true);
         timeoutSpin.getStyleClass().add("themed-spinner");
         timeoutSpin.setMaxWidth(Double.MAX_VALUE);
 
-        Spinner<Integer> poolSpin = new Spinner<>(1, 20, cfg.getMaxPoolSize());
+        poolSpin = new Spinner<>(1, 20, cfg.getMaxPoolSize());
         poolSpin.setEditable(true);
         poolSpin.getStyleClass().add("themed-spinner");
         poolSpin.setMaxWidth(Double.MAX_VALUE);
 
-        CheckBox dualWriteCheck = new CheckBox("Dual-Write (sync file + database)");
+        dualWriteCheck = new CheckBox("Dual-Write (sync file + database)");
         dualWriteCheck.setSelected(cfg.isDualWrite());
 
         optGrid.addRow(0, gridLabel("Timeout (s):"),   timeoutSpin);
@@ -139,16 +128,18 @@ public final class DatabaseConfigurationDialog {
         optGrid.add(dualWriteCheck, 0, 2, 2, 1);
 
         // ── Status / test ──────────────────────────────────────────────
-        Label statusLabel = new Label();
+        statusLabel = new Label();
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(Double.MAX_VALUE);
         statusLabel.setStyle("-fx-font-size: 13px;");
         statusLabel.setVisible(false);
 
-        Button testBtn = new Button("Test Connection");
+        testBtn = new Button("Test Connection");
         testBtn.setStyle("-fx-background-color: #0D9488; -fx-text-fill: white; " +
                 "-fx-font-weight: 600; -fx-background-radius: 8px; -fx-cursor: hand; -fx-padding: 8 18;");
         testBtn.setMaxWidth(Double.MAX_VALUE);
+
+        testBtn.setOnAction(evt -> handleTestConnection());
 
         // ── Visibility logic ───────────────────────────────────────────
         Runnable applyEngineVisibility = () -> {
@@ -161,7 +152,6 @@ public final class DatabaseConfigurationDialog {
             remoteSection.setVisible(showRemote);  remoteSection.setManaged(showRemote);
             testBtn.setVisible(showTest);          testBtn.setManaged(showTest);
 
-            // Pre-fill default port when engine changes
             if (showRemote && portField.getText().isBlank()) {
                 portField.setText(String.valueOf(e.defaultPort()));
             }
@@ -170,76 +160,39 @@ public final class DatabaseConfigurationDialog {
         engineCombo.valueProperty().addListener((o, ov, nv) -> applyEngineVisibility.run());
         applyEngineVisibility.run();
 
-        testBtn.setOnAction(evt -> {
-            statusLabel.setVisible(false);
-            testBtn.setDisable(true);
-            testBtn.setText("Testing…");
-
-            DatabaseConfiguration probe = buildConfig(engineCombo, sqliteFileField,
-                    hostField, portField, dbField, userField, passField,
-                    sslCheck, timeoutSpin, poolSpin, dualWriteCheck);
-
-            new Thread(() -> {
-                String error = DatabaseConnectionService.testConnection(probe);
-                Platform.runLater(() -> {
-                    testBtn.setDisable(false);
-                    testBtn.setText("Test Connection");
-                    statusLabel.setVisible(true);
-                    if (error == null) {
-                        statusLabel.setText("✓ Connection successful!");
-                        statusLabel.setStyle("-fx-font-size:13px; -fx-text-fill:#16A34A;");
-                    } else {
-                        statusLabel.setText("✗ " + error);
-                        statusLabel.setStyle("-fx-font-size:13px; -fx-text-fill:#DC2626;");
-                    }
-                });
-            }, "db-test").start();
-        });
-
-        root.getChildren().addAll(
+        getChildren().addAll(
                 title, desc,
                 engineLabel, engineCombo,
                 sqliteSection, remoteSection,
                 sep, optTitle, optGrid,
                 testBtn, statusLabel);
-
-        ScrollPane scroll = new ScrollPane(root);
-        scroll.setFitToWidth(true);
-        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
-
-        pane.setContent(scroll);
-        pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
-
-        Button okBtn = (Button) pane.lookupButton(ButtonType.OK);
-        Button cancelBtn = (Button) pane.lookupButton(ButtonType.CANCEL);
-        okBtn.setStyle("-fx-background-color:#0D9488; -fx-text-fill:white; -fx-font-weight:600; " +
-                "-fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 24;");
-        if (cancelBtn != null) {
-            cancelBtn.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E5E7EB") + "; " +
-                    "-fx-text-fill:" + (AppTheme.darkMode ? "#F8FAFC" : "#1F2937") + "; " +
-                    "-fx-font-weight:600; -fx-font-size:14px; -fx-background-radius:10px; -fx-padding:10 20;");
-        }
-
-        dialog.setResultConverter(bt -> {
-            if (bt != ButtonType.OK) return null;
-            return buildConfig(engineCombo, sqliteFileField,
-                    hostField, portField, dbField, userField, passField,
-                    sslCheck, timeoutSpin, poolSpin, dualWriteCheck);
-        });
-
-        return dialog.showAndWait();
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────
+    private void handleTestConnection() {
+        statusLabel.setVisible(false);
+        testBtn.setDisable(true);
+        testBtn.setText("Testing…");
 
-    private static DatabaseConfiguration buildConfig(
-            ComboBox<Engine> engineCombo, TextField sqliteFileField,
-            TextField hostField, TextField portField, TextField dbField,
-            TextField userField, PasswordField passField,
-            CheckBox sslCheck, Spinner<Integer> timeoutSpin,
-            Spinner<Integer> poolSpin, CheckBox dualWriteCheck) {
+        DatabaseConfiguration probe = buildConfigFromUI();
 
+        new Thread(() -> {
+            String error = DatabaseConnectionService.testConnection(probe);
+            Platform.runLater(() -> {
+                testBtn.setDisable(false);
+                testBtn.setText("Test Connection");
+                statusLabel.setVisible(true);
+                if (error == null) {
+                    statusLabel.setText("✓ Connection successful!");
+                    statusLabel.setStyle("-fx-font-size:13px; -fx-text-fill:#16A34A;");
+                } else {
+                    statusLabel.setText("✗ " + error);
+                    statusLabel.setStyle("-fx-font-size:13px; -fx-text-fill:#DC2626;");
+                }
+            });
+        }, "db-test").start();
+    }
+
+    public DatabaseConfiguration buildConfigFromUI() {
         DatabaseConfiguration c = new DatabaseConfiguration();
         c.setEngine(engineCombo.getValue());
         c.setSqliteFile(sqliteFileField.getText().trim());
@@ -258,20 +211,20 @@ public final class DatabaseConfigurationDialog {
         return c;
     }
 
-    private static TextField inputTF(String val, String prompt) {
+    private TextField inputTF(String val, String prompt) {
         TextField f = new TextField(val != null ? val : "");
         f.setPromptText(prompt);
         f.setStyle(inputStyle());
         return f;
     }
 
-    private static Label gridLabel(String text) {
+    private Label gridLabel(String text) {
         Label l = new Label(text);
         l.setStyle("-fx-font-size:13px; -fx-font-weight:600; -fx-text-fill:" + textPrimary() + ";");
         return l;
     }
 
-    private static Button browseFileBtn(String title, TextField target, Stage owner) {
+    private Button browseFileBtn(String title, TextField target) {
         Button b = new Button("Browse…");
         b.setStyle("-fx-background-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") + "; " +
                 "-fx-text-fill:" + (AppTheme.darkMode ? "#F1F5F9" : "#1F2937") + "; " +
@@ -280,32 +233,22 @@ public final class DatabaseConfigurationDialog {
             FileChooser fc = new FileChooser();
             fc.setTitle(title);
             fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("SQLite database", "*.db", "*.sqlite"));
-            java.io.File f2 = fc.showOpenDialog(owner);
+            java.io.File f2 = fc.showOpenDialog(getScene().getWindow());
             if (f2 != null) target.setText(f2.getAbsolutePath());
         });
         return b;
     }
 
-    private static String inputStyle() {
-        if (AppTheme.darkMode) {
-            return "-fx-background-color:#1E293B; -fx-border-color:#334155; " +
-                    "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
-                    "-fx-padding:9 12; -fx-font-size:14px; -fx-text-fill:#E2E8F0;";
-        }
-        return "-fx-background-color:#F9FAFB; -fx-border-color:#D1D5DB; " +
-                "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
-                "-fx-padding:9 12; -fx-font-size:14px;";
+    private String inputStyle() {
+        return "-fx-background-color: " + (AppTheme.darkMode ? "#1E293B" : "#F9FAFB") + "; " +
+                "-fx-border-color: " + (AppTheme.darkMode ? "#334155" : "#D1D5DB") + "; " +
+                "-fx-border-width: 1.5; -fx-border-radius: 10px; -fx-background-radius: 10px; " +
+                "-fx-padding: 9 12; -fx-font-size: 14px; -fx-text-fill: " + textPrimary() + ";";
     }
 
-    private static String textPrimary() {
-        return AppTheme.darkMode ? "#F8FAFC" : "#0F172A";
-    }
+    private String textPrimary() { return AppTheme.darkMode ? "#F8FAFC" : "#0F172A"; }
+    private String textMuted() { return AppTheme.darkMode ? "#94A3B8" : "#64748B"; }
 
-    private static String textMuted() {
-        return AppTheme.darkMode ? "#94A3B8" : "#64748B";
-    }
-
-    /** ListCell that shows Engine.displayName instead of enum name. */
     private static class EngineCell extends ListCell<Engine> {
         @Override
         protected void updateItem(Engine item, boolean empty) {

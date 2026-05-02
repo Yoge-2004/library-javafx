@@ -37,10 +37,31 @@ public final class AppConfigurationService {
     }
 
     private static AppConfiguration loadConfiguration() {
+        AppConfiguration loaded = null;
         try {
-            AppConfiguration loaded = DataStorage.readSerialized(CONFIG_FILE.toString(), AppConfiguration.class);
+            // Priority 1: Local File
+            if (Files.exists(CONFIG_FILE)) {
+                loaded = DataStorage.readSerialized(CONFIG_FILE.toString(), AppConfiguration.class);
+            }
+            
+            // Priority 2: Legacy File
             if (loaded == null && Files.exists(LEGACY_CONFIG_FILE)) {
                 loaded = DataStorage.readSerialized(LEGACY_CONFIG_FILE.toString(), AppConfiguration.class);
+            }
+
+            // Priority 3: Database Fallback (if local files missing or corrupt)
+            if (loaded == null) {
+                try {
+                    com.example.entities.DatabaseConfiguration dbConfig = new com.example.entities.DatabaseConfiguration();
+                    if (dbConfig.isConfigured()) {
+                        DataStorage.syncFromDatabase(AppPaths.resolveDataDirectory());
+                        if (Files.exists(CONFIG_FILE)) {
+                            loaded = DataStorage.readSerialized(CONFIG_FILE.toString(), AppConfiguration.class);
+                        }
+                    }
+                } catch (Exception dbEx) {
+                    LOGGER.log(Level.FINE, "Database configuration sync failed during startup", dbEx);
+                }
             }
 
             AppConfiguration config = loaded != null ? loaded : new AppConfiguration();
@@ -110,6 +131,7 @@ public final class AppConfigurationService {
         AppConfiguration updated = getConfiguration();
         if (updated.selectKnownLibrary(displayName.trim())) {
             updateConfiguration(updated);
+            LOGGER.log(Level.INFO, "System configuration updated: Active library changed to ''{0}''", displayName.trim());
         }
     }
 

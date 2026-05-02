@@ -2,6 +2,7 @@ package com.example.application.ui;
 
 import com.example.application.ToastDisplay;
 import com.example.entities.User;
+import com.example.entities.UserRole;
 import com.example.services.UserService;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
@@ -18,13 +19,15 @@ public class UserManagementView extends BorderPane {
     private final String currentUserId;
     private final boolean isAdmin;
     private final ToastDisplay toast;
+    private final Runnable onDataChanged;
     private TableView<User> table;
     private TextField searchField;
 
-    public UserManagementView(String currentUserId, ToastDisplay toast) {
+    public UserManagementView(String currentUserId, ToastDisplay toast, Runnable onDataChanged) {
         this.currentUserId = currentUserId;
         this.isAdmin = UserService.isAdmin(currentUserId);
         this.toast = toast;
+        this.onDataChanged = onDataChanged;
         initUI();
     }
 
@@ -68,13 +71,17 @@ public class UserManagementView extends BorderPane {
         searchField.setStyle(inputStyle());
         searchField.textProperty().addListener((o, old, v) -> reload());
         
-        searchRow.getChildren().addAll(AppTheme.createIcon(AppTheme.ICON_SEARCH, 18), searchField);
+        Button refreshBtn = AppTheme.createIconButton(AppTheme.ICON_SYNC, "Refresh users", AppTheme.ButtonStyle.GHOST);
+        refreshBtn.setOnAction(e -> reload());
+
+        searchRow.getChildren().addAll(AppTheme.createIcon(AppTheme.ICON_SEARCH, 18), searchField, refreshBtn);
 
         topBar.getChildren().addAll(titleRow, searchRow);
         setTop(topBar);
 
         // Table
         table = new TableView<>();
+        table.setFixedCellSize(48.0);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
         table.getStyleClass().add("table-view");
         
@@ -82,7 +89,12 @@ public class UserManagementView extends BorderPane {
         TableColumn<User, String> nCol = col("Full Name", u -> u.getFullName(), 180);
         TableColumn<User, String> rCol = col("Role",      u -> u.getRole().getDisplayName(), 110);
         
-        TableColumn<User, Void> sCol = new TableColumn<>("Status");
+        TableColumn<User, Void> sCol = new TableColumn<>();
+        Label sHeader = new Label("Status");
+        sHeader.setStyle("-fx-padding:0; -fx-alignment:CENTER;");
+        sCol.getStyleClass().add("col-center");
+        sHeader.maxWidthProperty().bind(sCol.widthProperty());
+        sCol.setGraphic(sHeader);
         sCol.setPrefWidth(140);
         sCol.setCellFactory(c -> new TableCell<>() {
             @Override protected void updateItem(Void v, boolean empty) {
@@ -93,10 +105,17 @@ public class UserManagementView extends BorderPane {
                 Label chip = new Label(txt);
                 chip.getStyleClass().addAll("chip", u.isActive() ? "chip-success" : "chip-warning");
                 setGraphic(chip);
+                setAlignment(Pos.CENTER);
             }
+
         });
 
-        TableColumn<User, Void> aCol = new TableColumn<>("Actions");
+        TableColumn<User, Void> aCol = new TableColumn<>();
+        Label aHeader = new Label("Actions");
+        aHeader.setStyle("-fx-padding:0; -fx-alignment:CENTER;");
+        aHeader.maxWidthProperty().bind(aCol.widthProperty());
+        aCol.setGraphic(aHeader);
+        aCol.getStyleClass().add("col-center");
         aCol.setPrefWidth(120);
         aCol.setCellFactory(c -> new TableCell<>() {
             final Button apprBtn = actionBtn(AppTheme.ICON_CHECK, "Approve", "#16A34A");
@@ -119,6 +138,7 @@ public class UserManagementView extends BorderPane {
                 box.getChildren().add(editBtn);
                 if (!u.getUserId().equals(currentUserId) && (isAdmin || !u.getRole().isAdmin())) box.getChildren().add(delBtn);
                 setGraphic(box);
+                setAlignment(Pos.CENTER);
             }
         });
 
@@ -131,16 +151,28 @@ public class UserManagementView extends BorderPane {
         reload();
     }
 
-    private void reload() {
+    public void updateUsers(List<User> users) {
+        if (users == null) return;
         String q = searchField.getText().trim().toLowerCase();
-        List<User> list = UserService.getAllUsers().stream()
+        List<User> list = users.stream()
                 .filter(u -> q.isEmpty() 
-                        || u.getUserId().toLowerCase().contains(q)
-                        || u.getFullName().toLowerCase().contains(q)
-                        || u.getEmail().toLowerCase().contains(q))
+                        || (u.getUserId() != null && u.getUserId().toLowerCase().contains(q))
+                        || (u.getFullName() != null && u.getFullName().toLowerCase().contains(q))
+                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q)))
+                .sorted((u1, u2) -> {
+                    // Sort inactive (pending) users first
+                    if (u1.isActive() != u2.isActive()) return u1.isActive() ? 1 : -1;
+                    return u1.getUserId().compareToIgnoreCase(u2.getUserId());
+                })
                 .collect(Collectors.toList());
         table.setItems(FXCollections.observableArrayList(list));
     }
+
+    public void reload() {
+        updateUsers(UserService.getAllUsers());
+        if (onDataChanged != null) onDataChanged.run();
+    }
+
 
     private void handleAddUser() {
         RegistrationDialog.show((Stage)getScene().getWindow(), false, true).ifPresent(req -> {
@@ -163,26 +195,62 @@ public class UserManagementView extends BorderPane {
         try {
             u.setActive(true);
             UserService.updateUser(u);
-            reload();
-            toast.showSuccess("User approved: " + u.getUserId());
-        } catch (Exception ex) { toast.showError(ex.getMessage()); }
+            
+            // Critical: reload data and refresh table on FX thread to ensure UI reflects DB state
+            javafx.application.Platform.runLater(() -> {
+                reload();
+                table.refresh();
+                toast.showSuccess("User approved: " + u.getUserId());
+            });
+
+            // Dispatch approval email in background
+            if (u.getEmail() != null && !u.getEmail().isBlank()) {
+                new Thread(() -> {
+                    try {
+                        com.example.services.ReminderService.sendAccountApprovalEmail(u);
+                    } catch (Exception ex) {
+                        javafx.application.Platform.runLater(() -> 
+                            toast.showError("Failed to send approval email: " + ex.getMessage()));
+                    }
+                }, "approval-email").start();
+            }
+        } catch (Exception ex) { 
+            toast.showError("Approval failed: " + ex.getMessage()); 
+        }
     }
 
     private void editUser(User u) {
         if (u == null) return;
-        // Re-using the edit logic from UserAccountDialogs for now as it's quite complex
         UserAccountDialogs.editUser((Stage)getScene().getWindow(), u, currentUserId, isAdmin, toast);
         reload();
     }
 
     private void deleteUser(User u) {
         if (u == null) return;
+
+        User actor = UserService.getUserById(currentUserId);
+        if (actor != null && actor.getRole() == UserRole.LIBRARIAN && u.isAdmin()) {
+            toast.showError("Security Violation: Librarians are not authorized to delete administrator accounts.");
+            return;
+        }
+
         Alert conf = new Alert(Alert.AlertType.WARNING, "Delete user \"" + u.getUserId() + "\"? This cannot be undone.", ButtonType.YES, ButtonType.NO);
         conf.setTitle("Confirm Deletion");
         AppTheme.applyTheme(conf.getDialogPane());
         conf.showAndWait().filter(bt -> bt == ButtonType.YES).ifPresent(bt -> {
             try {
-                UserService.deleteUser(u.getUserId());
+                User target = u;
+                if (target.isAdmin() && target.isActive()) {
+                    long adminCount = UserService.getAllUsers().stream()
+                            .filter(user -> user.isAdmin() && user.isActive())
+                            .count();
+                    if (adminCount <= 1) {
+                        toast.showError("Cannot delete the last active administrator.");
+                        return;
+                    }
+                }
+                
+                UserService.deleteUser(target.getUserId());
                 reload();
                 toast.showSuccess("User deleted.");
             } catch (Exception ex) { toast.showError(ex.getMessage()); }
@@ -192,6 +260,7 @@ public class UserManagementView extends BorderPane {
     private <T> TableColumn<T, String> col(String name, java.util.function.Function<T, String> fn, double w) {
         TableColumn<T, String> c = new TableColumn<>(name);
         c.setPrefWidth(w);
+        c.getStyleClass().add("col-left");
         c.setCellValueFactory(data -> new javafx.beans.property.SimpleStringProperty(fn.apply(data.getValue())));
         return c;
     }

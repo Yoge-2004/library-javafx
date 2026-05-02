@@ -53,7 +53,9 @@ public final class ReminderService {
 
         Map<String, List<IssueRecord>> recordsByUser = new LinkedHashMap<>();
         for (IssueRecord record : overdueBooks) {
-            recordsByUser.computeIfAbsent(record.getUserId(), key -> new ArrayList<>()).add(record);
+            if (record.getRemainingFine() > 0) {
+                recordsByUser.computeIfAbsent(record.getUserId(), key -> new ArrayList<>()).add(record);
+            }
         }
 
         ReminderDispatchResult result = new ReminderDispatchResult();
@@ -90,7 +92,7 @@ public final class ReminderService {
         Session session = createSession(config);
         sendMessage(session, config, user.getEmail(), "Library overdue reminder",
                 buildOverdueBody(config, user, records),
-                buildOverdueHtmlBody(config, user, records));
+                buildOverdueHtmlBody(config, user, records), null, null);
     }
 
     public static void sendTemporaryPassword(User user, String temporaryPassword) throws MessagingException {
@@ -109,10 +111,10 @@ public final class ReminderService {
         Session session = createSession(config);
         sendMessage(session, config, user.getEmail(), "Library OS password reset",
                 buildTemporaryPasswordBody(config, user, temporaryPassword),
-                buildTemporaryPasswordHtmlBody(config, user, temporaryPassword));
+                buildTemporaryPasswordHtmlBody(config, user, temporaryPassword), null, null);
     }
 
-    public static void sendPaymentInvoice(User user, IssueRecord record, double amount, String invoiceId) throws MessagingException {
+    public static void sendPaymentInvoice(User user, IssueRecord record, double amount, String invoiceId, byte[] attachment, String fileName) throws MessagingException {
         if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
             throw new MessagingException("Valid user email is required.");
         }
@@ -125,7 +127,26 @@ public final class ReminderService {
         String plain = "Fine Payment Receipt\n\nInvoice: " + invoiceId + "\nAmount: " + amount + "\nBook: " + record.getBookTitle();
         String html = buildPaymentInvoiceHtmlBody(config, user, record, amount, invoiceId);
         
-        sendMessage(session, config, user.getEmail(), subject, plain, html);
+        sendMessage(session, config, user.getEmail(), subject, plain, html, attachment, fileName);
+    }
+
+    public static void sendAccountApprovalEmail(User user) throws MessagingException {
+        if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new MessagingException("User information and valid email are required.");
+        }
+
+        AppConfiguration config = AppConfigurationService.getConfiguration();
+        validateConfiguration(config);
+        Session session = createSession(config);
+
+        String subject = "Your Library OS account has been approved!";
+        String plain = "Hello " + user.getFullName() + ",\n\n" +
+                "Great news! Your account at " + config.getCurrentLibraryDisplayName() + " has been approved by the administrator.\n" +
+                "You can now sign in using your username and password.\n\n" +
+                "Happy reading!";
+        String html = buildAccountApprovalHtmlBody(config, user);
+
+        sendMessage(session, config, user.getEmail(), subject, plain, html, null, null);
     }
 
     /**
@@ -163,38 +184,37 @@ public final class ReminderService {
     }
 
     private static void sendMessage(Session session, AppConfiguration config, String toAddress,
-                                    String subject, String plainBody, String htmlBody) throws MessagingException {
+                                    String subject, String plainBody, String htmlBody, byte[] attachment, String attachmentName) throws MessagingException {
         Message message = new MimeMessage(session);
         message.setFrom(new InternetAddress(config.getFromAddress()));
         message.setRecipients(Message.RecipientType.TO, InternetAddress.parse(toAddress));
         message.setSubject(subject);
         message.setHeader("X-Mailer", "Library OS");
+
+        MimeMultipart mixed = new MimeMultipart("mixed");
+
+        MimeBodyPart contentPart = new MimeBodyPart();
+        MimeMultipart alternative = new MimeMultipart("alternative");
+
         MimeBodyPart plainPart = new MimeBodyPart();
         plainPart.setText(plainBody, StandardCharsets.UTF_8.name());
+        alternative.addBodyPart(plainPart);
 
         MimeBodyPart htmlPart = new MimeBodyPart();
         htmlPart.setContent(htmlBody, "text/html; charset=UTF-8");
-
-        MimeMultipart alternative = new MimeMultipart("alternative");
-        alternative.addBodyPart(plainPart);
         alternative.addBodyPart(htmlPart);
 
-        MimeBodyPart alternativeBodyPart = new MimeBodyPart();
-        alternativeBodyPart.setContent(alternative);
+        contentPart.setContent(alternative);
+        mixed.addBodyPart(contentPart);
 
-        MimeMultipart related = new MimeMultipart("related");
-        related.addBodyPart(alternativeBodyPart);
-
-        if (!APP_ICON_SVG.isBlank()) {
-            MimeBodyPart logoPart = new MimeBodyPart();
-            logoPart.setDataHandler(new DataHandler(new ByteArrayDataSource(
-                    APP_ICON_SVG.getBytes(StandardCharsets.UTF_8), "image/svg+xml")));
-            logoPart.setContentID("<app_logo>");
-            logoPart.setDisposition(MimeBodyPart.INLINE);
-            related.addBodyPart(logoPart);
+        if (attachment != null && attachment.length > 0) {
+            MimeBodyPart attachPart = new MimeBodyPart();
+            attachPart.setDataHandler(new DataHandler(new ByteArrayDataSource(attachment, "application/octet-stream")));
+            attachPart.setFileName(attachmentName);
+            mixed.addBodyPart(attachPart);
         }
 
-        message.setContent(related);
+        message.setContent(mixed);
         try {
             Transport.send(message);
         } catch (MessagingException ex) {
@@ -220,7 +240,7 @@ public final class ReminderService {
         builder.append("The following library items are overdue:\n\n");
         double totalFine = 0.0;
         for (IssueRecord record : records) {
-            double fine = record.calculateFine();
+            double fine = record.getRemainingFine();
             totalFine += fine;
             builder.append("- ").append(record.getBookTitle())
                     .append(" | Due: ").append(record.getDueDate().format(DATE_FORMATTER))
@@ -228,6 +248,7 @@ public final class ReminderService {
                     .append(" | Fine: ").append(config.formatAmount(fine))
                     .append('\n');
         }
+
         builder.append("\nTotal outstanding fine: ").append(config.formatAmount(totalFine)).append('\n');
         builder.append("Please return the item(s) or contact the library administrator.\n");
         return builder.toString();
@@ -246,7 +267,7 @@ public final class ReminderService {
         StringBuilder items = new StringBuilder();
         double totalFine = 0.0;
         for (IssueRecord record : records) {
-            double fine = record.calculateFine();
+            double fine = record.getRemainingFine();
             totalFine += fine;
             items.append("""
                     <tr class="stack-row">
@@ -284,19 +305,25 @@ public final class ReminderService {
                   <div style="font-size:13px;color:#065F46;text-transform:uppercase;font-weight:700;letter-spacing:0.04em;">Outstanding Fine</div>
                   <div style="margin-top:4px;font-size:24px;font-weight:800;color:#0F766E;">%s</div>
                 </div>
-                <p style="margin:20px 0 0 0;color:#475569;font-size:14px;line-height:1.6;">
-                  Sign in to Library OS to review your circulation record or contact the library administrator for assistance.
-                </p>
                 """.formatted(
                 escapeHtml(user.getFullName()),
                 items,
                 escapeHtml(config.formatAmount(totalFine)));
 
-        return buildEmailShell(
-                config,
-                "Overdue Library Reminder",
-                "Please review the items below and return them as soon as possible.",
-                body);
+        // Icon: Book/Library
+        String icon = """
+                <div style="display:inline-block;width:56px;height:56px;background:linear-gradient(135deg,#0F172A,#134E4A 58%,#14B8A6);border-radius:16px;position:relative;box-shadow:0 4px 10px rgba(15,23,42,0.3);vertical-align:middle;">
+                  <div style="position:absolute;left:14px;top:10px;width:28px;height:34px;background:#FFFFFF;border-radius:4px;box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+                    <div style="position:absolute;left:0;top:0;width:9px;height:100%;background:#CCFBF1;border-radius:4px 0 0 4px;"></div>
+                    <div style="position:absolute;left:11px;top:6px;width:12px;height:2px;background:#0F766E;opacity:0.8;"></div>
+                    <div style="position:absolute;left:11px;top:12px;width:12px;height:2px;background:#0F766E;opacity:0.8;"></div>
+                    <div style="position:absolute;left:11px;top:18px;width:8px;height:2px;background:#0F766E;opacity:0.8;"></div>
+                  </div>
+                </div>
+                """;
+
+        return buildEmailShell(config, "Overdue Reminder", 
+                "Please return the items below as soon as possible.", icon, body);
     }
 
     private static String buildTemporaryPasswordHtmlBody(AppConfiguration config, User user, String temporaryPassword) {
@@ -312,26 +339,24 @@ public final class ReminderService {
                 <p style="margin:20px 0 0 0;color:#475569;font-size:14px;line-height:1.6;">
                   Sign in with this password and change it immediately from <strong>Settings &gt; Change Password</strong>.
                 </p>
-                <p style="margin:12px 0 0 0;color:#475569;font-size:14px;line-height:1.6;">
-                  If you did not request this change, contact the library administrator right away.
-                </p>
                 """.formatted(
                 escapeHtml(user.getFullName()),
                 escapeHtml(config.getCurrentLibraryDisplayName()),
                 escapeHtml(temporaryPassword));
 
-        return buildEmailShell(
-                config,
-                "Password Reset",
-                "Use the temporary password below to sign in and update your credentials.",
-                body);
+        // Icon: Lock
+        String icon = """
+                <div style="display:inline-block;width:56px;height:56px;background:linear-gradient(135deg,#6366F1,#4F46E5);border-radius:16px;position:relative;box-shadow:0 4px 10px rgba(99,102,241,0.3);vertical-align:middle;">
+                  <div style="position:absolute;left:18px;top:24px;width:20px;height:16px;background:#FFFFFF;border-radius:4px;"></div>
+                  <div style="position:absolute;left:22px;top:14px;width:12px;height:14px;border:3px solid #FFFFFF;border-bottom:none;border-radius:6px 6px 0 0;"></div>
+                </div>
+                """;
+
+        return buildEmailShell(config, "Password Reset", 
+                "Use the temporary password below to sign in and update your credentials.", icon, body);
     }
 
-    private static String buildEmailShell(AppConfiguration config, String heading, String subtitle, String body) {
-        String logoBlock = APP_ICON_SVG.isBlank()
-                ? "<div style=\"display:block;width:56px;height:56px;border-radius:18px;background:linear-gradient(135deg,#0F172A,#14B8A6);\"></div>"
-                : "<img src=\"cid:app_logo\" width=\"56\" height=\"56\" style=\"display:block;border-radius:18px;\">";
-
+    private static String buildEmailShell(AppConfiguration config, String heading, String subtitle, String iconBlock, String body) {
         return """
                 <!DOCTYPE html>
                 <html lang="en">
@@ -349,7 +374,7 @@ public final class ReminderService {
                       .stack-table,
                       .stack-table tbody,
                       .stack-row,
-                      .stack-cell { display: block !important; width: 100%% !important; }
+                      .stack-cell { display: block !important; width: 100% !important; }
                       .stack-row { border-bottom: 1px solid #E2E8F0 !important; padding: 6px 0 !important; }
                       .stack-cell {
                         box-sizing: border-box !important;
@@ -374,29 +399,51 @@ public final class ReminderService {
                 </head>
                 <body class="shell-body" style="margin:0;padding:24px;background:#E2E8F0;font-family:Segoe UI,Arial,sans-serif;">
                   <div class="shell-card" style="max-width:680px;margin:0 auto;background:#FFFFFF;border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(15,23,42,0.12);">
-                    <div class="shell-hero" style="padding:28px 32px;background:linear-gradient(135deg,#0F172A,#134E4A 58%%,#14B8A6);">
-                      <div class="shell-hero-row" style="display:flex;align-items:center;gap:16px;">
-                        %s
-                        <div class="shell-hero-copy">
-                          <div style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#99F6E4;">Library OS</div>
-                          <div style="margin-top:6px;font-size:28px;font-weight:800;color:#F8FAFC;">%s</div>
-                          <div style="margin-top:6px;font-size:14px;color:#CCFBF1;line-height:1.6;">%s</div>
-                        </div>
-                      </div>
+                    <div class="shell-hero" style="padding:32px;background:linear-gradient(135deg,#0F172A,#134E4A 58%,#14B8A6);">
+                      <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:100%;">
+                        <tr>
+                          <td style="vertical-align:middle;padding-right:24px;width:56px;">
+                            <!-- Premium CSS-based Logo (Cross-Client Compatible) -->
+                            <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:56px;height:56px;background-color:#0F172A;border-radius:14px;overflow:hidden;box-shadow:0 4px 10px rgba(0,0,0,0.3);">
+                              <tr>
+                                <td align="center" valign="middle" style="padding:0;">
+                                  <table role="presentation" border="0" cellpadding="0" cellspacing="0" style="width:28px;height:36px;background-color:#FFFFFF;border-radius:4px;overflow:hidden;">
+                                    <tr>
+                                      <td style="width:9px;background-color:#CCFBF1;border-right:1px solid #F1F5F9;">&nbsp;</td>
+                                      <td valign="middle" style="padding:4px 3px;">
+                                        <div style="width:12px;height:2px;background-color:#0F766E;margin-bottom:5px;font-size:1px;line-height:1px;">&nbsp;</div>
+                                        <div style="width:12px;height:2px;background-color:#0F766E;margin-bottom:5px;font-size:1px;line-height:1px;">&nbsp;</div>
+                                        <div style="width:8px;height:2px;background-color:#0F766E;font-size:1px;line-height:1px;">&nbsp;</div>
+                                      </td>
+                                    </tr>
+                                  </table>
+                                </td>
+                              </tr>
+                            </table>
+                          </td>
+                          <td style="vertical-align:middle;text-align:left;">
+                            <div style="font-size:12px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#99F6E4;margin-bottom:6px;">Library OS</div>
+                            <div style="font-size:28px;font-weight:800;color:#F8FAFC;line-height:1.1;margin:0;">{{HEADING}}</div>
+                            <div style="margin-top:6px;font-size:14px;color:#CCFBF1;line-height:1.4;opacity:0.85;">{{SUBTITLE}}</div>
+                          </td>
+                        </tr>
+                      </table>
                     </div>
                     <div class="shell-content" style="padding:28px 32px;">
-                      <div style="margin-bottom:20px;font-size:14px;color:#64748B;">%s</div>
-                      %s
+                      <div style="margin-bottom:20px;font-size:14px;color:#64748B;">{{LIBRARY}}</div>
+                      {{BODY}}
+                      <p style="margin:24px 0 0 0;padding-top:20px;border-top:1px solid #F1F5F9;color:#94A3B8;font-size:12px;text-align:center;">
+                        This is an automated message from Library OS. Please do not reply.
+                      </p>
                     </div>
                   </div>
                 </body>
                 </html>
-                """.formatted(
-                logoBlock,
-                escapeHtml(heading),
-                escapeHtml(subtitle),
-                escapeHtml(config.getCurrentLibraryDisplayName()),
-                body);
+                """
+                .replace("{{HEADING}}", escapeHtml(heading))
+                .replace("{{SUBTITLE}}", escapeHtml(subtitle))
+                .replace("{{LIBRARY}}", escapeHtml(config.getCurrentLibraryDisplayName()))
+                .replace("{{BODY}}", body);
     }
 
     private static String escapeHtml(String value) {
@@ -515,19 +562,74 @@ public final class ReminderService {
     }
     private static String buildPaymentInvoiceHtmlBody(AppConfiguration config, User user, IssueRecord record, double amount, String invoiceId) {
         String template = loadHtmlTemplate("invoice-template.html");
-        if (template == null) return "<h1>Invoice " + invoiceId + "</h1><p>Amount: " + amount + "</p>";
+        String body;
+        if (template == null) {
+            body = "<h1>Invoice " + invoiceId + "</h1><p>Amount: " + amount + "</p>";
+        } else {
+            // Extract content between <div class="content"> and the last </div> before </body>
+            int start = template.indexOf("<div class=\"content\">");
+            int end = template.lastIndexOf("</div>");
+            if (start != -1 && end != -1) {
+                body = template.substring(start, end + 6);
+            } else {
+                body = template;
+            }
 
-        return template
-                .replace("{{LIBRARY_NAME}}", config.getLibraryName())
-                .replace("{{INVOICE_ID}}", invoiceId)
-                .replace("{{DATE}}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy HH:mm")))
-                .replace("{{USER_NAME}}", user.getDisplayName())
-                .replace("{{USER_ID}}", user.getUserId())
-                .replace("{{BOOK_TITLE}}", record.getBookTitle())
-                .replace("{{ISBN}}", record.getIsbn())
-                .replace("{{DAYS}}", String.valueOf(record.getDaysOverdue()))
-                .replace("{{AMOUNT}}", AppTheme.formatCurrency(amount))
-                .replace("{{YEAR}}", String.valueOf(java.time.Year.now().getValue()));
+            body = body
+                    .replace("{{LIBRARY_NAME}}", config.getLibraryName())
+                    .replace("{{INVOICE_ID}}", invoiceId)
+                    .replace("{{DATE}}", LocalDateTime.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy HH:mm")))
+                    .replace("{{USER_NAME}}", user.getDisplayName())
+                    .replace("{{USER_ID}}", user.getUserId())
+                    .replace("{{BOOK_TITLE}}", record.getBookTitle())
+                    .replace("{{ISBN}}", record.getIsbn())
+                    .replace("{{DAYS}}", String.valueOf(record.getDaysOverdue()))
+                    .replace("{{AMOUNT}}", AppTheme.formatCurrency(amount))
+                    .replace("{{YEAR}}", String.valueOf(java.time.Year.now().getValue()));
+        }
+
+        // Icon: Invoice
+        String icon = """
+                <div style="display:inline-block;width:56px;height:56px;background:linear-gradient(135deg,#0D9488,#0F766E);border-radius:16px;position:relative;box-shadow:0 4px 10px rgba(13,148,136,0.3);vertical-align:middle;">
+                  <div style="position:absolute;left:15px;top:12px;width:26px;height:32px;background:#FFFFFF;border-radius:2px;">
+                    <div style="position:absolute;left:4px;top:6px;width:18px;height:2px;background:#E2E8F0;"></div>
+                    <div style="position:absolute;left:4px;top:12px;width:18px;height:2px;background:#E2E8F0;"></div>
+                    <div style="position:absolute;left:4px;top:18px;width:12px;height:2px;background:#0D9488;"></div>
+                  </div>
+                </div>
+                """;
+
+        return buildEmailShell(config, "Payment Receipt", "Thank you for your payment.", icon, body);
+    }
+
+    private static String buildAccountApprovalHtmlBody(AppConfiguration config, User user) {
+        String body = """
+                <p style="margin:0 0 16px 0;color:#334155;font-size:15px;line-height:1.6;">Hello %s,</p>
+                <p style="margin:0 0 20px 0;color:#334155;font-size:15px;line-height:1.6;">
+                  Great news! Your account at <strong>%s</strong> has been approved by the administrator.
+                </p>
+                <p style="margin:0 0 20px 0;color:#334155;font-size:15px;line-height:1.6;">
+                  You can now sign in using your username (<strong>%s</strong>) and the password you chose during registration.
+                </p>
+                <div style="margin:24px 0;text-align:center;">
+                   <div style="display:inline-block;padding:14px 28px;background:#0D9488;color:#FFFFFF;border-radius:12px;font-weight:700;text-decoration:none;">Sign In Now</div>
+                </div>
+                """.formatted(
+                escapeHtml(user.getFullName()),
+                escapeHtml(config.getCurrentLibraryDisplayName()),
+                escapeHtml(user.getUserId()));
+
+        // Icon: Checkmark/Success
+        String icon = """
+                <div style="display:inline-block;width:56px;height:56px;background:linear-gradient(135deg,#22C55E,#16A34A);border-radius:16px;position:relative;box-shadow:0 4px 10px rgba(34,197,94,0.3);vertical-align:middle;">
+                  <div style="position:absolute;left:16px;top:16px;width:24px;height:24px;background:white;border-radius:50%%;">
+                     <div style="position:absolute;left:8px;top:11px;width:8px;height:4px;border-left:3px solid #16A34A;border-bottom:3px solid #16A34A;transform:rotate(-45deg);"></div>
+                  </div>
+                </div>
+                """;
+
+        return buildEmailShell(config, "Account Approved", 
+                "Your registration request has been accepted.", icon, body);
     }
 
     private static String loadHtmlTemplate(String name) {

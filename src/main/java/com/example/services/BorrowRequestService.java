@@ -76,6 +76,8 @@ public final class BorrowRequestService {
             }
 
             saveRequests();
+            LOGGER.log(Level.INFO, "New borrow request created: ID={0}, ISBN={1}, User={2}, Qty={3}",
+                    new Object[]{request.getRequestId(), isbn, userId, quantity});
             return request;
         } finally {
             lock.writeLock().unlock();
@@ -109,6 +111,18 @@ public final class BorrowRequestService {
         return getPendingRequests().size();
     }
 
+    public static BorrowRequest getRequestById(String requestId) {
+        lock.readLock().lock();
+        try {
+            return requests.stream()
+                    .filter(r -> r.getRequestId().equals(requestId))
+                    .findFirst()
+                    .orElse(null);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     public static void approveRequest(String requestId, String processedBy) {
         lock.writeLock().lock();
         try {
@@ -116,6 +130,8 @@ public final class BorrowRequestService {
             BookService.issueBookToUser(request.getIsbn(), request.getUserId(), request.getQuantity());
             request.approve(processedBy);
             saveRequests();
+            LOGGER.log(Level.INFO, "Borrow request APPROVED: ID={0}, ISBN={1}, User={2}, ProcessedBy={3}",
+                    new Object[]{requestId, request.getIsbn(), request.getUserId(), processedBy});
         } finally {
             lock.writeLock().unlock();
         }
@@ -127,6 +143,8 @@ public final class BorrowRequestService {
             BorrowRequest request = findPendingRequest(requestId);
             request.reject(processedBy, note == null || note.isBlank() ? "Rejected by staff" : note.trim());
             saveRequests();
+            LOGGER.log(Level.INFO, "Borrow request REJECTED: ID={0}, ISBN={1}, User={2}, ProcessedBy={3}, Reason=''{4}''",
+                    new Object[]{requestId, request.getIsbn(), request.getUserId(), processedBy, request.getNote()});
         } finally {
             lock.writeLock().unlock();
         }
@@ -138,6 +156,17 @@ public final class BorrowRequestService {
             saveRequests();
         } finally {
             lock.readLock().unlock();
+        }
+    }
+
+    public static void forceReload() {
+        lock.writeLock().lock();
+        try {
+            requests = loadRequests();
+            archivedRequests = loadArchivedRequests();
+            LOGGER.log(Level.INFO, "Borrow requests forcibly reloaded from storage");
+        } finally {
+            lock.writeLock().unlock();
         }
     }
 

@@ -264,6 +264,17 @@ public class LoginView extends StackPane {
         passwordField.setOnAction(e -> handleLogin());
         visiblePasswordField.setOnAction(e -> handleLogin());
 
+        // Explicitly hide library popup when focus moves to other fields
+        usernameField.focusedProperty().addListener((obs, old, focused) -> {
+            if (focused) hideLibraryPopup();
+        });
+        passwordField.focusedProperty().addListener((obs, old, focused) -> {
+            if (focused) hideLibraryPopup();
+        });
+        visiblePasswordField.focusedProperty().addListener((obs, old, focused) -> {
+            if (focused) hideLibraryPopup();
+        });
+
         loginForm.getChildren().addAll(header, formFields, buttonContainer, footerBox);
 
         return loginForm;
@@ -310,28 +321,17 @@ public class LoginView extends StackPane {
     }
 
     private VBox createLibraryBox() {
-        AppConfiguration configuration = AppConfigurationService.getConfiguration();
+        AppConfiguration config = AppConfigurationService.getConfiguration();
         availableLibraries.clear();
-        availableLibraries.addAll(configuration.getKnownLibraries());
-        if (availableLibraries.isEmpty()) {
-            availableLibraries.add(configuration.getCurrentLibraryDisplayName());
-        }
-        // Inject test data if needed (10-15 libraries)
-        if (availableLibraries.size() < 5) {
-            availableLibraries.addAll(List.of(
-                "Central Library", "North Branch", "Eastside Commons", "South Valley Library",
-                "West End Archive", "Main Campus Library", "Downtown Public Library",
-                "Suburban Reading Room", "Tech Institute Library", "Historical Society",
-                "Community Book Hub", "State University Main"
-            ));
-        }
+        availableLibraries.addAll(com.example.entities.LibrariesDB.getInstance().getLibraries());
         availableLibraries.sort(String.CASE_INSENSITIVE_ORDER);
 
-        VBox libraryBox = new VBox(6);
+        VBox libraryBox = new VBox(6); 
+        libraryBox.setFillWidth(true);
         Label libraryLabel = new Label("Library");
         libraryLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: 600; -fx-text-fill: " + labelText() + ";");
 
-        libraryField = new TextField(configuration.getCurrentLibraryDisplayName());
+        libraryField = new TextField(config.getCurrentLibraryDisplayName());
         libraryField.setPromptText("Select your library");
         libraryField.setPrefHeight(48);
         libraryField.setMaxWidth(Double.MAX_VALUE);
@@ -358,12 +358,20 @@ public class LoginView extends StackPane {
                 super.updateItem(item, empty);
                 if (empty || item == null) {
                     setText(null);
+                    setGraphic(null);
                     setStyle("-fx-background-color: transparent;");
                 } else {
                     setText(item);
+                    setWrapText(true);
+                    // Force wrapping by binding to the list width (minus padding)
+                    prefWidthProperty().bind(lv.widthProperty().subtract(16));
+                    setMinWidth(lv.getWidth() - 16);
+                    setMaxWidth(lv.getWidth() - 16);
+                    
                     setStyle("-fx-background-color: transparent; " +
                             "-fx-text-fill: " + lvText + "; " +
                             "-fx-padding: 10 14; -fx-font-size: 14px;");
+                    
                     setOnMouseEntered(e -> setStyle("-fx-background-color: " + lvHover + "; " +
                             "-fx-text-fill: " + lvText + "; " +
                             "-fx-padding: 10 14; -fx-font-size: 14px;"));
@@ -373,10 +381,9 @@ public class LoginView extends StackPane {
                 }
             }
         });
-        // Fixed row height × 3 visible rows; ListView scrolls internally beyond 3
-        libraryListView.setFixedCellSize(44);
-        libraryListView.setPrefHeight(44 * 3 + 2); // 3 rows + border
-        libraryListView.setMaxHeight(44 * 3 + 2);
+        // Remove fixed cell size to allow cells to expand vertically for wrapped text
+        libraryListView.setPrefHeight(140); 
+        libraryListView.setMaxHeight(200);
 
         libraryListView.setOnMouseClicked(e -> {
             String sel = libraryListView.getSelectionModel().getSelectedItem();
@@ -404,7 +411,10 @@ public class LoginView extends StackPane {
         });
         libraryField.focusedProperty().addListener((obs, oldValue, focused) -> {
             if (focused) {
-                filterLibraries(libraryField.getText());
+                // Only show suggestions if there's already text or if explicitly clicked
+                if (libraryField.getText() != null && !libraryField.getText().isEmpty()) {
+                    filterLibraries(libraryField.getText());
+                }
             } else {
                 // Small delay so a mouse-click on a list row registers before the popup closes
                 javafx.animation.PauseTransition delay =
@@ -413,12 +423,15 @@ public class LoginView extends StackPane {
                 delay.play();
             }
         });
+        
+        // Also show suggestions if user explicitly clicks while already focused
+        libraryField.setOnMouseClicked(e -> {
+            if (libraryField.isFocused()) {
+                filterLibraries(libraryField.getText());
+            }
+        });
 
-        Label helper = new Label("Start typing to filter the available libraries.");
-        helper.setStyle("-fx-font-size: 12px; -fx-text-fill: " + mutedText() + ";");
-        helper.setWrapText(true);
-
-        libraryBox.getChildren().addAll(libraryLabel, libraryField, helper);
+        libraryBox.getChildren().addAll(libraryLabel, libraryField);
         return libraryBox;
     }
 
@@ -427,7 +440,7 @@ public class LoginView extends StackPane {
                 "-fx-border-width: 1.5; -fx-border-radius: 12px; " +
                 "-fx-background-radius: 12px; -fx-font-size: 15px; " +
                 "-fx-text-fill: " + fieldText() + "; -fx-prompt-text-fill: " + promptText() + "; " +
-                "-fx-padding: 12 16;";
+                "-fx-padding: 10 14;";
     }
 
     private void togglePasswordVisibility() {
@@ -518,6 +531,11 @@ public class LoginView extends StackPane {
 
     private void filterLibraries(String query) {
         if (libraryField == null || libraryPopup == null) return;
+        
+        // Don't show if the field isn't actually part of a visible window yet
+        if (libraryField.getScene() == null || libraryField.getScene().getWindow() == null || !libraryField.getScene().getWindow().isShowing()) {
+            return;
+        }
 
         String normalized = (query == null ? "" : query).trim().toLowerCase();
         List<String> filtered = availableLibraries.stream()
@@ -526,22 +544,30 @@ public class LoginView extends StackPane {
                 .toList();
 
         libraryListView.getItems().setAll(filtered);
-        // Adjust height: show min(size,3) rows
+        // Adjust height: show min(size,3) rows. Use a base of 48 to account for possible wrapping.
         int visible = Math.min(filtered.size(), 3);
-        libraryListView.setPrefHeight(visible * 44 + 2);
+        libraryListView.setPrefHeight(visible * 48 + 2);
 
         if (!filtered.isEmpty() && libraryField.isFocused()) {
-            Platform.runLater(() -> {
-                if (libraryField.getScene() == null || libraryField.getScene().getWindow() == null) return;
+            javafx.animation.PauseTransition delay = new javafx.animation.PauseTransition(javafx.util.Duration.millis(120));
+            delay.setOnFinished(e -> {
+                if (!libraryField.isFocused() || libraryField.getScene() == null || libraryField.getScene().getWindow() == null) return;
                 
-                // Use the field's actual screen coordinates
                 javafx.geometry.Bounds bounds = libraryField.localToScreen(libraryField.getBoundsInLocal());
-                if (bounds == null) return;
+                if (bounds == null || bounds.getWidth() <= 0) return;
 
                 libraryListView.setPrefWidth(bounds.getWidth());
-                // Align exactly to the bottom of the field with a small 2px gap
-                libraryPopup.show(libraryField, bounds.getMinX(), bounds.getMaxY() + 2);
+                if (libraryField.getScene().getWindow().isShowing()) {
+                    if (!libraryPopup.isShowing()) {
+                        // Position to the RIGHT of the library field to avoid covering the username box
+                        libraryPopup.show(libraryField, bounds.getMaxX() + 10, bounds.getMinY());
+                    } else {
+                        libraryPopup.setX(bounds.getMaxX() + 10);
+                        libraryPopup.setY(bounds.getMinY());
+                    }
+                }
             });
+            delay.play();
         } else {
             hideLibraryPopup();
         }

@@ -4,6 +4,7 @@ import com.example.application.ToastDisplay;
 import com.example.entities.Book;
 import com.example.entities.BorrowRequest;
 import com.example.entities.User;
+import com.example.entities.BooksDB;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.services.BookService;
 import com.example.services.ReminderService;
@@ -16,12 +17,12 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import java.time.LocalDateTime;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import com.example.services.InvoiceService;
@@ -42,28 +43,107 @@ public class CirculationView extends BorderPane {
     private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("MMM dd, HH:mm");
 
     private final ObservableList<IssueRecord> issueRecords;
-    private final ObservableList<BorrowRequest> borrowRequests;
     private final boolean isStaff;
     private final String currentUser;
     private final Runnable onRefresh;
     private final ToastDisplay toast;
+    private final Runnable refreshAllData;
+
+    private TextField searchField;
+    private javafx.collections.transformation.FilteredList<IssueRecord> filteredIssues;
+    private javafx.collections.transformation.FilteredList<BorrowRequest> filteredRequests;
+    private javafx.collections.transformation.FilteredList<IssueRecord> filteredOverdue;
+    private javafx.collections.transformation.FilteredList<IssueRecord> filteredSettlements;
+    private javafx.collections.transformation.FilteredList<BooksDB.InvoiceData> filteredHistory;
 
     private TableView<IssueRecord>  issuesTable;
     private TableView<BorrowRequest> requestsTable;
+    private TableView<IssueRecord>  overdueTable;
+    private TableView<IssueRecord>  settlementsTable;
+    private TableView<BooksDB.InvoiceData> historyTable;
+    
+    private javafx.collections.transformation.SortedList<BorrowRequest> sortedRequests;
+    private static int lastSelectedTabIndex = 0;
+
+    private Button remindAllBtn;
+
 
     public CirculationView(ObservableList<IssueRecord> issueRecords,
                            ObservableList<BorrowRequest> borrowRequests,
+                           ObservableList<BooksDB.InvoiceData> historyList,
                            boolean isStaff, String currentUser,
-                           Runnable onRefresh, ToastDisplay toast) {
+                           Runnable onRefresh, ToastDisplay toast, Runnable refreshAllData) {
         this.issueRecords  = issueRecords;
-        this.borrowRequests = borrowRequests;
         this.isStaff       = isStaff;
         this.currentUser   = currentUser;
         this.onRefresh     = onRefresh;
         this.toast         = toast;
+        this.refreshAllData = refreshAllData;
+
+        // Active Issues: Only books currently out
+        this.filteredIssues = new javafx.collections.transformation.FilteredList<>(issueRecords, r -> !r.isReturned());
+        
+        this.filteredRequests = new javafx.collections.transformation.FilteredList<>(borrowRequests, p -> true);
+        
+        // Overdue: Not returned AND (due date passed AND has remaining fine)
+        this.filteredOverdue = new javafx.collections.transformation.FilteredList<>(issueRecords, 
+            r -> r.isOverdue() && r.getRemainingFine() > 0);
+            
+        // Settlements: Returned AND has remaining fine (Pay Later users)
+        this.filteredSettlements = new javafx.collections.transformation.FilteredList<>(issueRecords, 
+            r -> r.isReturned() && r.getRemainingFine() > 0);
+
+        // Borrow Requests: Sorted with PENDING first, then by date
+        this.sortedRequests = new javafx.collections.transformation.SortedList<>(filteredRequests);
+        this.sortedRequests.setComparator((r1, r2) -> {
+            if (r1.getStatus() != r2.getStatus()) {
+                if (r1.getStatus() == BorrowRequest.Status.PENDING) return -1;
+                if (r2.getStatus() == BorrowRequest.Status.PENDING) return 1;
+            }
+            return r2.getRequestedAt().compareTo(r1.getRequestedAt());
+        });
+
+        // Payment History: Past 7 days
+        this.filteredHistory = new javafx.collections.transformation.FilteredList<>(historyList, h -> true);
+
         initUI();
+        initFiltering();
         bind();
+        
+        // Restore last selected tab if any
+        if (getCenter() instanceof ScrollPane sp && sp.getContent() instanceof VBox vb) {
+            for (Node n : vb.getChildren()) {
+                if (n instanceof TabPane tp) {
+                    tp.getSelectionModel().select(Math.min(lastSelectedTabIndex, tp.getTabs().size() - 1));
+                    tp.getSelectionModel().selectedIndexProperty().addListener((obs, old, val) -> {
+                        lastSelectedTabIndex = val.intValue();
+                    });
+                    break;
+                }
+            }
+        }
     }
+
+
+    private void initFiltering() {
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> {
+            String q = newVal.trim().toLowerCase();
+            filteredIssues.setPredicate(r -> q.isEmpty() || r.getBookTitle().toLowerCase().contains(q) || r.getUserId().toLowerCase().contains(q));
+            filteredRequests.setPredicate(r -> q.isEmpty() || r.getBookTitle().toLowerCase().contains(q) || r.getUserId().toLowerCase().contains(q));
+            filteredOverdue.setPredicate(r -> {
+                if (!r.isOverdue() || r.getRemainingFine() <= 0) return false;
+                return q.isEmpty() || r.getBookTitle().toLowerCase().contains(q) || r.getUserId().toLowerCase().contains(q);
+            });
+            filteredSettlements.setPredicate(r -> {
+                if (!r.isReturned() || r.getRemainingFine() <= 0) return false;
+                return q.isEmpty() || r.getBookTitle().toLowerCase().contains(q) || r.getUserId().toLowerCase().contains(q);
+            });
+            filteredHistory.setPredicate(h -> {
+                return q.isEmpty() || h.getId().toLowerCase().contains(q) || h.getUserId().toLowerCase().contains(q);
+            });
+        });
+    }
+
 
     // ═══════════════════════════════════════════════════════════════
     // Init
@@ -81,9 +161,19 @@ public class CirculationView extends BorderPane {
         content.setPadding(new Insets(24));
         content.setStyle("-fx-background-color:" + pageBackground() + ";");
 
-        content.getChildren().addAll(buildHeader(), buildTabs());
+        searchField = new TextField();
+        searchField.setPromptText("Search by title or user...");
+        searchField.setStyle(inputStyle());
+        searchField.setPrefWidth(300);
+        searchField.setMaxWidth(300);
+        
+        HBox searchRow = new HBox(searchField);
+        searchRow.setAlignment(Pos.CENTER_RIGHT);
+
+        content.getChildren().addAll(buildHeader(), searchRow, buildTabs());
         scroll.setContent(content);
         setCenter(scroll);
+
     }
 
     private VBox buildHeader() {
@@ -115,7 +205,11 @@ public class CirculationView extends BorderPane {
 
         tp.getTabs().add(tab("Active Issues", AppTheme.ICON_LIBRARY, issuesPanel()));
         tp.getTabs().add(tab("Borrow Requests", AppTheme.ICON_NOTIFICATION, requestsPanel()));
-        if (isStaff) tp.getTabs().add(tab("Overdue", AppTheme.ICON_WARNING, overduePanel()));
+        if (isStaff) {
+            tp.getTabs().add(tab("Overdue", AppTheme.ICON_WARNING, overduePanel()));
+            tp.getTabs().add(tab("Settlements", AppTheme.ICON_SYNC, settlementsPanel()));
+            tp.getTabs().add(tab("Payment History", AppTheme.ICON_CARD, historyPanel()));
+        }
 
         return tp;
     }
@@ -139,6 +233,8 @@ public class CirculationView extends BorderPane {
         }
 
         issuesTable = buildIssuesTable();
+        issuesTable.setFixedCellSize(48.0); // Unified row height
+        issuesTable.setItems(filteredIssues);
         VBox.setVgrow(issuesTable, Priority.ALWAYS);
         p.getChildren().add(issuesTable);
         return p;
@@ -158,13 +254,16 @@ public class CirculationView extends BorderPane {
                 r -> r.getIssueDate().format(DATE_FMT), 100);
         TableColumn<IssueRecord, String> dueC   = col("Due Date",
                 r -> r.getDueDate().format(DATE_FMT), 100);
-        TableColumn<IssueRecord, String> qtyC   = col("Qty",
+        TableColumn<IssueRecord, String> qtyC   = colC("Qty",
                 r -> String.valueOf(r.getQuantity()), 50);
 
         // Status chip
         TableColumn<IssueRecord, Void> statusC = new TableColumn<>("Status");
-        statusC.setPrefWidth(110);
+        statusC.setSortable(false);
+        statusC.getStyleClass().add("col-center");
+        statusC.setPrefWidth(125); // Increased for better spacing
         statusC.setCellFactory(c -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
             @Override protected void updateItem(Void v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || getTableRow() == null || getTableRow().getItem() == null)
@@ -176,10 +275,14 @@ public class CirculationView extends BorderPane {
             }
         });
 
+
         // Actions
         TableColumn<IssueRecord, Void> actC = new TableColumn<>("Actions");
-        actC.setPrefWidth(112);
+        actC.setSortable(false);
+        actC.getStyleClass().add("col-center");
+        actC.setPrefWidth(120);
         actC.setCellFactory(c -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
             final Button retBtn  = actionIconBtn(AppTheme.ICON_RETURN, "Return book", "#0D9488");
             final Button renBtn  = actionIconBtn(AppTheme.ICON_REFRESH,  "Renew loan", "#3B82F6");
             {
@@ -231,10 +334,13 @@ public class CirculationView extends BorderPane {
         p.setFillWidth(true);
 
         requestsTable = buildRequestsTable();
+        requestsTable.setFixedCellSize(48.0); // Unified row height
+        requestsTable.setItems(sortedRequests);
         VBox.setVgrow(requestsTable, Priority.ALWAYS);
         p.getChildren().add(requestsTable);
         return p;
     }
+
 
     private TableView<BorrowRequest> buildRequestsTable() {
         TableView<BorrowRequest> t = new TableView<>();
@@ -243,18 +349,21 @@ public class CirculationView extends BorderPane {
         t.setPlaceholder(new Label("No borrow requests"));
 
         TableColumn<BorrowRequest, String> titleC = col2("Book Title",
-                r -> r.getBookTitle(), 240);
+                r -> r.getBookTitle(), 180);
         TableColumn<BorrowRequest, String> userC  = col2("Requested By",
                 r -> r.getUserId(), 110);
-        TableColumn<BorrowRequest, String> qtyC   = col2("Qty",
+        TableColumn<BorrowRequest, String> qtyC   = col2C("Qty",
                 r -> String.valueOf(r.getQuantity()), 50);
         TableColumn<BorrowRequest, String> dateC  = col2("Requested",
                 r -> r.getRequestedAt().format(DATETIME_FMT), 110);
 
         // Status chip
         TableColumn<BorrowRequest, Void> statusC = new TableColumn<>("Status");
-        statusC.setPrefWidth(100);
+        statusC.setSortable(false);
+        statusC.getStyleClass().add("col-center");
+        statusC.setPrefWidth(120);
         statusC.setCellFactory(c -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
             @Override protected void updateItem(Void v, boolean empty) {
                 super.updateItem(v, empty);
                 if (empty || getTableRow() == null || getTableRow().getItem() == null)
@@ -271,39 +380,24 @@ public class CirculationView extends BorderPane {
             }
         });
 
-        // Note/rejection reason column with tooltip for long text
+        // Note/rejection reason column
         TableColumn<BorrowRequest, String> noteC = makeCol("Reason",
                 r -> r.getNote() != null ? r.getNote() : "", 220);
         noteC.setCellFactory(col -> new TableCell<>() {
             @Override protected void updateItem(String s, boolean empty) {
                 super.updateItem(s, empty);
-                if (empty || s == null || s.isEmpty()) { setText(null); setGraphic(null); setTooltip(null); return; }
-
+                if (empty || s == null || s.isEmpty()) { 
+                    setText(null); setGraphic(null); setTooltip(null); return; 
+                }
                 String display = s.length() > 72 ? s.substring(0, 69) + "..." : s;
-                Label preview = new Label(display);
-                preview.setStyle("-fx-text-fill:#DC2626; -fx-font-size:12px;");
-                preview.setWrapText(true);
-                preview.setMaxWidth(160);
+                setText(display);
+                setStyle("-fx-text-fill:#DC2626; -fx-font-size:12px;");
+                setAlignment(Pos.CENTER_LEFT);
 
                 Tooltip tip = AppTheme.createTooltip(s);
                 tip.setWrapText(true);
-                tip.setMaxWidth(300);
-                tip.setStyle("-fx-font-size:13px;");
-                Tooltip.install(preview, tip);
-
-                HBox box = new HBox(8);
-                box.setAlignment(Pos.CENTER_LEFT);
-                box.getChildren().add(preview);
-
-                if (s.length() > 72) {
-                    Button viewBtn = AppTheme.createIconButton(
-                            AppTheme.ICON_VISIBILITY, "View full reason", AppTheme.ButtonStyle.GHOST);
-                    viewBtn.setOnAction(event -> showLongTextDialog("Request Reason", s));
-                    box.getChildren().add(viewBtn);
-                }
-
-                setGraphic(box);
-                setText(null);
+                tip.setMaxWidth(350);
+                setTooltip(tip);
             }
         });
 
@@ -315,27 +409,39 @@ public class CirculationView extends BorderPane {
         t.getColumns().add(noteC);
 
         if (isStaff) {
-            TableColumn<BorrowRequest, Void> actC = new TableColumn<>("Actions");
-            actC.setPrefWidth(82);
+            TableColumn<BorrowRequest, Void> actC = new TableColumn<>();
+            Label actH = new Label("Actions");
+            actH.setStyle("-fx-padding:0; -fx-alignment:CENTER;");
+            actH.setMinWidth(120);
+            actC.setGraphic(actH);
+            actC.setSortable(false);
+            actC.getStyleClass().add("col-center");
+            actC.setPrefWidth(120);
             actC.setCellFactory(c -> new TableCell<>() {
+                { getStyleClass().add("col-center"); }
                 final Button appr = actionIconBtn(AppTheme.ICON_CHECK, "Approve request", "#16A34A");
                 final Button rej  = actionIconBtn(AppTheme.ICON_CLOSE, "Reject request", "#DC2626");
+                final Button view = actionIconBtn(AppTheme.ICON_VISIBILITY, "View reason", "#64748B");
                 {
                     appr.setOnAction(e -> approveRequest(getTableView().getItems().get(getIndex())));
                     rej .setOnAction(e -> rejectRequest (getTableView().getItems().get(getIndex())));
+                    view.setOnAction(e -> {
+                        BorrowRequest req = getTableView().getItems().get(getIndex());
+                        showLongTextDialog("Request Reason", req.getNote());
+                    });
                 }
                 @Override protected void updateItem(Void v, boolean empty) {
                     super.updateItem(v, empty);
                     if (empty || getTableRow() == null || getTableRow().getItem() == null)
                     { setGraphic(null); return; }
                     BorrowRequest req = getTableRow().getItem();
-                    if (req.isPending()) {
-                        HBox box = new HBox(4, appr, rej);
-                        box.setAlignment(Pos.CENTER);
-                        setGraphic(box);
-                    } else {
-                        setGraphic(null);
-                    }
+                    
+                    HBox box = new HBox(6);
+                    box.setAlignment(Pos.CENTER);
+                    if (req.isPending()) box.getChildren().addAll(appr, rej);
+                    if (req.getNote() != null && !req.getNote().isEmpty()) box.getChildren().add(view);
+                    
+                    setGraphic(box);
                 }
             });
             t.getColumns().add(actC);
@@ -364,19 +470,187 @@ public class CirculationView extends BorderPane {
                 styledLabel("Overdue Books Alert", 16, overdueBannerTitle(), true),
                 styledLabel("These records have exceeded their due date.", 13, overdueBannerText(), false));
         
-        Button remindAllBtn = AppTheme.createIconTextButton("Remind All Overdue", AppTheme.ICON_MAIL, AppTheme.ButtonStyle.PRIMARY);
+        remindAllBtn = AppTheme.createIconTextButton("Remind All Overdue", AppTheme.ICON_MAIL, AppTheme.ButtonStyle.PRIMARY);
         remindAllBtn.setOnAction(e -> bulkRemindOverdue());
+        updateRemindAllBtnState();
         
         Region sp = new Region(); HBox.setHgrow(sp, Priority.ALWAYS);
         banner.getChildren().addAll(icon, txt, sp, remindAllBtn);
+
         p.getChildren().add(banner);
 
         buildOverdueTable(p, banner);
         return p;
     }
 
+    private VBox settlementsPanel() {
+        VBox p = new VBox(12);
+        p.setFillWidth(true);
+
+        settlementsTable = buildSettlementsTable();
+        settlementsTable.setFixedCellSize(44.0);
+        settlementsTable.setItems(filteredSettlements);
+        VBox.setVgrow(settlementsTable, Priority.ALWAYS);
+        p.getChildren().add(settlementsTable);
+        return p;
+    }
+
+    private VBox historyPanel() {
+        VBox p = new VBox(12);
+        p.setFillWidth(true);
+
+        historyTable = buildHistoryTable();
+        historyTable.setFixedCellSize(44.0);
+        historyTable.setItems(filteredHistory);
+        VBox.setVgrow(historyTable, Priority.ALWAYS);
+        p.getChildren().add(historyTable);
+        return p;
+    }
+
+    private TableView<BooksDB.InvoiceData> buildHistoryTable() {
+        TableView<BooksDB.InvoiceData> t = new TableView<>();
+        t.getStyleClass().add("table-view");
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        t.setPlaceholder(new Label("No payment records found in the past 7 days."));
+
+        TableColumn<BooksDB.InvoiceData, String> idCol = new TableColumn<>("Invoice ID");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        idCol.setPrefWidth(140);
+        idCol.getStyleClass().add("col-left");
+        idCol.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-left"); }
+            @Override protected void updateItem(String s, boolean empty) {
+                super.updateItem(s, empty);
+                setText(empty ? null : s);
+            }
+        });
+
+        TableColumn<BooksDB.InvoiceData, String> userCol = new TableColumn<>("Member");
+        userCol.setCellValueFactory(new PropertyValueFactory<>("userId"));
+        userCol.setPrefWidth(120);
+        userCol.getStyleClass().add("col-left");
+        userCol.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-left"); }
+            @Override protected void updateItem(String s, boolean empty) {
+                super.updateItem(s, empty);
+                setText(empty ? null : s);
+            }
+        });
+
+        TableColumn<BooksDB.InvoiceData, String> bookCol = new TableColumn<>("Book");
+        bookCol.setCellValueFactory(new PropertyValueFactory<>("bookTitle"));
+        bookCol.setPrefWidth(180);
+        bookCol.getStyleClass().add("col-left");
+        bookCol.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-left"); }
+            @Override protected void updateItem(String s, boolean empty) {
+                super.updateItem(s, empty);
+                setText(empty ? null : s);
+            }
+        });
+
+        TableColumn<BooksDB.InvoiceData, Double> amtCol = new TableColumn<>("Amount");
+        amtCol.setCellValueFactory(new PropertyValueFactory<>("amount"));
+        amtCol.setPrefWidth(100);
+        amtCol.getStyleClass().add("col-center");
+        amtCol.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
+            @Override protected void updateItem(Double item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : AppTheme.formatCurrency(item));
+            }
+        });
+
+        TableColumn<BooksDB.InvoiceData, LocalDateTime> dateCol = new TableColumn<>("Date");
+        dateCol.setCellValueFactory(new PropertyValueFactory<>("date"));
+        dateCol.setPrefWidth(140);
+        dateCol.getStyleClass().add("col-center");
+        dateCol.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
+            @Override protected void updateItem(LocalDateTime item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.format(DATETIME_FMT));
+            }
+        });
+
+        TableColumn<BooksDB.InvoiceData, Void> actCol = new TableColumn<>("Actions");
+        actCol.setPrefWidth(80);
+        actCol.getStyleClass().add("col-center");
+        actCol.setCellFactory(col -> new TableCell<>() {
+            private final Button btn = AppTheme.createIconButton(AppTheme.ICON_PRINT, "Reprint Receipt", AppTheme.ButtonStyle.GHOST);
+            {
+                btn.setOnAction(e -> reprintInvoice(getTableView().getItems().get(getIndex())));
+                getStyleClass().add("col-center");
+            }
+            @Override protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                setGraphic(empty ? null : btn);
+            }
+        });
+
+        t.getColumns().setAll(idCol, userCol, bookCol, amtCol, dateCol, actCol);
+        return t;
+    }
+
+    private void reprintInvoice(BooksDB.InvoiceData data) {
+        User user = UserService.getUserById(data.getUserId());
+        if (user == null) {
+            if (toast != null) toast.showError("Member not found.");
+            return;
+        }
+        
+        // Find matching record if possible for extra details, or create a dummy for the invoice
+        IssueRecord record = issueRecords.stream()
+            .filter(r -> r.getUserId().equals(data.getUserId()) && r.getIsbn().equals(data.getIsbn()))
+            .findFirst()
+            .orElseGet(() -> {
+                // Dummy record for reprinting if original was purged from circulation
+                IssueRecord dummy = new IssueRecord(data.getIsbn(), data.getBookTitle(), data.getUserId(), LocalDate.now(), 1);
+                dummy.setFinePaid(true);
+                return dummy;
+            });
+            
+        InvoiceService.processInvoiceActions(user, record, data.getAmount(), data.getId(), toast);
+    }
+
+    private TableView<IssueRecord> buildSettlementsTable() {
+        TableView<IssueRecord> t = new TableView<>();
+        t.getStyleClass().add("table-view");
+        t.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        t.setPlaceholder(new Label("No outstanding settlements! 💸"));
+
+        t.getColumns().add(colIR("Book Title",    r -> r.getBookTitle(), 200));
+        t.getColumns().add(colIR("Borrower",      r -> r.getUserId(), 120));
+        t.getColumns().add(colIR("Return Date",   r -> r.getReturnDate() != null ? r.getReturnDate().format(DATE_FMT) : "-", 110));
+        t.getColumns().add(colIRC("Fine",         r -> AppTheme.formatCurrency(r.getRemainingFine()), 110));
+
+        TableColumn<IssueRecord, Void> actC = new TableColumn<>("Actions");
+        actC.getStyleClass().add("col-center");
+        actC.setPrefWidth(125);
+        actC.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
+            final Button payBtn = actionIconBtn(AppTheme.ICON_CARD, "Process Payment", "#0D9488");
+            {
+                payBtn.setOnAction(e -> processFinePayment(getTableRow().getItem(), getTableRow().getItem().getRemainingFine()));
+            }
+            @Override protected void updateItem(Void v, boolean empty) {
+                super.updateItem(v, empty);
+                if (empty || getTableRow() == null || getTableRow().getItem() == null) {
+                    setGraphic(null);
+                } else {
+                    setGraphic(payBtn);
+                }
+            }
+        });
+        t.getColumns().add(actC);
+
+        return t;
+    }
+
     private void bulkRemindOverdue() {
-        List<IssueRecord> overdue = issueRecords.stream().filter(IssueRecord::isOverdue).collect(java.util.stream.Collectors.toList());
+        List<IssueRecord> overdue = issueRecords.stream()
+            .filter(r -> r.isOverdue() && r.getRemainingFine() > 0)
+            .collect(java.util.stream.Collectors.toList());
         if (overdue.isEmpty()) {
             if (toast != null) toast.showInfo("No overdue books found.");
             return;
@@ -414,23 +688,30 @@ public class CirculationView extends BorderPane {
         ot.getColumns().add(colIR("Book Title",    r -> r.getBookTitle(), 200));
         ot.getColumns().add(colIR("Borrower",      r -> r.getUserId(), 120));
         ot.getColumns().add(colIR("Due Date",      r -> r.getDueDate().format(DATE_FMT), 110));
-        ot.getColumns().add(colIR("Days Overdue",  r -> String.valueOf(r.getDaysOverdue()), 100));
-        ot.getColumns().add(colIR("Fine",          r -> AppTheme.formatCurrency(r.calculateFine()), 110));
-        ot.getColumns().add(overdueActionColumn());
+        ot.getColumns().add(colIRC("Days Overdue", r -> String.valueOf(r.getDaysOverdue()), 100));
+        ot.getColumns().add(colIRC("Fine",         r -> AppTheme.formatCurrency(r.getRemainingFine()), 110));
+        
+        TableColumn<IssueRecord, Void> actC = overdueActionColumn();
+        actC.getStyleClass().add("column-header-center");
+        ot.getColumns().add(actC);
 
-        ObservableList<IssueRecord> overdueData =
-                FXCollections.observableArrayList(BookService.getAllOverdueBooks());
-        ot.setItems(overdueData);
+        ot.setItems(filteredOverdue);
+        overdueTable = ot;
         VBox.setVgrow(ot, Priority.ALWAYS);
+
 
         // Export + Print buttons
         Button exportBtn = AppTheme.createIconTextButton(
                 "Export CSV", AppTheme.ICON_UPLOAD, AppTheme.ButtonStyle.GHOST);
-        exportBtn.setOnAction(e -> exportOverdueReport(overdueData));
+        exportBtn.setOnAction(e -> exportOverdueReport(filteredOverdue));
+        exportBtn.disableProperty().bind(javafx.beans.binding.Bindings.isEmpty(filteredOverdue));
+
 
         Button printBtn = AppTheme.createIconTextButton(
                 "Print Report", AppTheme.ICON_PRINT, AppTheme.ButtonStyle.GHOST);
         printBtn.setOnAction(e -> printOverdueReport(ot));
+        printBtn.disableProperty().bind(javafx.beans.binding.Bindings.isEmpty(filteredOverdue));
+
 
         HBox bar2 = new HBox(8, printBtn, exportBtn);
         bar2.setAlignment(Pos.CENTER_RIGHT);
@@ -491,9 +772,10 @@ public class CirculationView extends BorderPane {
         };
         refreshBooks.run();
         bookSearch.textProperty().addListener((o, old, v) -> refreshBooks.run());
-        bookList.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
 
-        // ── Selected Books List ──────────────────────────────────
+        // --- Persistence for selections ---
+        Set<Book> selectedBooks = new HashSet<>();
+        Map<String, Spinner<Integer>> quantityMap = new HashMap<>();
         Label selectedHdr = fieldLabel("Selected Books & Quantities");
         VBox selectedBooksBox = new VBox(10);
         selectedBooksBox.setPadding(new Insets(10));
@@ -501,23 +783,19 @@ public class CirculationView extends BorderPane {
                 "; -fx-background-radius:8px; -fx-border-color:" + (AppTheme.darkMode ? "#334155" : "#E2E8F0") +
                 "; -fx-border-width:1;");
 
-        Map<String, Spinner<Integer>> quantityMap = new HashMap<>();
-
-        bookList.getSelectionModel().getSelectedItems().addListener((javafx.collections.ListChangeListener<Book>) c -> {
+        // Helper to update the selected books UI
+        Runnable updateSelectedUI = () -> {
             selectedBooksBox.getChildren().clear();
-            quantityMap.clear();
-            var selected = bookList.getSelectionModel().getSelectedItems();
-
-            if (selected.isEmpty()) {
+            if (selectedBooks.isEmpty()) {
                 Label placeholder = new Label("No books selected");
                 placeholder.setStyle("-fx-text-fill:" + textMuted() + "; -fx-font-style:italic;");
                 selectedBooksBox.getChildren().add(placeholder);
                 bookAvail.setText("");
             } else {
-                bookAvail.setText(selected.size() + " book(s) selected");
+                bookAvail.setText(selectedBooks.size() + " book(s) selected");
                 bookAvail.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A; -fx-font-weight:600;");
 
-                for (Book sb : selected) {
+                for (Book sb : selectedBooks) {
                     HBox row = new HBox(12);
                     row.setAlignment(Pos.CENTER_LEFT);
 
@@ -525,18 +803,47 @@ public class CirculationView extends BorderPane {
                     title.setStyle("-fx-font-size:13px; -fx-text-fill:" + textPrimary() + "; -fx-font-weight:600;");
                     HBox.setHgrow(title, Priority.ALWAYS);
 
-                    Spinner<Integer> qSpin = new Spinner<>(1, sb.getQuantity(), 1);
-                    qSpin.setEditable(true);
-                    qSpin.setPrefWidth(90);
-                    qSpin.getStyleClass().add("themed-spinner");
-                    qSpin.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
+                    Spinner<Integer> qSpin = quantityMap.computeIfAbsent(sb.getIsbn(), k -> {
+                        Spinner<Integer> s = new Spinner<>(1, sb.getQuantity(), 1);
+                        s.setEditable(true);
+                        s.setPrefWidth(90);
+                        s.getStyleClass().add("themed-spinner");
+                        s.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
+                        return s;
+                    });
 
-                    quantityMap.put(sb.getIsbn(), qSpin);
+                    Button removeBtn = AppTheme.createIconButton(AppTheme.ICON_CLOSE, "Remove", AppTheme.ButtonStyle.GHOST);
+                    removeBtn.setOnAction(e -> {
+                        selectedBooks.remove(sb);
+                        quantityMap.remove(sb.getIsbn());
+                        // Trigger UI update
+                        Platform.runLater(() -> {
+                           // We need to find a way to refresh the list selection if it's currently visible
+                           // But for now just updating the UI box is enough
+                        });
+                    });
+
                     row.getChildren().addAll(title, qSpin);
                     selectedBooksBox.getChildren().add(row);
                 }
             }
+        };
+
+        bookList.getSelectionModel().selectedItemProperty().addListener((o, old, v) -> {
+            if (v != null) {
+                if (selectedBooks.contains(v)) {
+                    selectedBooks.remove(v);
+                    quantityMap.remove(v.getIsbn());
+                } else {
+                    selectedBooks.add(v);
+                }
+                updateSelectedUI.run();
+                // Clear selection to allow re-selection if it pops up in search again
+                Platform.runLater(() -> bookList.getSelectionModel().clearSelection());
+            }
         });
+
+        updateSelectedUI.run();
 
         // ── User picker ──────────────────────────────────────────
         Label userLbl = fieldLabel("Select User");
@@ -569,18 +876,25 @@ public class CirculationView extends BorderPane {
 
         Label issueDateLbl = fieldLabel("Issue Date");
         DatePicker issueDatePicker = new DatePicker(LocalDate.now());
+        issueDatePicker.setDayCellFactory(picker -> new DateCell() {
+            @Override
+            public void updateItem(LocalDate date, boolean empty) {
+                super.updateItem(date, empty);
+                setDisable(empty || date.isAfter(LocalDate.now()));
+            }
+        });
         issueDatePicker.setEditable(false);
-        issueDatePicker.setMaxWidth(Double.MAX_VALUE);
+        issueDatePicker.setPrefWidth(160);
         issueDatePicker.setStyle(inputStyle());
 
         Label loanDaysLbl = fieldLabel("Loan Period (Days)");
         Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, BookService.getLoanPeriodDays());
         loanDaysSpin.setEditable(true);
         loanDaysSpin.getStyleClass().add("themed-spinner");
-        loanDaysSpin.setPrefWidth(140);
+        loanDaysSpin.setPrefWidth(120);
         loanDaysSpin.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
 
-        Label testingHint = new Label("Multiple books can be selected using Ctrl/Shift + Click.");
+        Label testingHint = new Label("Search and click books to toggle selection. Selections persist across searches.");
         testingHint.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         testingHint.setWrapText(true);
 
@@ -594,7 +908,7 @@ public class CirculationView extends BorderPane {
                 bookLbl, bookSearch, bookList, bookAvail,
                 selectedHdr, selectedBooksBox,
                 userLbl, userSearch, userListView,
-                new HBox(12,
+                new HBox(24, // More gap
                         new VBox(6, issueDateLbl, issueDatePicker),
                         new VBox(6, loanDaysLbl, loanDaysSpin)),
                 testingHint,
@@ -613,21 +927,19 @@ public class CirculationView extends BorderPane {
         ((Button) dp.lookupButton(ButtonType.CANCEL)).getStyleClass().add("btn-secondary");
 
         issueBtn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
-            var selected = bookList.getSelectionModel().getSelectedItems();
             User user = userListView.getSelectionModel().getSelectedItem();
             LocalDate date = issueDatePicker.getValue();
-
-            if (selected.isEmpty()) { errLbl.setText("Please select at least one book."); errLbl.setVisible(true); ev.consume(); return; }
+            if (selectedBooks.isEmpty()) { errLbl.setText("Please select at least one book."); errLbl.setVisible(true); ev.consume(); return; }
             if (user == null)       { errLbl.setText("Please select a user."); errLbl.setVisible(true); ev.consume(); return; }
             if (date == null)       { errLbl.setText("Please choose an issue date."); errLbl.setVisible(true); ev.consume(); return; }
 
             errLbl.setVisible(false);
             try {
-                for (Book b : selected) {
+                for (Book b : selectedBooks) {
                     int qty = quantityMap.get(b.getIsbn()).getValue();
                     BookService.issueBookToUser(b.getIsbn(), user.getUserId(), qty, date, loanDaysSpin.getValue());
                 }
-                toast.showSuccess("Successfully issued " + selected.size() + " book(s) to " + user.getUserId());
+                toast.showSuccess("Successfully issued " + selectedBooks.size() + " book(s) to " + user.getUserId());
                 onRefresh.run();
             } catch (Exception ex) {
                 errLbl.setText(ex.getMessage()); errLbl.setVisible(true); ev.consume();
@@ -682,6 +994,8 @@ public class CirculationView extends BorderPane {
         a.showAndWait().ifPresent(type -> {
             if (type == payBtn) {
                 processFinePayment(r, fine);
+            } else {
+                if (toast != null) toast.showSuccess("Book returned. Fine moved to Settlements.");
             }
         });
     }
@@ -689,9 +1003,11 @@ public class CirculationView extends BorderPane {
     private void processFinePayment(IssueRecord r, double fine) {
         try {
             User user = UserService.getUserById(r.getUserId());
-            // 1. Generate Invoice (Internal Record - maybe just a log for now or a dedicated DB table if needed)
+            // 1. Generate Invoice
             // 2. Offer to Print/Email
-            InvoiceService.generateAndHandleInvoice(user, r, fine, toast);
+            double remaining = r.calculateFine() - r.getPaidAmount();
+            InvoiceService.generateAndHandleInvoice(user, r, remaining, toast);
+            if (onRefresh != null) onRefresh.run(); // Refresh UI after payment
         } catch (Exception e) {
             if (toast != null) toast.showError("Payment processing failed: " + e.getMessage());
         }
@@ -849,8 +1165,10 @@ public class CirculationView extends BorderPane {
 
     private TableColumn<IssueRecord, Void> overdueActionColumn() {
         TableColumn<IssueRecord, Void> actionColumn = new TableColumn<>("Actions");
-        actionColumn.setPrefWidth(116);
+        actionColumn.getStyleClass().add("col-center");
+        actionColumn.setPrefWidth(125);
         actionColumn.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
             final Button emailBtn = actionIconBtn(AppTheme.ICON_MAIL, "Send overdue reminder", "#0D9488");
             final Button contactBtn = actionIconBtn(AppTheme.ICON_USER, "View borrower contact", "#64748B");
             final Button invBtn = actionIconBtn(AppTheme.ICON_SAVE, "Generate early invoice", "#F59E0B");
@@ -864,7 +1182,7 @@ public class CirculationView extends BorderPane {
                     IssueRecord r = getTableView().getItems().get(getIndex());
                     try {
                         User user = UserService.getUserById(r.getUserId());
-                        InvoiceService.generateAndHandleInvoice(user, r, r.calculateFine(), toast);
+                        InvoiceService.generateAndHandleInvoice(user, r, r.calculateFine(), toast, refreshAllData);
                     } catch (Exception ex) {
                         if (toast != null) toast.showError("Failed to load user: " + ex.getMessage());
                     }
@@ -880,8 +1198,11 @@ public class CirculationView extends BorderPane {
 
                 IssueRecord record = getTableRow().getItem();
                 User borrower = UserService.getUserById(record.getUserId());
-                boolean canEmail = borrower != null && borrower.getEmail() != null && !borrower.getEmail().isBlank();
-                emailBtn.setDisable(!canEmail);
+                boolean systemCanEmail = com.example.services.AppConfigurationService.getConfiguration().isEmailConfigured();
+                boolean userHasEmail = borrower != null && borrower.getEmail() != null && !borrower.getEmail().isBlank();
+                boolean isReturned = record.isReturned();
+                
+                emailBtn.setDisable(!systemCanEmail || !userHasEmail || isReturned);
                 setGraphic(box);
             }
         });
@@ -940,9 +1261,13 @@ public class CirculationView extends BorderPane {
     // ═══════════════════════════════════════════════════════════════
 
     private void bind() {
-        issuesTable.setItems(issueRecords);
-        requestsTable.setItems(borrowRequests);
+        issuesTable.setItems(filteredIssues);
+        requestsTable.setItems(filteredRequests);
+        if (overdueTable != null) overdueTable.setItems(filteredOverdue);
+        if (settlementsTable != null) settlementsTable.setItems(filteredSettlements);
+        if (historyTable != null) historyTable.setItems(filteredHistory);
     }
+
 
     // ═══════════════════════════════════════════════════════════════
     // Column helpers
@@ -950,17 +1275,45 @@ public class CirculationView extends BorderPane {
 
     @FunctionalInterface interface StrFn<T> { String apply(T t); }
 
-    private static <T> TableColumn<T, String> makeCol(String name, StrFn<T> fn, double w) {
-        TableColumn<T, String> c = new TableColumn<>(name);
-        c.setCellValueFactory(d ->
-                new javafx.beans.property.SimpleStringProperty(fn.apply(d.getValue())));
-        c.setPrefWidth(w);
-        return c;
-    }
-
     private TableColumn<IssueRecord,  String> col(String n, StrFn<IssueRecord>  f, double w) { return makeCol(n,f,w); }
     private TableColumn<BorrowRequest,String> col2(String n, StrFn<BorrowRequest> f, double w) { return makeCol(n,f,w); }
     private TableColumn<IssueRecord,  String> colIR(String n, StrFn<IssueRecord> f, double w) { return makeCol(n,f,w); }
+    
+    private TableColumn<IssueRecord, String> colC(String n, StrFn<IssueRecord> f, double w) { return makeColCenter(n,f,w); }
+    private TableColumn<BorrowRequest, String> col2C(String n, StrFn<BorrowRequest> f, double w) { return makeColCenter(n,f,w); }
+    private TableColumn<IssueRecord, String> colIRC(String n, StrFn<IssueRecord> f, double w) { return makeColCenter(n,f,w); }
+    
+    private static <T> TableColumn<T, String> makeCol(String name, StrFn<T> fn, double w) {
+        TableColumn<T, String> c = new TableColumn<>(name);
+        c.setSortable(false);
+        c.getStyleClass().add("col-left");
+        c.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(fn.apply(d.getValue())));
+        c.setPrefWidth(w);
+        c.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-left"); }
+            @Override protected void updateItem(String s, boolean empty) {
+                super.updateItem(s, empty);
+                setText(empty ? null : s);
+            }
+        });
+        return c;
+    }
+
+    private static <T> TableColumn<T, String> makeColCenter(String name, StrFn<T> fn, double w) {
+        TableColumn<T, String> c = new TableColumn<>(name);
+        c.setSortable(false);
+        c.getStyleClass().add("col-center");
+        c.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(fn.apply(d.getValue())));
+        c.setPrefWidth(w);
+        c.setCellFactory(col -> new TableCell<>() {
+            { getStyleClass().add("col-center"); }
+            @Override protected void updateItem(String s, boolean empty) {
+                super.updateItem(s, empty);
+                setText(empty ? null : s);
+            }
+        });
+        return c;
+    }
 
     // ═══════════════════════════════════════════════════════════════
     // Style helpers
@@ -1018,7 +1371,6 @@ public class CirculationView extends BorderPane {
                 "-fx-border-width:1.5; -fx-border-radius:10px; -fx-background-radius:10px; " +
                 "-fx-padding:10 14; -fx-font-size:14px;";
     }
-    private static void showErr(Label lbl, String msg) { lbl.setText(msg); lbl.setVisible(true); }
 
     private static String listSurfaceStyle() {
         return "-fx-background-color:" + (AppTheme.darkMode ? "#1E293B" : "white") + "; " +
@@ -1075,5 +1427,30 @@ public class CirculationView extends BorderPane {
 
     private static String valueOrPlaceholder(String value) {
         return value == null || value.isBlank() ? "(not provided)" : value;
+    }
+    public void refresh() {
+        if (issuesTable != null) issuesTable.refresh();
+        if (requestsTable != null) requestsTable.refresh();
+        if (overdueTable != null) overdueTable.refresh();
+        if (settlementsTable != null) settlementsTable.refresh();
+        if (historyTable != null) historyTable.refresh();
+        updateRemindAllBtnState();
+    }
+
+    private void updateRemindAllBtnState() {
+        if (remindAllBtn != null) {
+            boolean systemCanEmail = com.example.services.AppConfigurationService.getConfiguration().isEmailConfigured();
+            boolean hasOverdue = !filteredOverdue.isEmpty();
+            remindAllBtn.setDisable(!systemCanEmail || !hasOverdue);
+        }
+    }
+
+
+    public void setSelectedTab(int index) {
+        if (getCenter() instanceof TabPane tp) {
+            if (index >= 0 && index < tp.getTabs().size()) {
+                tp.getSelectionModel().select(index);
+            }
+        }
     }
 }

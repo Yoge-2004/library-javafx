@@ -46,10 +46,6 @@ public final class AppConfiguration implements Serializable {
 
     // ── First-run flag
     private boolean initialSetupDone    = false;
-
-    // ── Library chooser support
-    private List<String> knownLibraries = new ArrayList<>();
-    private List<LibraryIdentity> knownLibraryProfiles = new ArrayList<>();
     private List<String> savedCategories = new ArrayList<>();
 
     // ════════════════════════════════════════════════════════════════
@@ -167,31 +163,20 @@ public final class AppConfiguration implements Serializable {
     public void    markSetupDone()             { initialSetupDone = true; }
 
     public List<String> getKnownLibraries() {
-        ensureKnownLibraries();
-        return List.copyOf(knownLibraries);
+        return LibrariesDB.getInstance().getLibraries();
     }
 
     public void setKnownLibraries(List<String> libraries) {
-        knownLibraries = new ArrayList<>();
-        knownLibraryProfiles = new ArrayList<>();
         if (libraries != null) {
-            for (String library : libraries) {
-                if (library != null && !library.isBlank()) {
-                    String trimmed = library.trim();
-                    knownLibraries.add(trimmed);
-                    addKnownLibraryProfile(parseDisplayName(trimmed));
-                }
+            for (String lib : libraries) {
+                LibrariesDB.getInstance().addLibrary(lib);
             }
         }
-        ensureKnownLibraries();
     }
 
+
     public void rememberCurrentLibrary() {
-        ensureKnownLibraries();
-        LibraryIdentity current = new LibraryIdentity(getLibraryName(), getBranchName());
-        knownLibraryProfiles.removeIf(current::matches);
-        knownLibraryProfiles.add(0, current);
-        syncKnownLibraryDisplays();
+        LibrariesDB.getInstance().addLibrary(getCurrentLibraryDisplayName());
     }
 
     public boolean selectKnownLibrary(String displayName) {
@@ -199,17 +184,7 @@ public final class AppConfiguration implements Serializable {
             return false;
         }
 
-        ensureKnownLibraries();
         String trimmed = displayName.trim();
-        for (LibraryIdentity profile : knownLibraryProfiles) {
-            if (profile.matches(trimmed)) {
-                setLibraryName(profile.libraryName());
-                setBranchName(profile.branchName());
-                rememberCurrentLibrary();
-                return true;
-            }
-        }
-
         LibraryIdentity parsed = parseDisplayName(trimmed);
         if (parsed != null) {
             setLibraryName(parsed.libraryName());
@@ -255,72 +230,12 @@ public final class AppConfiguration implements Serializable {
         setCurrencyCode(currencyCode);
         setFinePerDay(finePerDay);
         setDatabaseConfiguration(databaseConfiguration);
-        ensureKnownLibraries();
         ensureSavedCategories();
     }
 
     // ════════════════════════════════════════════════════════════════
     // Helpers
     // ════════════════════════════════════════════════════════════════
-    private static String blankToNull(String v) {
-        return (v == null || v.isBlank()) ? null : v.trim();
-    }
-    private static String blankOr(String v, String fallback) {
-        return (v == null || v.isBlank()) ? fallback : v.trim();
-    }
-
-    private static String inferCurrencySymbol(String code) {
-        try {
-            return Currency.getInstance(blankOr(code, "USD")).getSymbol();
-        } catch (Exception ignored) {
-            return "$";
-        }
-    }
-
-    private static final List<String> SEED_LIBRARIES = List.of(
-            "City Central Library - Main Branch",
-            "City Central Library - East Wing",
-            "Green Valley Public Library - Main Branch",
-            "Green Valley Public Library - North Campus",
-            "Sunrise University Library - Academic Block",
-            "Sunrise University Library - Research Wing",
-            "Westside Community Library - Main Branch",
-            "Westside Community Library - Children's Section",
-            "Lakewood District Library - Downtown",
-            "Lakewood District Library - Suburban Branch",
-            "Hilltop School Library - Senior Block",
-            "Hilltop School Library - Junior Block",
-            "Heritage Archive - History Wing",
-            "Tech Park Library - Innovation Hub",
-            "Seaside Public Library - Marina Branch"
-    );
-
-    private void ensureKnownLibraries() {
-        if (knownLibraries == null) {
-            knownLibraries = new ArrayList<>();
-        }
-        if (knownLibraryProfiles == null) {
-            knownLibraryProfiles = new ArrayList<>();
-        }
-
-        // Seed demo libraries on first run (when list would be empty)
-        if (knownLibraries.isEmpty() && knownLibraryProfiles.isEmpty()) {
-            knownLibraries.addAll(SEED_LIBRARIES);
-        }
-
-        List<LibraryIdentity> mergedProfiles = new ArrayList<>();
-        for (LibraryIdentity profile : knownLibraryProfiles) {
-            addKnownLibraryProfile(mergedProfiles, profile);
-        }
-        for (String value : knownLibraries) {
-            addKnownLibraryProfile(mergedProfiles, parseDisplayName(value));
-        }
-        addKnownLibraryProfile(mergedProfiles, new LibraryIdentity(getLibraryName(), getBranchName()));
-
-        knownLibraryProfiles = mergedProfiles;
-        syncKnownLibraryDisplays();
-    }
-
     private void ensureSavedCategories() {
         if (savedCategories == null) {
             savedCategories = new ArrayList<>();
@@ -346,31 +261,21 @@ public final class AppConfiguration implements Serializable {
         savedCategories.add(trimmed);
     }
 
-    private void syncKnownLibraryDisplays() {
-        LinkedHashSet<String> unique = new LinkedHashSet<>();
-        for (LibraryIdentity profile : knownLibraryProfiles) {
-            if (profile != null) {
-                unique.add(profile.displayName());
-            }
-        }
-        unique.add(getCurrentLibraryDisplayName());
-        knownLibraries = new ArrayList<>(unique);
+    private static String blankToNull(String v) {
+        return (v == null || v.isBlank()) ? null : v.trim();
+    }
+    private static String blankOr(String v, String fallback) {
+        return (v == null || v.isBlank()) ? fallback : v.trim();
     }
 
-    private void addKnownLibraryProfile(LibraryIdentity identity) {
-        if (knownLibraryProfiles == null) {
-            knownLibraryProfiles = new ArrayList<>();
+    private static String inferCurrencySymbol(String code) {
+        try {
+            return Currency.getInstance(blankOr(code, "USD")).getSymbol();
+        } catch (Exception ignored) {
+            return "$";
         }
-        addKnownLibraryProfile(knownLibraryProfiles, identity);
     }
 
-    private static void addKnownLibraryProfile(List<LibraryIdentity> profiles, LibraryIdentity identity) {
-        if (profiles == null || identity == null) {
-            return;
-        }
-        profiles.removeIf(identity::matches);
-        profiles.add(identity);
-    }
 
     private static LibraryIdentity parseDisplayName(String displayName) {
         if (displayName == null || displayName.isBlank()) {
@@ -405,16 +310,6 @@ public final class AppConfiguration implements Serializable {
 
         private String displayName() {
             return libraryName + " - " + branchName;
-        }
-
-        private boolean matches(String displayName) {
-            return displayName != null && displayName().equalsIgnoreCase(displayName.trim());
-        }
-
-        private boolean matches(LibraryIdentity other) {
-            return other != null
-                    && libraryName.equalsIgnoreCase(other.libraryName)
-                    && branchName.equalsIgnoreCase(other.branchName);
         }
 
         @Override

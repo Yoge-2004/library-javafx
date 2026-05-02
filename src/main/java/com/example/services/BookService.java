@@ -59,7 +59,8 @@ public final class BookService {
 
         try {
             booksDB.addBook(book);
-            LOGGER.log(Level.INFO, "Book added successfully: {0}", book.getTitle());
+            LOGGER.log(Level.INFO, "User added book: ISBN={0}, Title=''{1}'', Author=''{2}'', Qty={3}",
+                    new Object[]{book.getIsbn(), book.getTitle(), book.getAuthor(), book.getQuantity()});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to add book: " + book.getTitle(), e);
             if (e instanceof BooksException) {
@@ -103,7 +104,8 @@ public final class BookService {
 
         try {
             booksDB.modifyBook(book);
-            LOGGER.log(Level.INFO, "Book updated successfully: {0}", book.getTitle());
+            LOGGER.log(Level.INFO, "User updated book: ISBN={0}, NewTitle=''{1}'', NewQty={2}",
+                    new Object[]{book.getIsbn(), book.getTitle(), book.getQuantity()});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to update book: " + book.getTitle(), e);
             if (e instanceof BooksException) {
@@ -235,8 +237,8 @@ public final class BookService {
         try {
             booksDB.issueBook(isbn.trim(), user, quantity,
                     issueDate != null ? issueDate : LocalDate.now(), Math.max(1, loanDays));
-            LOGGER.log(Level.INFO, "Issued {0} copies of book {1} to user {2}",
-                    new Object[]{quantity, isbn, userId});
+            LOGGER.log(Level.INFO, "CIRCULATION: Issued {0} copies of ''{1}'' (ISBN: {2}) to User ''{3}''",
+                    new Object[]{quantity, book.getTitle(), isbn, userId});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to issue book", e);
             if (e instanceof BooksException) {
@@ -279,7 +281,7 @@ public final class BookService {
 
         try {
             booksDB.returnBook(isbn.trim(), user, quantity);
-            LOGGER.log(Level.INFO, "Returned {0} copies of book {1} from user {2}",
+            LOGGER.log(Level.INFO, "CIRCULATION: Returned {0} copies of book {1} from User ''{2}''",
                     new Object[]{quantity, isbn, userId});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to return book", e);
@@ -330,11 +332,35 @@ public final class BookService {
         }
     }
 
+    /**
+     * Retrieves all records relevant for circulation (active + settlements).
+     */
+    public static List<IssueRecord> getCirculationRecords() {
+        try {
+            return booksDB.getCirculationRecords();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to retrieve circulation records", e);
+            return Collections.emptyList();
+        }
+    }
+
     public static List<IssueRecord> getAllIssueRecords() {
         try {
             return booksDB.getAllIssueRecords();
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to retrieve issue history", e);
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Retrieves recent payment history.
+     */
+    public static List<BooksDB.InvoiceData> getPaymentHistory() {
+        try {
+            return BooksDB.getInstance().getInvoiceHistory();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Failed to retrieve payment history", e);
             return Collections.emptyList();
         }
     }
@@ -965,5 +991,35 @@ public final class BookService {
     @Deprecated
     public static void persistBooks() throws IOException {
         persistBooksDatabase();
+    }
+
+    public static void seedSampleData() {
+        String[][] books = {
+            {"978-0140449266", "The Count of Monte Cristo", "Alexandre Dumas", "Classic", "1844", "5"},
+            {"978-0743273565", "The Great Gatsby", "F. Scott Fitzgerald", "Classic", "1925", "8"},
+            {"978-0451524935", "1984", "George Orwell", "Dystopian", "1949", "10"},
+            {"978-0061120084", "To Kill a Mockingbird", "Harper Lee", "Fiction", "1960", "6"},
+            {"978-0544003415", "The Lord of the Rings", "J.R.R. Tolkien", "Fantasy", "1954", "4"},
+            {"978-0345391803", "The Hitchhiker's Guide to the Galaxy", "Douglas Adams", "Sci-Fi", "1979", "12"},
+            {"978-0141439518", "Pride and Prejudice", "Jane Austen", "Romance", "1813", "7"},
+            {"978-0307474278", "The Da Vinci Code", "Dan Brown", "Thriller", "2003", "9"},
+            {"978-0316769488", "The Catcher in the Rye", "J.D. Salinger", "Fiction", "1951", "5"},
+            {"978-0062315007", "The Alchemist", "Paulo Coelho", "Adventure", "1988", "15"},
+            {"978-0375842207", "The Book Thief", "Markus Zusak", "Historical", "2005", "4"},
+            {"978-0441172719", "Dune", "Frank Herbert", "Sci-Fi", "1965", "6"},
+            {"978-0140283334", "The Shadow of the Wind", "Carlos Ruiz Zafón", "Mystery", "2001", "3"},
+            {"978-0307387899", "The Road", "Cormac McCarthy", "Post-Apocalyptic", "2006", "5"},
+            {"978-0618260300", "The Hobbit", "J.R.R. Tolkien", "Fantasy", "1937", "8"}
+        };
+
+        for (String[] b : books) {
+            try {
+                if (getBookByIsbn(b[0]) == null) {
+                    // b[0]=isbn, b[1]=title, b[2]=author, b[3]=category, b[5]=quantity
+                    addBook(b[0], b[1], b[2], b[3], Integer.parseInt(b[5]));
+                }
+            } catch (Exception ignored) {}
+        }
+        booksDB.saveAllData();
     }
 }

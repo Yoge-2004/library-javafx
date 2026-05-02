@@ -45,30 +45,39 @@ public final class DataStorage {
         }
 
         Path filePath = Paths.get(filename);
-        byte[] snapshot = DatabaseConnectionService.loadSnapshot(snapshotKey(filePath));
-        if (snapshot != null) {
-            LOGGER.log(Level.INFO, "Loaded {0} from database snapshot", filename);
-            return clazz.cast(deserialize(snapshot, clazz));
+
+        // PRIORITY: Try database snapshot first if connected
+        if (DatabaseConnectionService.isConnected()) {
+            byte[] snapshot = DatabaseConnectionService.loadSnapshot(snapshotKey(filePath));
+            if (snapshot != null) {
+                LOGGER.log(Level.INFO, "Loaded {0} from primary database snapshot", filename);
+                try {
+                    return clazz.cast(deserialize(snapshot, clazz));
+                } catch (Exception e) {
+                    LOGGER.log(Level.WARNING, "Failed to deserialize DB snapshot for {0}, falling back to file", filename);
+                }
+            }
         }
 
-        if (!Files.exists(filePath)) {
-            LOGGER.log(Level.INFO, "File does not exist: {0}", filename);
-            return null;
+        // FALLBACK: Use local file system
+        if (Files.exists(filePath)) {
+            lock.readLock().lock();
+            try (ObjectInputStream ois = new ObjectInputStream(
+                    new BufferedInputStream(Files.newInputStream(filePath)))) {
+
+                Object obj = ois.readObject();
+                LOGGER.log(Level.FINE, "Successfully read object from local file: {0}", filename);
+                return clazz.cast(obj);
+
+            } catch (ClassCastException e) {
+                throw new IOException("Object in file cannot be cast to " + clazz.getSimpleName(), e);
+            } finally {
+                lock.readLock().unlock();
+            }
         }
 
-        lock.readLock().lock();
-        try (ObjectInputStream ois = new ObjectInputStream(
-                new BufferedInputStream(Files.newInputStream(filePath)))) {
-
-            Object obj = ois.readObject();
-            LOGGER.log(Level.FINE, "Successfully read object from: {0}", filename);
-            return clazz.cast(obj);
-
-        } catch (ClassCastException e) {
-            throw new IOException("Object in file cannot be cast to " + clazz.getSimpleName(), e);
-        } finally {
-            lock.readLock().unlock();
-        }
+        LOGGER.log(Level.INFO, "Data not found in database or file: {0}", filename);
+        return null;
     }
 
     /**
@@ -383,5 +392,60 @@ public final class DataStorage {
     private static String snapshotKey(Path filePath) {
         Path fileName = filePath.getFileName();
         return fileName != null ? fileName.toString() : filePath.toString();
+    }
+
+    /**
+     * Restores all local data files from their database snapshots.
+     * This pulls the latest mirrored state from the DB and overwrites local .ser files.
+     */
+    public static void syncFromDatabase(Path dataDir) throws IOException {
+        if (dataDir == null) return;
+        Files.createDirectories(dataDir);
+        Path configDir = AppPaths.configDirectory();
+        Files.createDirectories(configDir);
+        
+        // Comprehensive list of all database files including modern and legacy names
+        Map<String, Path> syncMap = new HashMap<>();
+        
+        // Data directory files
+        syncMap.put("users_db.ser", dataDir.resolve("users_db.ser"));
+        syncMap.put("books_db.ser", dataDir.resolve("books_db.ser"));
+        syncMap.put("issued_books.ser", dataDir.resolve("issued_books.ser"));
+        syncMap.put("borrower_details.ser", dataDir.resolve("borrower_details.ser"));
+        syncMap.put("issue_records.ser", dataDir.resolve("issue_records.ser"));
+        syncMap.put("fines.ser", dataDir.resolve("fines.ser"));
+        syncMap.put("requests.ser", dataDir.resolve("requests.ser"));
+        syncMap.put("issues.ser", dataDir.resolve("issues.ser"));
+        
+        // Config directory files
+        syncMap.put("app_config.ser", configDir.resolve("app_config.ser"));
+        syncMap.put("libraries_db.ser", configDir.resolve("libraries_db.ser"));
+        
+        // Legacy fallbacks (for older snapshots)
+        syncMap.put("users.ser", dataDir.resolve("users_db.ser"));
+        syncMap.put("books.ser", dataDir.resolve("books_db.ser"));
+        syncMap.put("config.ser", configDir.resolve("app_config.ser"));
+        syncMap.put("branches.ser", configDir.resolve("libraries_db.ser"));
+        syncMap.put("settings.ser", configDir.resolve("app_config.ser"));
+
+        for (Map.Entry<String, Path> entry : syncMap.entrySet()) {
+            String key = entry.getKey();
+            Path targetFile = entry.getValue();
+            
+            // Don't overwrite if local file is already present and we are just starting up
+            // (Unless we are doing a force sync, but here we assume startup sync)
+            if (Files.exists(targetFile)) continue;
+
+            byte[] snapshot = DatabaseConnectionService.loadSnapshot(key);
+            if (snapshot != null) {
+                lock.writeLock().lock();
+                try {
+                    Files.write(targetFile, snapshot, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+                    LOGGER.log(Level.INFO, "Restored {0} from database snapshot to {1}", new Object[]{key, targetFile});
+                } finally {
+                    lock.writeLock().unlock();
+                }
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.scene.Node;
 import javafx.stage.DirectoryChooser;
 
 import java.io.File;
@@ -17,6 +18,7 @@ public class LibraryConfigurationView extends BorderPane {
 
     private final AppConfiguration config;
     private final Consumer<String> onSave;
+    private static int lastSelectedTabIndex = 0;
     
     private Spinner<Integer> maxBorrowSpin;
     private Spinner<Integer> loanDaysSpin;
@@ -24,8 +26,11 @@ public class LibraryConfigurationView extends BorderPane {
     private Spinner<Double> fineSpin;
     private TextField currSymbolField;
     private TextField currCodeField;
+    private TextField libNameField;
+    private TextField branchNameField;
     
     private TextField smtpHostField;
+
     private ComboBox<Integer> smtpPortCombo;
     private TextField smtpUserField;
     private PasswordField smtpPassField;
@@ -35,6 +40,7 @@ public class LibraryConfigurationView extends BorderPane {
     
     private TextField exportDirField;
     private ComboBox<String> storageFormatCombo;
+    private DatabaseConfigurationView dbConfigView;
 
     public LibraryConfigurationView(AppConfiguration config, Consumer<String> onSave) {
         this.config = config;
@@ -59,11 +65,19 @@ public class LibraryConfigurationView extends BorderPane {
         tabs.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
         tabs.getStyleClass().add("settings-tab-pane");
 
+        dbConfigView = new DatabaseConfigurationView(config.getDatabaseConfiguration());
+
         tabs.getTabs().addAll(
             new Tab("Rules & Currency", buildRulesPanel()),
             new Tab("Email / SMTP", buildEmailPanel()),
-            new Tab("Storage & Data", buildStoragePanel())
+            new Tab("Storage & Data", buildStoragePanel()),
+            new Tab("Database", dbConfigView)
         );
+        
+        tabs.getSelectionModel().select(Math.min(lastSelectedTabIndex, tabs.getTabs().size() - 1));
+        tabs.getSelectionModel().selectedIndexProperty().addListener((obs, old, val) -> {
+            lastSelectedTabIndex = val.intValue();
+        });
 
         VBox content = new VBox(20, tabs);
         content.setPadding(new Insets(20));
@@ -88,7 +102,10 @@ public class LibraryConfigurationView extends BorderPane {
 
     private VBox buildRulesPanel() {
         VBox p = panelContainer();
+        p.setAlignment(Pos.TOP_CENTER);
+        
         GridPane g = grid();
+        g.setAlignment(Pos.CENTER);
         
         maxBorrowSpin = spinner(1, 100, BookService.getMaxBorrowLimit());
         loanDaysSpin = spinner(1, 365, BookService.getLoanPeriodDays());
@@ -98,16 +115,22 @@ public class LibraryConfigurationView extends BorderPane {
         currSymbolField = textField(config.getCurrencySymbol());
         currCodeField = textField(config.getCurrencyCode());
 
-        g.addRow(0, label("Max Books per User:"), maxBorrowSpin);
-        g.addRow(1, label("Loan Period (days):"), loanDaysSpin);
-        g.addRow(2, label("Max Renewals:"), renewalSpin);
-        g.addRow(3, label("Fine per Day:"), fineSpin);
-        g.addRow(4, label("Currency Symbol:"), currSymbolField);
-        g.addRow(5, label("Currency Code:"), currCodeField);
+        libNameField = textField(config.getLibraryName());
+        branchNameField = textField(config.getBranchName());
+
+        g.addRow(0, label("Library Name:"), libNameField);
+        g.addRow(1, label("Branch Name:"), branchNameField);
+        g.addRow(2, label("Max Books per User:"), maxBorrowSpin);
+        g.addRow(3, label("Loan Period (days):"), loanDaysSpin);
+        g.addRow(4, label("Max Renewals:"), renewalSpin);
+        g.addRow(5, label("Fine per Day:"), fineSpin);
+        g.addRow(6, label("Currency Symbol:"), currSymbolField);
+        g.addRow(7, label("Currency Code:"), currCodeField);
         
-        p.getChildren().addAll(sectionHeader("BORROWING & FINES"), g);
+        p.getChildren().addAll(sectionHeader("IDENTITY & RULES"), g);
         return p;
     }
+
 
     private VBox buildEmailPanel() {
         VBox p = panelContainer();
@@ -167,6 +190,8 @@ public class LibraryConfigurationView extends BorderPane {
 
     private void handleSave() {
         try {
+            config.setLibraryName(libNameField.getText());
+            config.setBranchName(branchNameField.getText());
             config.setSmtpHost(smtpHostField.getText());
             config.setSmtpPort(smtpPortCombo.getValue());
             config.setSmtpUsername(smtpUserField.getText());
@@ -177,8 +202,10 @@ public class LibraryConfigurationView extends BorderPane {
             config.setCurrencySymbol(currSymbolField.getText());
             config.setCurrencyCode(currCodeField.getText());
             config.setExportDirectory(exportDirField.getText());
+            config.setDatabaseConfiguration(dbConfigView.buildConfigFromUI());
             
             AppConfigurationService.updateConfiguration(config);
+
             BookService.updateLibraryConfiguration(
                     maxBorrowSpin.getValue(),
                     loanDaysSpin.getValue(),
@@ -249,4 +276,17 @@ public class LibraryConfigurationView extends BorderPane {
 
     private String pageBackground() { return AppTheme.darkMode ? "#0F172A" : "#F8FAFC"; }
     private String textPrimary() { return AppTheme.darkMode ? "#F1F5F9" : "#1E293B"; }
+
+    public void setSelectedTab(int index) {
+        if (getCenter() instanceof ScrollPane sp && sp.getContent() instanceof VBox vb) {
+            for (Node n : vb.getChildren()) {
+                if (n instanceof TabPane tp) {
+                    if (index >= 0 && index < tp.getTabs().size()) {
+                        tp.getSelectionModel().select(index);
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }

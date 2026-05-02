@@ -3,7 +3,8 @@ package com.example.entities;
 public enum UserRole {
     USER("User"),
     ADMIN("Administrator"),
-    LIBRARIAN("Librarian");
+    LIBRARIAN("Librarian"),
+    RESTRICTED_ADMIN("Restricted Admin");
 
     private final String displayName;
 
@@ -16,10 +17,10 @@ public enum UserRole {
     }
 
     public boolean isAdmin() {
-        return this == ADMIN;
+        return this == ADMIN || this == RESTRICTED_ADMIN;
     }
 
     public boolean isStaff() {
-        return this == LIBRARIAN || this == ADMIN;
+        return this == LIBRARIAN || this == ADMIN || this == RESTRICTED_ADMIN;
     }
 }

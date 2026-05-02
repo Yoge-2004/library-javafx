@@ -1,5 +1,8 @@
 package com.example.application.ui;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import com.example.entities.AppConfiguration;
 import com.example.services.AppConfigurationService;
 import javafx.embed.swing.SwingFXUtils;
@@ -31,6 +34,7 @@ import javafx.util.Duration;
 
 import java.awt.Taskbar;
 import java.awt.image.BufferedImage;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.Collection;
 
@@ -57,24 +61,8 @@ public final class AppTheme {
     public static final String ICON_RETURN = "M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z";
     public static final String ICON_MAIL = "M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z";
     public static final String ICON_SEARCH = "M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z";
-    public static final String APP_ICON_SVG = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 256 256\">\n" +
-            "  <defs>\n" +
-            "    <linearGradient id=\"grad1\" x1=\"0%\" y1=\"0%\" x2=\"100%\" y2=\"100%\">\n" +
-            "      <stop offset=\"0%\" style=\"stop-color:#0F172A;stop-opacity:1\" />\n" +
-            "      <stop offset=\"55%\" style=\"stop-color:#134E4A;stop-opacity:1\" />\n" +
-            "      <stop offset=\"100%\" style=\"stop-color:#14B8A6;stop-opacity:1\" />\n" +
-            "    </linearGradient>\n" +
-            "  </defs>\n" +
-            "  <rect x=\"0\" y=\"0\" width=\"256\" height=\"256\" rx=\"72\" ry=\"72\" fill=\"url(#grad1)\"/>\n" +
-            "  <circle cx=\"64\" cy=\"51\" r=\"170\" fill=\"white\" opacity=\"0.12\"/>\n" +
-            "  <rect x=\"66\" y=\"46\" width=\"123\" height=\"148\" rx=\"20\" ry=\"20\" fill=\"white\"/>\n" +
-            "  <rect x=\"66\" y=\"46\" width=\"37\" height=\"148\" rx=\"10\" ry=\"10\" fill=\"#CCFBF1\"/>\n" +
-            "  <line x1=\"92\" y1=\"60\" x2=\"172\" y2=\"60\" stroke=\"#0F766E\" stroke-width=\"7\" opacity=\"0.85\"/>\n" +
-            "  <line x1=\"92\" y1=\"103\" x2=\"172\" y2=\"103\" stroke=\"#0F766E\" stroke-width=\"7\" opacity=\"0.85\"/>\n" +
-            "  <line x1=\"92\" y1=\"146\" x2=\"147\" y2=\"146\" stroke=\"#0F766E\" stroke-width=\"7\" opacity=\"0.85\"/>\n" +
-            "  <rect x=\"77\" y=\"190\" width=\"103\" height=\"20\" rx=\"8\" ry=\"8\" fill=\"#99F6E4\"/>\n" +
-            "</svg>";
-
+    public static final String ICON_CARD = "M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4V6h16v12zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm-6-4h8v2h-8v-2z";
+    
     public static final String ICON_DASHBOARD = "M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z";
     public static final String ICON_LIBRARY = "M12 11.55C9.64 9.35 6.48 8 3 8v11c3.48 0 6.64 1.35 9 3.55 2.36-2.19 5.52-3.55 9-3.55V8c-3.48 0-6.64 1.35-9 3.55zM12 8c1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3 1.34 3 3 3z";
     public static final String ICON_SYNC = "M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z";
@@ -139,38 +127,27 @@ public final class AppTheme {
     private static Image cachedMediumIcon;
     private static Image cachedSmallIcon;
     private static Image cachedTinyIcon;
-    /** Set by LibraryApp when dark mode toggles; used to apply dark-mode to dialogs. */
     public static boolean darkMode = false;
 
-    /**
-     * Custom cubic-bezier interpolators replacing deprecated Interpolator.SPLINE().
-     * Equivalent to common CSS easing functions.
-     */
-    // Spring overshoot: cubic-bezier(0.34, 1.56, 0.64, 1.0)
     public static final Interpolator SPRING_INTERPOLATOR = new Interpolator() {
         @Override protected double curve(double t) {
-            // Approximation of cubic-bezier(0.34,1.56,0.64,1.0) — overshoots then settles
             double p1x=0.34,p1y=1.56,p2x=0.64,p2y=1.0;
             return cubicBezier(t,p1x,p1y,p2x,p2y);
         }
     };
-    // Ease-out-quart: cubic-bezier(0.25, 0.46, 0.45, 0.94)
     public static final Interpolator EASE_OUT_QUART = new Interpolator() {
         @Override protected double curve(double t) {
             return cubicBezier(t,0.25,0.46,0.45,0.94);
         }
     };
-    // Ease-in-out: cubic-bezier(0.4, 0.0, 0.2, 1.0)
     public static final Interpolator EASE_STANDARD = new Interpolator() {
         @Override protected double curve(double t) {
             return cubicBezier(t,0.4,0.0,0.2,1.0);
         }
     };
 
-    /** Evaluate a cubic Bézier with control points (p1x,p1y) and (p2x,p2y) at t in [0,1]. */
     private static double cubicBezier(double t, double p1x, double p1y, double p2x, double p2y) {
-        // Newton-Raphson solve for x, then return y
-        double x = t; // initial guess
+        double x = t;
         for (int i = 0; i < 8; i++) {
             double cx = 3*p1x, bx = 3*(p2x-p1x)-cx, ax = 1-cx-bx;
             double xVal = ((ax*x+bx)*x+cx)*x;
@@ -184,7 +161,6 @@ public final class AppTheme {
 
     private AppTheme() {}
 
-    // === SCENE CREATION ===
     public static Scene createScene(Parent root, double width, double height) {
         Scene scene = new Scene(root, width, height);
         applyTheme(scene);
@@ -207,11 +183,56 @@ public final class AppTheme {
         }
         if (!pane.getStyleClass().contains("dialog-pane-modern"))
             pane.getStyleClass().add("dialog-pane-modern");
-        // Apply dark mode so dialogs match the main window
         if (darkMode && !pane.getStyleClass().contains("dark-mode"))
             pane.getStyleClass().add("dark-mode");
         else if (!darkMode)
             pane.getStyleClass().remove("dark-mode");
+
+        for (ButtonType bt : pane.getButtonTypes()) {
+            Button b = (Button) pane.lookupButton(bt);
+            if (b != null) {
+                b.getStyleClass().removeAll("btn-primary", "btn-secondary", "btn-outline");
+                
+                if (bt.getButtonData() == ButtonBar.ButtonData.OK_DONE || 
+                    bt.getButtonData() == ButtonBar.ButtonData.FINISH ||
+                    bt.getButtonData() == ButtonBar.ButtonData.YES ||
+                    bt == ButtonType.OK || bt == ButtonType.YES) {
+                    
+                    b.getStyleClass().add("btn-primary");
+                    b.setStyle("-fx-background-color: #0D9488; -fx-text-fill: white; " +
+                            "-fx-font-weight: 700; -fx-background-radius: 10px; -fx-padding: 8 22; " +
+                            "-fx-cursor: hand; -fx-font-size: 14px;");
+                } else if (bt.getButtonData() == ButtonBar.ButtonData.CANCEL_CLOSE ||
+                           bt.getButtonData() == ButtonBar.ButtonData.NO ||
+                           bt == ButtonType.CANCEL || bt == ButtonType.NO) {
+                           
+                    b.getStyleClass().add("btn-secondary");
+                    b.setStyle("-fx-background-color: " + (darkMode ? "#334155" : "#E2E8F0") + "; " +
+                            "-fx-text-fill: " + (darkMode ? "#F8FAFC" : "#1F2937") + "; " +
+                            "-fx-font-weight: 600; -fx-background-radius: 10px; -fx-padding: 8 20; " +
+                            "-fx-cursor: hand; -fx-font-size: 14px;");
+                } else {
+                    b.getStyleClass().add("btn-outline");
+                    b.setStyle("-fx-background-color: transparent; " +
+                            "-fx-border-color: " + (darkMode ? "#475569" : "#CBD5E1") + "; " +
+                            "-fx-border-width: 1.5; -fx-text-fill: " + (darkMode ? "#CBD5E1" : "#475569") + "; " +
+                            "-fx-font-weight: 600; -fx-background-radius: 10px; -fx-padding: 8 20; " +
+                            "-fx-cursor: hand; -fx-font-size: 14px;");
+                }
+                
+                b.setOnMouseEntered(e -> {
+                    b.setOpacity(0.9);
+                    b.setScaleX(1.02);
+                    b.setScaleY(1.02);
+                });
+                b.setOnMouseExited(e -> {
+                    b.setOpacity(1.0);
+                    b.setScaleX(1.0);
+                    b.setScaleY(1.0);
+                });
+            }
+        }
+
         pane.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene != null && newScene.getWindow() instanceof Stage stage) {
                 applyWindowIcon(stage);
@@ -225,17 +246,9 @@ public final class AppTheme {
         }
     }
 
-    /**
-     * Enables OS minimize / maximize / restore buttons on a dialog stage.
-     * JavaFX Dialog stages are DECORATED but some platforms (GTK) suppress
-     * maximize unless explicitly allowed via the stage's resizable flag and
-     * a platform-specific hint set through AWT.
-     */
     private static void enableOsWindowControls(Stage stage) {
         if (stage == null) return;
-        // Ensure the stage is resizable so maximize button is active
         if (!stage.isResizable()) stage.setResizable(true);
-        // On Linux/GTK, force the window manager to show all title-bar buttons
         try {
             java.awt.Window[] awtWindows = java.awt.Window.getWindows();
             for (java.awt.Window w : awtWindows) {
@@ -257,7 +270,6 @@ public final class AppTheme {
         return cachedStylesheet;
     }
 
-    // === STAGE UTILITIES ===
     public static Stage createModalStage(Stage owner, String title) {
         return createModalStage(owner, title, 400, 300);
     }
@@ -273,7 +285,6 @@ public final class AppTheme {
         return stage;
     }
 
-    // === SVG ICON CREATION ===
     public static SVGPath createIcon(String pathContent) {
         return createIcon(pathContent, 20);
     }
@@ -296,20 +307,18 @@ public final class AppTheme {
     }
 
     public static void applyWindowIcon(Stage stage) {
-        if (stage == null) {
-            return;
-        }
+        if (stage == null) return;
         if (cachedLargeIcon == null) {
-            cachedLargeIcon = createAppIcon(256);
-            cachedMediumIcon = createAppIcon(128);
-            cachedSmallIcon = createAppIcon(64);
+            cachedLargeIcon = createAppIcon(512);
+            cachedMediumIcon = createAppIcon(256);
+            cachedSmallIcon = createAppIcon(128);
             cachedTinyIcon = createAppIcon(32);
             applyTaskbarIcon(cachedLargeIcon);
         }
-        stage.getIcons().setAll(cachedLargeIcon, cachedMediumIcon, cachedSmallIcon, cachedTinyIcon);
+        // Small-to-large order often works better for Linux taskbar managers
+        stage.getIcons().setAll(cachedTinyIcon, cachedSmallIcon, cachedMediumIcon, cachedLargeIcon);
     }
 
-    // === BUTTON CREATION ===
     public static Button createButton(String text, ButtonStyle style) {
         Button button = new Button(text);
         button.getStyleClass().addAll("app-button", style.getStyleClass());
@@ -334,24 +343,41 @@ public final class AppTheme {
         return button;
     }
 
-    public static Tooltip createTooltip(String text) {
-        Tooltip tooltip = new Tooltip(text);
-        configureTooltip(tooltip);
-        return tooltip;
+    public static void configureTooltip(Control node, String text) {
+        if (node == null || text == null || text.isBlank()) return;
+        Tooltip tooltip = createTooltip(text);
+        node.setTooltip(tooltip);
     }
 
-    public static void configureTooltip(Tooltip tooltip) {
-        if (tooltip == null) {
-            return;
-        }
-        // Faster show delay — feels more responsive
-        tooltip.setShowDelay(Duration.millis(150));
-        // Stay visible as long as the cursor is on the control (essentially infinite)
-        tooltip.setShowDuration(Duration.hours(1));
-        // Longer hide delay to prevent "disturbance" when moving between icons
-        tooltip.setHideDelay(Duration.millis(600));
+    public static Tooltip createTooltip(String text) {
+        Tooltip tooltip = new Tooltip(text);
+        tooltip.getStyleClass().add("modern-tooltip");
+        tooltip.setShowDelay(Duration.millis(400));
+        tooltip.setShowDuration(Duration.hours(48)); // Essentially indefinitely
+        tooltip.setHideDelay(Duration.millis(150));
         tooltip.setWrapText(true);
-        tooltip.setMaxWidth(300);
+        tooltip.setMaxWidth(320);
+
+        // Enhanced show animation
+        tooltip.showingProperty().addListener((obs, wasShowing, isShowing) -> {
+            if (isShowing) {
+                Node skinNode = tooltip.getSkin().getNode();
+                if (skinNode != null) {
+                    skinNode.setOpacity(0);
+                    skinNode.setTranslateY(8);
+                    
+                    FadeTransition ft = new FadeTransition(Duration.millis(250), skinNode);
+                    ft.setToValue(1.0);
+                    
+                    TranslateTransition tt = new TranslateTransition(Duration.millis(250), skinNode);
+                    tt.setToY(0);
+                    tt.setInterpolator(Interpolator.EASE_OUT);
+                    
+                    new ParallelTransition(ft, tt).play();
+                }
+            }
+        });
+        return tooltip;
     }
 
     public static Button createIconTextButton(String text, String iconPath, ButtonStyle style) {
@@ -363,7 +389,6 @@ public final class AppTheme {
         return button;
     }
 
-    // === CHIP CREATION ===
     public static Label createChip(String text, ChipStyle style) {
         Label chip = new Label(text);
         chip.getStyleClass().addAll("chip", style.getStyleClass());
@@ -376,25 +401,19 @@ public final class AppTheme {
         return badge;
     }
 
-    // === FORM COMPONENTS ===
     public static HBox createPasswordField(String prompt, StringProperty boundProperty) {
         PasswordField hiddenField = new PasswordField();
         hiddenField.setPromptText(prompt);
-
         TextField visibleField = new TextField();
         visibleField.setPromptText(prompt);
         visibleField.setVisible(false);
         visibleField.setManaged(false);
-
         visibleField.textProperty().bindBidirectional(hiddenField.textProperty());
         boundProperty.bind(hiddenField.textProperty());
-
         StackPane fieldStack = new StackPane(hiddenField, visibleField);
         HBox.setHgrow(fieldStack, Priority.ALWAYS);
-
         Button toggleBtn = createIconButton(ICON_VISIBILITY, "Toggle visibility", ButtonStyle.GHOST);
         toggleBtn.getStyleClass().add("password-toggle");
-
         toggleBtn.setOnAction(e -> {
             boolean isHidden = hiddenField.isVisible();
             hiddenField.setVisible(!isHidden);
@@ -403,12 +422,10 @@ public final class AppTheme {
             visibleField.setManaged(isHidden);
             toggleBtn.setGraphic(createIcon(isHidden ? ICON_VISIBILITY_OFF : ICON_VISIBILITY));
         });
-
         HBox wrapper = new HBox(fieldStack, toggleBtn);
         wrapper.setAlignment(Pos.CENTER_LEFT);
         wrapper.getStyleClass().add("input-with-icon");
         wrapper.setSpacing(4);
-
         return wrapper;
     }
 
@@ -419,29 +436,24 @@ public final class AppTheme {
         return field;
     }
 
-    // === LAYOUT COMPONENTS ===
     public static VBox createHeaderBlock(String kicker, String title, String subtitle) {
         VBox block = new VBox(8);
         block.setFillWidth(true);
-
         if (kicker != null && !kicker.isBlank()) {
             Label kickerLabel = new Label(kicker);
             kickerLabel.getStyleClass().add("label-tiny");
             block.getChildren().add(kickerLabel);
         }
-
         Label titleLabel = new Label(title);
         titleLabel.getStyleClass().add("heading-4");
         titleLabel.setWrapText(true);
         block.getChildren().add(titleLabel);
-
         if (subtitle != null && !subtitle.isBlank()) {
             Label subtitleLabel = new Label(subtitle);
             subtitleLabel.getStyleClass().add("body-regular");
             subtitleLabel.setWrapText(true);
             block.getChildren().add(subtitleLabel);
         }
-
         return block;
     }
 
@@ -449,28 +461,20 @@ public final class AppTheme {
         VBox card = new VBox(8);
         card.getStyleClass().add("metric-card");
         card.setPadding(new Insets(20));
-
         Label valueLabel = new Label(value);
         valueLabel.getStyleClass().add("metric-value-large");
-
         Label labelLabel = new Label(label);
         labelLabel.getStyleClass().add("metric-label");
-
         card.getChildren().addAll(valueLabel, labelLabel);
-
         if (change != null && !change.isEmpty()) {
             Label changeLabel = new Label(change);
             changeLabel.getStyleClass().add(positive ? "metric-change-positive" : "metric-change-negative");
             card.getChildren().add(changeLabel);
         }
-
         installCardHoverEffect(card);
         return card;
     }
 
-    // === ANIMATIONS ===
-
-    // ── Fade ─────────────────────────────────────────────────────────────
     public static void fadeIn(Node node, double delayMillis) {
         if (node == null) return;
         node.setOpacity(0);
@@ -488,7 +492,6 @@ public final class AppTheme {
         f.play();
     }
 
-    // ── Slide up (enter from below) ───────────────────────────────────────
     public static void slideUp(Node node, double delayMillis) {
         slideUp(node, delayMillis, 28, 360);
     }
@@ -504,14 +507,12 @@ public final class AppTheme {
         d.setOnFinished(e -> new ParallelTransition(f, s).play()); d.play();
     }
 
-    // ── Staggered list entrance ───────────────────────────────────────────
     public static void staggeredEntrance(Collection<? extends Node> nodes,
                                          double initialDelay, double stepDelay) {
         double delay = initialDelay;
         for (Node node : nodes) { slideUp(node, delay); delay += stepDelay; }
     }
 
-    // ── Pop-in: spring scale 0.82 → 1.04 → 1.0, fade in ─────────────────
     public static void popIn(Node node, double delayMillis) {
         if (node == null) return;
         node.setOpacity(0); node.setScaleX(0.82); node.setScaleY(0.82);
@@ -529,7 +530,6 @@ public final class AppTheme {
         pause.play();
     }
 
-    // ── Pop-out: shrink + fade, then callback ─────────────────────────────
     public static void popOut(Node node, Runnable onDone) {
         if (node == null) { if (onDone != null) onDone.run(); return; }
         node.setCache(true); node.setCacheHint(CacheHint.SCALE);
@@ -542,30 +542,40 @@ public final class AppTheme {
         p.play();
     }
 
-    // ── View crossfade: outgoing slides left, incoming slides in from right
     public static void crossfadeViews(Region outgoing, Region incoming,
                                       javafx.scene.layout.Pane container) {
         if (incoming == null || container == null) return;
-        incoming.setOpacity(0); incoming.setTranslateX(32);
+        
+        // Prepare incoming view (slide up slightly while fading in)
+        incoming.setOpacity(0);
+        incoming.setTranslateY(15); 
         container.getChildren().add(incoming);
 
         if (outgoing != null) {
-            FadeTransition fo = new FadeTransition(Duration.millis(150), outgoing);
-            fo.setToValue(0); fo.setInterpolator(Interpolator.EASE_IN);
-            TranslateTransition to = new TranslateTransition(Duration.millis(150), outgoing);
-            to.setToX(-22); to.setInterpolator(Interpolator.EASE_IN);
+            FadeTransition fo = new FadeTransition(Duration.millis(220), outgoing);
+            fo.setToValue(0);
+            fo.setInterpolator(Interpolator.EASE_IN);
+            
+            TranslateTransition to = new TranslateTransition(Duration.millis(220), outgoing);
+            to.setToY(-10);
+            to.setInterpolator(Interpolator.EASE_IN);
+            
             ParallelTransition out = new ParallelTransition(fo, to);
             out.setOnFinished(e -> container.getChildren().remove(outgoing));
             out.play();
         }
-        FadeTransition fi = new FadeTransition(Duration.millis(260), incoming);
-        fi.setToValue(1); fi.setInterpolator(Interpolator.EASE_OUT);
-        TranslateTransition ti = new TranslateTransition(Duration.millis(260), incoming);
-        ti.setToX(0); ti.setInterpolator(EASE_OUT_QUART);
+
+        FadeTransition fi = new FadeTransition(Duration.millis(380), incoming);
+        fi.setToValue(1);
+        fi.setInterpolator(Interpolator.EASE_OUT);
+        
+        TranslateTransition ti = new TranslateTransition(Duration.millis(380), incoming);
+        ti.setToY(0);
+        ti.setInterpolator(EASE_OUT_QUART);
+        
         new ParallelTransition(fi, ti).play();
     }
 
-    // ── Pulse: scale up → down, n times ──────────────────────────────────
     public static void pulse(Node node, int cycles) {
         if (node == null) return;
         ScaleTransition up   = new ScaleTransition(Duration.millis(160), node);
@@ -576,7 +586,6 @@ public final class AppTheme {
         seq.setCycleCount(cycles); seq.play();
     }
 
-    // ── Shake: elastic horizontal oscillation ─────────────────────────────
     public static void shake(Node node) {
         if (node == null) return;
         double ox = node.getTranslateX();
@@ -592,7 +601,6 @@ public final class AppTheme {
         tl.play();
     }
 
-    // ── Flash success: green background for 750 ms ────────────────────────
     public static void flashSuccess(Node node) {
         if (node == null) return;
         String orig = node.getStyle();
@@ -602,7 +610,6 @@ public final class AppTheme {
         hold.play();
     }
 
-    // ── Flash error: red background + shake ──────────────────────────────
     public static void flashError(Node node) {
         if (node == null) return;
         String orig = node.getStyle();
@@ -613,7 +620,6 @@ public final class AppTheme {
         hold.play();
     }
 
-    // ── Animated number count-up (cubic ease-out) ─────────────────────────
     public static void animateCount(Label label, int targetValue,
                                     String prefix, String suffix) {
         if (label == null) return;
@@ -627,7 +633,7 @@ public final class AppTheme {
         int steps = 32, ms = 950;
         for (int i = 1; i <= steps; i++) {
             double t  = (double) i / steps;
-            double ez = 1 - Math.pow(1 - t, 3); // cubic ease-out
+            double ez = 1 - Math.pow(1 - t, 3);
             int val   = f + (int) Math.round((to - f) * ez);
             tl.getKeyFrames().add(new KeyFrame(Duration.millis((double) ms / steps * i),
                     e -> label.setText(prefix + val + suffix)));
@@ -635,7 +641,6 @@ public final class AppTheme {
         tl.play();
     }
 
-    // ── Theme transition: quick fade-out, apply, fade-in ─────────────────
     public static void animateThemeChange(Node root, Runnable applyTheme) {
         if (root == null) { if (applyTheme != null) applyTheme.run(); return; }
         FadeTransition out = new FadeTransition(Duration.millis(140), root);
@@ -649,7 +654,6 @@ public final class AppTheme {
         out.play();
     }
 
-    // ── Shimmer loading skeleton ─────────────────────────────────────────
     public static Timeline shimmer(Region target) {
         if (target == null) return new Timeline();
         String base = darkMode ? "#1E293B" : "#E2E8F0";
@@ -664,7 +668,6 @@ public final class AppTheme {
         return tl;
     }
 
-    // ── Internal: scale a node smoothly ─────────────────────────────────
     private static void animateScale(Node node, double scale, int ms) {
         node.setCache(true); node.setCacheHint(CacheHint.SCALE);
         ScaleTransition t = new ScaleTransition(Duration.millis(ms), node);
@@ -674,7 +677,6 @@ public final class AppTheme {
         t.play();
     }
 
-    // ── Button hover: scale 1.02 + press 0.95 + focus ring ──────────────
     public static void installButtonAnimation(Button button) {
         boolean scaleable = !button.getStyleClass().contains("icon-button");
         if (scaleable) {
@@ -687,25 +689,19 @@ public final class AppTheme {
                 animateScale(button, isFocused ? 1.015 : 1.0, 160));
     }
 
-    // ── Card hover: lift shadow + scale 1.02 ────────────────────────────
     private static void installCardHoverEffect(Region card) {
         DropShadow lift = new DropShadow();
         lift.setColor(Color.web("#0F172A", 0.14));
         lift.setRadius(20); lift.setOffsetY(6);
-
         DropShadow rest = new DropShadow();
         rest.setColor(Color.web("#0F172A", 0.06));
         rest.setRadius(8); rest.setOffsetY(2);
-
         card.setEffect(rest);
         card.hoverProperty().addListener((obs, was, isHover) -> {
-            animateScale(card, isHover ? 1.02 : 1.0, 180);
             card.setEffect(isHover ? lift : rest);
         });
     }
 
-
-    // === UTILITY METHODS ===
     public static void runLater(Runnable action) {
         Platform.runLater(action);
     }
@@ -738,7 +734,6 @@ public final class AppTheme {
         label.setText(message);
         label.getStyleClass().setAll("validation-message", styleClass);
         label.setVisible(true);
-
         PauseTransition delay = new PauseTransition(Duration.seconds(durationSeconds));
         delay.setOnFinished(e -> {
             label.setVisible(false);
@@ -748,9 +743,15 @@ public final class AppTheme {
     }
 
     private static Image createAppIcon(int size) {
+        try {
+            InputStream is = AppTheme.class.getResourceAsStream("/app-icon.png");
+            if (is != null) {
+                return new Image(is, size, size, true, true);
+            }
+        } catch (Exception ignored) {}
+
         Canvas canvas = new Canvas(size, size);
         GraphicsContext graphics = canvas.getGraphicsContext2D();
-
         double arc = size * 0.28;
         graphics.setFill(new LinearGradient(
                 0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
@@ -758,49 +759,57 @@ public final class AppTheme {
                 new Stop(0.55, Color.web("#134E4A")),
                 new Stop(1, Color.web("#14B8A6"))));
         graphics.fillRoundRect(0, 0, size, size, arc, arc);
-
         graphics.setFill(Color.web("#FFFFFF", 0.12));
         graphics.fillOval(size * 0.10, size * 0.08, size * 0.66, size * 0.66);
-
         graphics.setFill(Color.WHITE);
-        double bookX = size * 0.26;
-        double bookY = size * 0.18;
-        double bookW = size * 0.48;
-        double bookH = size * 0.58;
+        double bookX = size * 0.26, bookY = size * 0.18, bookW = size * 0.48, bookH = size * 0.58;
         graphics.fillRoundRect(bookX, bookY, bookW, bookH, size * 0.08, size * 0.08);
-
         graphics.setFill(Color.web("#CCFBF1"));
-        graphics.fillRoundRect(bookX + bookW * 0.10, bookY + bookH * 0.14,
-                bookW * 0.18, bookH * 0.72, size * 0.04, size * 0.04);
-
+        graphics.fillRoundRect(bookX + bookW * 0.10, bookY + bookH * 0.14, bookW * 0.18, bookH * 0.72, size * 0.04, size * 0.04);
         graphics.setStroke(Color.web("#0F766E", 0.85));
         graphics.setLineWidth(Math.max(2.0, size * 0.03));
         graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.26, bookX + bookW * 0.78, bookY + bookH * 0.26);
         graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.48, bookX + bookW * 0.78, bookY + bookH * 0.48);
         graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.70, bookX + bookW * 0.66, bookY + bookH * 0.70);
-
         graphics.setFill(Color.web("#99F6E4"));
-        graphics.fillRoundRect(size * 0.30, size * 0.74, size * 0.40, size * 0.08,
-                size * 0.03, size * 0.03);
-
+        graphics.fillRoundRect(size * 0.30, size * 0.74, size * 0.40, size * 0.08, size * 0.03, size * 0.03);
         WritableImage image = new WritableImage(size, size);
         canvas.snapshot(new SnapshotParameters(), image);
         return image;
     }
 
+    public static void staggeredEntrance(Parent container, double initialDelay) {
+        if (container == null) return;
+        List<Node> children = new ArrayList<>();
+        if (container instanceof Pane pane) children.addAll(pane.getChildren());
+        else if (container instanceof GridPane gp) children.addAll(gp.getChildren());
+
+        double delay = initialDelay;
+        for (Node child : children) {
+            child.setOpacity(0);
+            child.setTranslateY(20);
+            
+            FadeTransition ft = new FadeTransition(Duration.millis(450), child);
+            ft.setToValue(1.0);
+            ft.setDelay(Duration.millis(delay));
+            
+            TranslateTransition tt = new TranslateTransition(Duration.millis(500), child);
+            tt.setToY(0);
+            tt.setDelay(Duration.millis(delay));
+            tt.setInterpolator(EASE_OUT_QUART);
+            
+            new ParallelTransition(ft, tt).play();
+            delay += 75; // Stagger
+        }
+    }
+
     private static void applyTaskbarIcon(Image image) {
         try {
-            if (!Taskbar.isTaskbarSupported()) {
-                return;
-            }
+            if (!Taskbar.isTaskbarSupported()) return;
             Taskbar taskbar = Taskbar.getTaskbar();
-            if (!taskbar.isSupported(Taskbar.Feature.ICON_IMAGE) || image == null) {
-                return;
-            }
+            if (!taskbar.isSupported(Taskbar.Feature.ICON_IMAGE) || image == null) return;
             BufferedImage awtImage = SwingFXUtils.fromFXImage(image, null);
             taskbar.setIconImage(awtImage);
-        } catch (UnsupportedOperationException ignored) {
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
     }
 }

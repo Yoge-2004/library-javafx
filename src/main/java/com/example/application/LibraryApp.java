@@ -4,6 +4,8 @@ import com.example.application.ui.*;
 import com.example.entities.*;
 import com.example.entities.BooksDB.IssueRecord;
 import com.example.services.*;
+import com.example.storage.AppPaths;
+import com.example.storage.DataStorage;
 import javafx.animation.*;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -12,6 +14,7 @@ import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
+import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
@@ -41,6 +44,8 @@ public class LibraryApp extends Application implements ToastDisplay {
     private String   currentUser;
     private UserRole currentUserRole = UserRole.USER;
     private Timeline autoRefreshTimer;
+    private final Stack<Region> navigationHistory = new Stack<>();
+    private Button backBtn;
     private HBox     activeToast = null;  // track current visible toast
     private SequentialTransition activeToastAnim = null;
 
@@ -52,6 +57,7 @@ public class LibraryApp extends Application implements ToastDisplay {
     private final ObservableList<Book>          booksList    = FXCollections.observableArrayList();
     private final ObservableList<IssueRecord>   issuesList   = FXCollections.observableArrayList();
     private final ObservableList<BorrowRequest> requestsList = FXCollections.observableArrayList();
+    private final ObservableList<BooksDB.InvoiceData> historyList = FXCollections.observableArrayList();
 
     private AnalyticsDashboard analyticsDashboard;
     private CatalogView        catalogView;
@@ -78,6 +84,19 @@ public class LibraryApp extends Application implements ToastDisplay {
         initializeOptionalDatabase(cfg);
         AppTheme.darkMode = cfg.isDarkMode();
         if (cfg.isDarkMode()) applyDarkMode(true);
+        
+        // Mirror existing data to DB if connected
+        if (DatabaseConnectionService.isConnected()) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    BookService.persistBooksDatabase();
+                    UserService.persistDatabase();
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, "Startup DB sync failed", e);
+                }
+            });
+        }
+
         if (cfg.isInitialSetupDone()) {
             showLoginScreen();
         } else {
@@ -250,10 +269,25 @@ public class LibraryApp extends Application implements ToastDisplay {
                 AppTheme.shake(importDbBtn);
                 return;
             }
-            importStatus.setText("✓ Connected to " + dbCfg.getEngine().getDisplayName() +
-                    ". Data will be loaded from the database on startup.");
-            importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A;");
-            AppTheme.pulse(importDbBtn, 1);
+            
+            try {
+                // Perform immediate sync from database to local storage
+                DataStorage.syncFromDatabase(com.example.storage.AppPaths.resolveDataDirectory());
+                
+                // Force reload singletons so the UI reflects the imported data
+                UsersDB.getInstance().forceReload();
+                BooksDB.getInstance().forceReload();
+                LibrariesDB.getInstance().forceReload();
+                BorrowRequestService.forceReload();
+
+                importStatus.setText("✓ Connected and synchronized! " + dbCfg.getEngine().getDisplayName() + " data imported.");
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#16A34A;");
+                AppTheme.pulse(importDbBtn, 1);
+            } catch (Exception ex) {
+                importStatus.setText("✗ Sync failed: " + ex.getMessage());
+                importStatus.setStyle("-fx-font-size:12px; -fx-text-fill:#DC2626;");
+                LOG.warning("Import from DB failed: " + ex.getMessage());
+            }
         });
 
         VBox importBox = new VBox(8, importHint, importFileBtn, importDbBtn, importStatus);
@@ -367,7 +401,26 @@ public class LibraryApp extends Application implements ToastDisplay {
         try {
             DatabaseConfiguration databaseConfiguration = cfg.getDatabaseConfiguration();
             if (databaseConfiguration != null && databaseConfiguration.isConfigured()) {
-                if (!DatabaseConnectionService.connect(databaseConfiguration)) {
+                if (DatabaseConnectionService.connect(databaseConfiguration)) {
+                    LOG.info("Database connected on startup. Synchronizing local state...");
+                    
+                    // Sync local files from database snapshots
+                    DataStorage.syncFromDatabase(AppPaths.resolveDataDirectory());
+                    
+                    // Force reload databases from the now-connected DB source
+                    UsersDB.getInstance().forceReload();
+                    BooksDB.getInstance().forceReload();
+                    LibrariesDB.getInstance().forceReload();
+                    BorrowRequestService.forceReload();
+                    
+                    // Reload app configuration to pick up any global changes (library name, branch, etc)
+                    AppConfiguration refreshed = AppConfigurationService.getConfiguration();
+                    if (refreshed != cfg) {
+                        AppTheme.darkMode = refreshed.isDarkMode();
+                        // Re-run library selection logic with refreshed config
+                        initializeLibrarySelection(refreshed);
+                    }
+                } else {
                     LOG.warning("Database configuration is present but the connection could not be established.");
                 }
             } else {
@@ -388,7 +441,7 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     private void showRegistrationDialog() {
-        RegistrationDialog.show(primaryStage, !UserService.hasRegisteredUsers(), false)
+        RegistrationDialog.show(primaryStage, !UserService.hasRegisteredUsers(), true)
                 .ifPresent(req -> {
                     try {
                         // Check username uniqueness before creating
@@ -407,7 +460,7 @@ public class LibraryApp extends Application implements ToastDisplay {
                         created.setActive(!req.pendingApproval());
                         UserService.updateUser(created);
                         if (req.pendingApproval()) {
-                            showSuccess("Librarian request submitted. An admin must approve it before you can log in.");
+                            showSuccess("Registration request submitted. An admin must approve it before you can log in.");
                         } else {
                             showSuccess("Account created! Please sign in.");
                         }
@@ -469,8 +522,8 @@ public class LibraryApp extends Application implements ToastDisplay {
         VBox mgmt = new VBox(4);
         if (currentUserRole.isStaff()) {
             Label mgmtHdr = new Label("MANAGEMENT"); mgmtHdr.getStyleClass().add("sidebar-section-label");
-            Button users = navBtn("Users", AppTheme.ICON_USER, false, this::showUserManagement);
-            Button sett  = navBtn("Settings", AppTheme.ICON_SETTINGS, false, this::showSettings);
+            Button users = navBtn("Users", AppTheme.ICON_USER, true, this::showUserManagement);
+            Button sett  = navBtn("Settings", AppTheme.ICON_SETTINGS, true, this::showSettings);
             mgmt.getChildren().addAll(mgmtHdr, users, sett);
         }
 
@@ -487,7 +540,12 @@ public class LibraryApp extends Application implements ToastDisplay {
             if (UserAccountDialogs.showPasswordEditor(primaryStage, currentUser))
                 showSuccess("Password changed.");
         });
-        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn);
+        Button delBtn = navBtn("Delete Account", AppTheme.ICON_DELETE, false, () -> {
+            UserAccountDialogs.showDeleteAccount(primaryStage, currentUser, this::showLoginScreen, this);
+        });
+
+        VBox accountSection = new VBox(4, accountHdr, profileBtn, passBtn, delBtn);
+
 
         Region spacer = new Region(); VBox.setVgrow(spacer, Priority.ALWAYS);
 
@@ -505,11 +563,12 @@ public class LibraryApp extends Application implements ToastDisplay {
 
     private Button navBtn(String text, String iconPath, boolean activatesNav, Runnable action) {
         Button b = new Button(text);
+        b.setTooltip(AppTheme.createTooltip(text));
+
         if (iconPath != null && !iconPath.isBlank()) {
             b.setGraphic(AppTheme.createIcon(iconPath, 18));
         }
         b.getStyleClass().add("sidebar-btn");
-        b.setMaxWidth(Double.MAX_VALUE);
         b.setOnAction(e -> {
             if (activatesNav) {
                 setActiveNav(b);
@@ -532,6 +591,11 @@ public class LibraryApp extends Application implements ToastDisplay {
         h.setAlignment(Pos.CENTER_LEFT);
 
         Label title = new Label("Dashboard"); title.getStyleClass().add("header-title");
+
+        backBtn = AppTheme.createIconButton(AppTheme.ICON_ARROW_BACK, "Go Back", AppTheme.ButtonStyle.GHOST);
+        backBtn.setVisible(false);
+        backBtn.setManaged(false);
+        backBtn.setOnAction(e -> navigateBack());
 
         Region spacer = new Region(); HBox.setHgrow(spacer, Priority.ALWAYS);
 
@@ -569,8 +633,37 @@ public class LibraryApp extends Application implements ToastDisplay {
                     .ifPresent(bt -> showLoginScreen());
         });
 
-        h.getChildren().addAll(title, spacer, refreshBtn, themeBtn, logoutBtn);
+        h.getChildren().addAll(backBtn, title, spacer, refreshBtn, themeBtn, logoutBtn);
         return h;
+    }
+
+    private void navigateBack() {
+        if (!navigationHistory.isEmpty()) {
+            Region previous = navigationHistory.pop();
+            // Don't add to history when going back
+            internalShowView(previous, false);
+        }
+    }
+
+    private void internalShowView(Region view, boolean addToHistory) {
+        Region current = contentArea.getChildren().isEmpty() ? null : (Region) contentArea.getChildren().get(0);
+        if (current == view) return;
+
+        if (addToHistory && current != null) {
+            navigationHistory.push(current);
+        }
+
+        AppTheme.crossfadeViews(current, view, contentArea);
+        updateNavigationState(view);
+    }
+
+    private void updateNavigationState(Region view) {
+        backBtn.setVisible(!navigationHistory.isEmpty());
+        backBtn.setManaged(!navigationHistory.isEmpty());
+        
+        if (view instanceof AnalyticsDashboard dashboard) {
+            Platform.runLater(dashboard::refreshLayout);
+        }
     }
 
     private HBox buildStatusBar() {
@@ -610,28 +703,29 @@ public class LibraryApp extends Application implements ToastDisplay {
                     currentUser, this::refreshAllData, this);
         showView(catalogView);
     }
-    private void navigateToCirculation() {
+    private void navigateToCirculation() { navigateToCirculation(-1); }
+    private void navigateToCirculation(int tabIndex) {
         if (circulationView == null)
-            circulationView = new CirculationView(issuesList, requestsList,
-                    currentUserRole.isStaff(), currentUser, this::refreshAllData, this);
+            circulationView = new CirculationView(issuesList, requestsList, historyList,
+                    currentUserRole.isStaff(), currentUser, this::refreshAllData, this, this::refreshAllData);
+
+        if (tabIndex >= 0) circulationView.setSelectedTab(tabIndex);
         showView(circulationView);
     }
     private void showView(Region view) {
-        Region outgoing = contentArea.getChildren().isEmpty()
-                ? null : (Region) contentArea.getChildren().get(0);
-        if (outgoing == view) return;
-        // Use crossfade for smooth page transitions
-        AppTheme.crossfadeViews(outgoing, view, contentArea);
-        if (view instanceof AnalyticsDashboard dashboard) {
-            Platform.runLater(dashboard::refreshLayout);
+        // Clear history if navigating to main sections via sidebar
+        if (view == analyticsDashboard || view == catalogView || view == circulationView) {
+            navigationHistory.clear();
         }
+        internalShowView(view, true);
     }
 
     // --- Settings dialogs ---
 
     private void showUserManagement() {
-        showView(new UserManagementView(currentUser, this));
+        showView(new UserManagementView(currentUser, this, this::refreshAllData));
     }
+
 
     private void showSettings() {
         SettingsView settingsView = new SettingsView(currentUserRole, new SettingsView.Actions() {
@@ -650,17 +744,23 @@ public class LibraryApp extends Application implements ToastDisplay {
             @Override public void openLibraryConfiguration() { showLibraryConfig(); }
             @Override public void openDataManagement() { showDataManagement(); }
             @Override public void openAnalytics() { navigateToDashboard(); }
+            @Override public void deleteAccount() {
+                UserAccountDialogs.showDeleteAccount(primaryStage, currentUser, LibraryApp.this::showLoginScreen, LibraryApp.this);
+            }
         });
         showView(settingsView);
     }
 
-    private void showLibraryConfig() {
+    private void showLibraryConfig() { showLibraryConfig(-1); }
+    private void showLibraryConfig(int tabIndex) {
         try {
             AppConfiguration cfg = AppConfigurationService.getConfiguration();
-            showView(new LibraryConfigurationView(cfg, msg -> {
+            LibraryConfigurationView view = new LibraryConfigurationView(cfg, msg -> {
                 showSuccess(msg);
                 refreshAllData();
-            }));
+            });
+            if (tabIndex >= 0) view.setSelectedTab(tabIndex);
+            showView(view);
         } catch (Exception ex) {
             showError("Could not load config: " + ex.getMessage());
         }
@@ -691,45 +791,93 @@ public class LibraryApp extends Application implements ToastDisplay {
     }
 
     private void refreshAllData(boolean showToastOnSuccess) {
-        if (loadingIndicator != null) { loadingIndicator.setVisible(true); statusLabel.setText("Syncing\u2026"); }
-        CompletableFuture.supplyAsync(() -> {
-            Map<String,Object> r = new HashMap<>();
-            r.put("books",    BookService.getAllBooks());
-            r.put("issues",   currentUserRole.isStaff()
-                    ? BookService.getAllActiveIssueRecords()
-                    : BookService.getUserActiveIssueRecords(currentUser));
-            r.put("requests", currentUserRole.isStaff()
-                    ? BookService.getAllBorrowRequests()
-                    : BookService.getBorrowRequestsForUser(currentUser));
-            r.put("stats",    BookService.getLibraryStatistics());
-            return r;
-        }).thenAcceptAsync(data -> Platform.runLater(() -> {
-            @SuppressWarnings("unchecked") List<Book>          books = (List<Book>)          data.get("books");
-            @SuppressWarnings("unchecked") List<IssueRecord>   iss   = (List<IssueRecord>)   data.get("issues");
-            @SuppressWarnings("unchecked") List<BorrowRequest> reqs  = (List<BorrowRequest>) data.get("requests");
-            booksList.setAll(books); issuesList.setAll(iss); requestsList.setAll(reqs);
+        if (loadingIndicator != null) {
+            loadingIndicator.setVisible(true);
+            statusLabel.setText("Syncing\u2026");
+        }
 
-            @SuppressWarnings("unchecked") Map<String,Object> stats = (Map<String,Object>) data.get("stats");
-            if (analyticsDashboard != null) {
-                long sc = UserService.getAllUsers().stream().filter(User::isStaff).count();
-                analyticsDashboard.update(stats, UserService.getAllUsers().size(), (int) sc);
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Ensure we have the latest config from disk (handles external changes)
+                AppConfigurationService.getConfiguration().normalize();
+                
+                // Reload data singletons
+                UsersDB.getInstance().forceReload();
+                BooksDB.getInstance().forceReload();
+                BorrowRequestService.forceReload();
+            } catch (Exception e) {
+                throw new RuntimeException("Background reload failed", e);
             }
-            if (loadingIndicator != null) {
-                loadingIndicator.setVisible(false);
-                statusLabel.setText("Updated " + java.time.LocalTime.now()
-                        .format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+        }).thenCompose(v -> CompletableFuture.supplyAsync(() -> {
+            try {
+                Map<String, Object> r = new HashMap<>();
+                r.put("books", BookService.getAllBooks());
+                r.put("issues", currentUserRole.isStaff()
+                        ? BookService.getCirculationRecords()
+                        : BookService.getUserActiveIssueRecords(currentUser));
+                r.put("requests", currentUserRole.isStaff()
+                        ? BookService.getAllBorrowRequests()
+                        : BookService.getBorrowRequestsForUser(currentUser));
+                r.put("history", BookService.getPaymentHistory());
+                r.put("stats", BookService.getLibraryStatistics());
+                r.put("users", UserService.getAllUsers());
+                return r;
+            } catch (Exception e) {
+                throw new RuntimeException("Data retrieval failed", e);
             }
-            if (showToastOnSuccess) {
-                showInfo("Library data refreshed.");
+        })).thenAcceptAsync(data -> Platform.runLater(() -> {
+            try {
+                @SuppressWarnings("unchecked") List<Book> books = (List<Book>) data.get("books");
+                @SuppressWarnings("unchecked") List<IssueRecord> iss = (List<IssueRecord>) data.get("issues");
+                @SuppressWarnings("unchecked") List<BorrowRequest> reqs = (List<BorrowRequest>) data.get("requests");
+                @SuppressWarnings("unchecked") List<BooksDB.InvoiceData> hist = (List<BooksDB.InvoiceData>) data.get("history");
+                booksList.setAll(books);
+                issuesList.setAll(iss);
+                requestsList.setAll(reqs);
+                historyList.setAll(hist);
+
+                @SuppressWarnings("unchecked") List<User> users = (List<User>) data.get("users");
+                if (contentArea != null && !contentArea.getChildren().isEmpty()) {
+                    Node activeView = contentArea.getChildren().get(0);
+                    if (activeView instanceof UserManagementView umv) {
+                        umv.updateUsers(users);
+                    } else if (activeView instanceof DataManagementView) {
+                        showDataManagement();
+                    } else if (activeView instanceof CirculationView cv) {
+                        cv.refresh();
+                    } else if (activeView instanceof CatalogView cat) {
+                        cat.refresh();
+                    }
+                }
+
+                @SuppressWarnings("unchecked") Map<String, Object> stats = (Map<String, Object>) data.get("stats");
+                if (analyticsDashboard != null) {
+                    long sc = UserService.getAllUsers().stream().filter(User::isStaff).count();
+                    analyticsDashboard.update(stats, UserService.getAllUsers().size(), (int) sc);
+                }
+
+                if (loadingIndicator != null) loadingIndicator.setVisible(false);
+                if (statusLabel != null)
+                    statusLabel.setText("Last updated: " + java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss")));
+                
+                if (showToastOnSuccess) {
+                    showSuccess("Library data refreshed from storage.");
+                }
+            } catch (Exception e) {
+                LOG.log(Level.SEVERE, "UI update failed during refresh", e);
+                showError("Refresh failed: " + e.getMessage());
             }
         })).exceptionally(ex -> {
             Platform.runLater(() -> {
-                if (loadingIndicator != null) { loadingIndicator.setVisible(false); statusLabel.setText("Sync failed"); }
+                LOG.log(Level.SEVERE, "Refresh background task failed", ex);
+                if (loadingIndicator != null) loadingIndicator.setVisible(false);
+                statusLabel.setText("Sync failed");
                 showError("Refresh failed: " + ex.getMessage());
             });
             return null;
         });
     }
+
 
     private void startAutoRefresh() {
         autoRefreshTimer = new Timeline(new KeyFrame(Duration.seconds(60), e -> refreshAllData(false)));
@@ -798,11 +946,68 @@ public class LibraryApp extends Application implements ToastDisplay {
         AppTheme.darkMode = dark;
         Scene s = primaryStage != null ? primaryStage.getScene() : null;
         if (s == null) return;
+        
         AppTheme.animateThemeChange(s.getRoot(), () -> {
             if (dark) { if (!s.getRoot().getStyleClass().contains("dark-mode")) s.getRoot().getStyleClass().add("dark-mode"); }
             else        s.getRoot().getStyleClass().remove("dark-mode");
+            
+            // Refresh the entire shell to ensure sidebar/header colors are updated
+            rebuildShell();
             rebuildCurrentViewForTheme();
         });
+    }
+
+    private void rebuildShell() {
+        if (rootStack.getChildren().isEmpty()) return;
+        Node mainLayout = rootStack.getChildren().get(0);
+        if (!(mainLayout instanceof BorderPane shell)) return;
+
+        // Re-generate sidebar and header
+        sidebar = buildSidebar();
+        shell.setLeft(sidebar);
+        shell.setTop(buildHeader());
+        shell.setBottom(buildStatusBar());
+        
+        // Ensure active tab is highlighted in the new sidebar
+        updateActiveSidebarState();
+    }
+
+    private void updateActiveSidebarState() {
+        if (contentArea == null || contentArea.getChildren().isEmpty()) return;
+        Node current = contentArea.getChildren().get(0);
+        
+        // Find ALL sidebar buttons recursively and update their active state
+        List<Button> allButtons = new ArrayList<>();
+        findAllButtons(sidebar, allButtons);
+
+        for (Button btn : allButtons) {
+            String text = btn.getText();
+            boolean active = false;
+            if (current instanceof AnalyticsDashboard && "Dashboard".equals(text)) active = true;
+            else if (current instanceof CatalogView && "Catalog".equals(text)) active = true;
+            else if (current instanceof CirculationView && "Circulation".equals(text)) active = true;
+            else if (current instanceof UserManagementView && "Users".equals(text)) active = true;
+            else if (current instanceof SettingsView && "Settings".equals(text)) active = true;
+
+            if (active) {
+                if (!btn.getStyleClass().contains("active")) {
+                    btn.getStyleClass().add("active");
+                }
+                activeNavBtn = btn;
+            } else {
+                btn.getStyleClass().remove("active");
+            }
+        }
+    }
+
+    private void findAllButtons(Parent root, List<Button> buttons) {
+        for (Node n : root.getChildrenUnmodifiable()) {
+            if (n instanceof Button b && b.getStyleClass().contains("sidebar-btn")) {
+                buttons.add(b);
+            } else if (n instanceof Parent p) {
+                findAllButtons(p, buttons);
+            }
+        }
     }
 
     private void rebuildCurrentViewForTheme() {
@@ -810,18 +1015,44 @@ public class LibraryApp extends Application implements ToastDisplay {
             return;
         }
 
-        Node currentView = contentArea.getChildren().getFirst();
+        Node current = contentArea.getChildren().get(0);
+        
+        // Tab preservation - recursive search for any TabPane
+        int selectedTabIndex = findTabPaneIndex(current);
+
+        // Clear cached view instances to force full themed rebuild
         analyticsDashboard = null;
         catalogView = null;
         circulationView = null;
 
-        if (currentView instanceof AnalyticsDashboard) {
+        if (current instanceof AnalyticsDashboard) {
             navigateToDashboard();
-        } else if (currentView instanceof CatalogView) {
+        } else if (current instanceof CatalogView) {
             navigateToCatalog();
-        } else if (currentView instanceof CirculationView) {
-            navigateToCirculation();
+        } else if (current instanceof CirculationView) {
+            navigateToCirculation(selectedTabIndex);
+        } else if (current instanceof UserManagementView) {
+            showUserManagement();
+        } else if (current instanceof SettingsView) {
+            showSettings();
+        } else if (current instanceof LibraryConfigurationView) {
+            showLibraryConfig(selectedTabIndex);
+        } else if (current instanceof DataManagementView) {
+            showDataManagement();
+        } else {
+            navigateToDashboard();
         }
+    }
+
+    private int findTabPaneIndex(Node root) {
+        if (root instanceof TabPane tp) return tp.getSelectionModel().getSelectedIndex();
+        if (root instanceof Parent p) {
+            for (Node n : p.getChildrenUnmodifiable()) {
+                int idx = findTabPaneIndex(n);
+                if (idx != -1) return idx;
+            }
+        }
+        return -1;
     }
 
     /** Apply dark mode to a DialogPane so dialogs respect the current theme. */

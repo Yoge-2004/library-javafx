@@ -78,6 +78,15 @@ public final class UserService {
         try {
             User user = new User(userId.trim(), password);
             user.setRole(role);
+            
+            // Mandatory approval for staff roles if system is already initialized
+            if (role != UserRole.USER && userDB.hasUsers()) {
+                user.setActive(false);
+                LOGGER.log(Level.INFO, "Staff user {0} created in PENDING APPROVAL state", userId);
+            } else {
+                user.setActive(true);
+            }
+            
             userDB.addUser(user);
             LOGGER.log(Level.INFO, "User created successfully: {0}", userId);
         } catch (Exception e) {
@@ -130,12 +139,27 @@ public final class UserService {
         validateUserData(user);
 
         try {
+            // Security check: cannot demote/deactivate the last active admin
+            User existing = userDB.getUser(user.getUserId());
+            if (existing != null && existing.getRole().isAdmin() && existing.isActive()) {
+                // If we are trying to change role or deactivate
+                if (user.getRole() != UserRole.ADMIN || !user.isActive()) {
+                    long adminCount = getAllUsers().stream()
+                            .filter(u -> u.getRole().isAdmin() && u.isActive())
+                            .count();
+                    if (adminCount <= 1) {
+                        throw new UserException("Cannot demote or deactivate the last active administrator.");
+                    }
+                }
+            }
+
             userDB.updateUser(user);
-            LOGGER.log(Level.INFO, "User updated successfully: {0}", user.getUserId());
+            LOGGER.log(Level.INFO, "User account updated: {0} (Role: {1}, Active: {2})",
+                    new Object[]{user.getUserId(), user.getRole(), user.isActive()});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to update user: " + user.getUserId(), e);
             if (e instanceof UserException) {
-                throw e;
+                throw (UserException) e;
             }
             throw new UserException("Failed to update user: " + e.getMessage(), e);
         }
@@ -153,9 +177,22 @@ public final class UserService {
         }
 
         try {
+            User target = getUserById(userId.trim());
+            // Security check: at least one active ADMIN must remain
+            if (target != null && target.isAdmin() && target.isActive()) {
+                long activeAdminCount = getAllUsers().stream()
+                        .filter(u -> u.isAdmin() && u.isActive())
+                        .count();
+                if (activeAdminCount <= 1) {
+                    throw new UserException("Security Violation: This is the last active administrator account. " +
+                            "You must promote or activate another administrator before removing this one.");
+                }
+            }
+
             assertAccountCanBeRemoved(userId.trim());
             userDB.removeUser(userId.trim());
-            LOGGER.log(Level.INFO, "User deleted successfully: {0}", userId);
+            LOGGER.log(Level.INFO, "User account PERMANENTLY DELETED: {0} (Target was Admin: {1})",
+                    new Object[]{userId, target != null && target.isAdmin()});
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to delete user: " + userId, e);
             throw new UserException("Failed to delete user: " + e.getMessage(), e);
@@ -190,6 +227,17 @@ public final class UserService {
             LOGGER.log(Level.SEVERE, "Failed to retrieve all users", e);
             throw new UserException("Failed to retrieve users: " + e.getMessage(), e);
         }
+    }
+
+    public static List<User> searchUsers(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            return getAllUsers();
+        }
+        String q = query.trim().toLowerCase();
+        return getAllUsers().stream()
+                .filter(u -> u.getUserId().toLowerCase().contains(q) || 
+                            (u.getFullName() != null && u.getFullName().toLowerCase().contains(q)))
+                .toList();
     }
 
     /**
@@ -445,5 +493,30 @@ public final class UserService {
     @Deprecated
     public static void persist() throws IOException {
         persistDatabase();
+    }
+
+    public static void seedSampleData() {
+        String[][] users = {
+            {"staff_alice", "password123", "LIBRARIAN", "Alice Smith", "alice@library.os"},
+            {"staff_bob", "password123", "LIBRARIAN", "Bob Johnson", "bob@library.os"},
+            {"admin_charlie", "password123", "RESTRICTED_ADMIN", "Charlie Admin", "charlie@library.os"},
+            {"user_dave", "password123", "USER", "Dave Member", "dave@gmail.com"},
+            {"user_eve", "password123", "USER", "Eve Reading", "eve@yahoo.com"}
+        };
+
+        for (String[] u : users) {
+            try {
+                if (!userExists(u[0])) {
+                    createUser(u[0], u[1], com.example.entities.UserRole.valueOf(u[2]));
+                    User user = getUserById(u[0]);
+                    user.setFirstName(u[3].split(" ")[0]);
+                    user.setLastName(u[3].split(" ")[1]);
+                    user.setEmail(u[4]);
+                    user.setActive(true);
+                    updateUser(user);
+                }
+            } catch (Exception ignored) {}
+        }
+        try { persistDatabase(); } catch (Exception ignored) {}
     }
 }

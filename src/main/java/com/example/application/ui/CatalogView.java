@@ -452,6 +452,9 @@ public class CatalogView extends BorderPane {
             if (toastDisplay != null) {
                 toastDisplay.showSuccess("Book request submitted!");
             }
+            if (onRefresh != null) {
+                onRefresh.run();
+            }
         } catch (Exception e) {
             if (toastDisplay != null) {
                 toastDisplay.showError("Failed to request book: " + e.getMessage());
@@ -560,6 +563,13 @@ public class CatalogView extends BorderPane {
                 updateBooksGrid();
             }
         }
+    }
+
+    public void refresh() {
+        refreshCategoryFilter();
+        applyFilters();
+        updateBooksGrid();
+        updateResponsiveLayout();
     }
 }
 

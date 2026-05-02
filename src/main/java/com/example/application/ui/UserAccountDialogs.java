@@ -12,6 +12,9 @@ import javafx.scene.control.ButtonBar;
 import javafx.scene.layout.*;
 import javafx.stage.Stage;
 
+import java.util.List;
+import com.example.application.ui.RegistrationDialog.RegistrationRequest;
+
 /**
  * User account management dialogs.
  *
@@ -206,7 +209,9 @@ public class UserAccountDialogs {
 
         // Table
         TableView<User> table = new TableView<>();
+        table.setFixedCellSize(44.0);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
+        table.getStyleClass().add("table-view");
         VBox.setVgrow(table, Priority.ALWAYS);
         table.setPrefHeight(400);
 
@@ -228,8 +233,7 @@ public class UserAccountDialogs {
                 String txt = u.getUserId().equals(currentUserId) ? "Active (You)"
                         : u.isActive() ? "Active" : "Pending Approval";
                 Label chip = new Label(txt);
-                chip.setStyle("-fx-background-color:" + (u.isActive() ? "#16A34A" : "#D97706")
-                        + ";-fx-text-fill:white;-fx-background-radius:20px;-fx-padding:3 10;-fx-font-size:12px;");
+                chip.getStyleClass().addAll("chip", u.isActive() ? "chip-success" : "chip-warning");
                 setGraphic(chip);
                 setText(null);
             }
@@ -440,7 +444,13 @@ public class UserAccountDialogs {
     // ── Helpers ───────────────────────────────────────────────────
 
     private static void reload(TableView<User> t) {
-        t.setItems(FXCollections.observableArrayList(UserService.getAllUsers()));
+        List<User> list = UserService.getAllUsers().stream()
+                .sorted((u1, u2) -> {
+                    if (u1.isActive() != u2.isActive()) return u1.isActive() ? 1 : -1;
+                    return u1.getUserId().compareToIgnoreCase(u2.getUserId());
+                })
+                .collect(java.util.stream.Collectors.toList());
+        t.setItems(FXCollections.observableArrayList(list));
     }
 
     private static TableColumn<User, String> col(String name,
@@ -542,5 +552,56 @@ public class UserAccountDialogs {
             return;
         }
         showAlert(message);
+    }
+    public static void showDeleteAccount(Stage owner, String userId, Runnable onDeleted, ToastDisplay toast) {
+        Dialog<Boolean> dlg = new Dialog<>();
+        dlg.setTitle("Delete Account");
+        dlg.initOwner(owner);
+
+        DialogPane pane = dlg.getDialogPane();
+        AppTheme.applyTheme(pane);
+        pane.setPrefWidth(440);
+        pane.setPrefHeight(340);
+
+        VBox root = new VBox(14);
+        root.setPadding(new Insets(24));
+        root.setAlignment(Pos.CENTER);
+
+        var icon = AppTheme.createIcon(AppTheme.ICON_WARNING, 48);
+        icon.setStyle("-fx-fill: #DC2626;");
+
+        Label warning = new Label("Confirm Account Deletion");
+        warning.setStyle("-fx-font-size: 18px; -fx-font-weight: 700; -fx-text-fill: " + textPrimary() + ";");
+
+        Label desc = new Label("Deleting your account is permanent. All borrow history and personal data will be wiped. Please enter your password to confirm.");
+        desc.setWrapText(true);
+        desc.setStyle("-fx-text-alignment: center; -fx-text-fill: " + (AppTheme.darkMode ? "#94A3B8" : "#64748B") + ";");
+
+        PasswordField passField = passField("Current password");
+        Label err = errorLabel();
+
+        root.getChildren().addAll(icon, warning, desc, passField, err);
+        pane.setContent(root);
+
+        pane.getButtonTypes().addAll(ButtonType.CANCEL, ButtonType.OK);
+        Button delBtn = styleOkBtn(pane, "Permanently Delete");
+        delBtn.setStyle(delBtn.getStyle() + "; -fx-background-color: #DC2626;");
+        styleSecondaryBtn(pane, ButtonType.CANCEL, "Keep My Account");
+
+        delBtn.addEventFilter(javafx.event.ActionEvent.ACTION, ev -> {
+            try {
+                UserService.deleteOwnAccount(userId, passField.getText());
+                notifySuccess(toast, "Account deleted. Goodbye!");
+                onDeleted.run();
+                dlg.setResult(true);
+                dlg.close();
+            } catch (Exception e) {
+                err.setText(e.getMessage());
+                err.setVisible(true);
+                ev.consume();
+            }
+        });
+
+        dlg.showAndWait();
     }
 }

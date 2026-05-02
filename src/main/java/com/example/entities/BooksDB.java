@@ -42,6 +42,7 @@ public final class BooksDB implements Serializable {
     private final Map<String, List<String>> issuedBooks; // userId -> list of ISBNs
     private final Map<String, Map<String, Integer>> borrowerDetails; // ISBN -> (userId -> quantity)
     private final Map<String, List<IssueRecord>> issueRecords; // userId -> list of IssueRecords
+    private List<InvoiceData> invoiceHistory; // Persistent history of payments
 
     // Configuration
     private transient boolean autoSave = true;
@@ -68,6 +69,7 @@ public final class BooksDB implements Serializable {
         private LocalDate returnDate;
         private double fineAmount;
         private boolean finePaid;
+        private double paidAmount;
         private int renewalCount;
         private String notes;
         private double finePerDayRate;
@@ -106,6 +108,7 @@ public final class BooksDB implements Serializable {
         public LocalDate getReturnDate() { return returnDate; }
         public double getFineAmount() { return fineAmount; }
         public boolean isFinePaid() { return finePaid; }
+        public double getPaidAmount() { return paidAmount; }
         public int getRenewalCount() { return renewalCount; }
         public String getNotes() { return notes; }
         public double getFinePerDayRate() { return finePerDayRate > 0.0 ? finePerDayRate : FINE_PER_DAY; }
@@ -121,6 +124,7 @@ public final class BooksDB implements Serializable {
         public void setReturnDate(LocalDate returnDate) { this.returnDate = returnDate; }
         public void setFineAmount(double fineAmount) { this.fineAmount = Math.max(0.0, fineAmount); }
         public void setFinePaid(boolean finePaid) { this.finePaid = finePaid; }
+        public void setPaidAmount(double paidAmount) { this.paidAmount = Math.max(0.0, paidAmount); }
         public void setQuantity(int quantity) { this.quantity = Math.max(1, quantity); }
         public void setNotes(String notes) { this.notes = notes; }
         public void setDueDate(LocalDate dueDate) { this.currentDueDate = Objects.requireNonNull(dueDate, "Due date cannot be null"); }
@@ -147,18 +151,32 @@ public final class BooksDB implements Serializable {
          * @return number of days overdue (0 if not overdue)
          */
         public long getDaysOverdue() {
-            LocalDate checkDate = returned && returnDate != null ? returnDate : LocalDate.now();
+            if (getFinePerDayRate() <= 0) return 0;
+            
+            // Calculate days overdue based on return date or current date
+            
+            LocalDate checkDate = (returned && returnDate != null) ? returnDate : LocalDate.now();
             long overdueDays = ChronoUnit.DAYS.between(currentDueDate, checkDate);
             return Math.max(0, overdueDays);
         }
 
         /**
-         * Calculates fine amount based on overdue days.
-         *
-         * @return calculated fine amount
+         * Calculates the total fine amount accrued to date.
+         * @return total fine amount
          */
         public double calculateFine() {
-            return getDaysOverdue() * getFinePerDayRate();
+            return getDaysOverdue() * getFinePerDayRate() * quantity;
+        }
+
+        /**
+         * Returns the remaining fine after subtracting payments.
+         * @return remaining fine
+         */
+        public double getRemainingFine() {
+            // For returned books, we use the fine amount that was set at return time.
+            // For active books, we calculate the dynamic fine.
+            double totalFine = returned ? fineAmount : calculateFine();
+            return Math.max(0.0, totalFine - paidAmount);
         }
 
         /**
@@ -167,8 +185,11 @@ public final class BooksDB implements Serializable {
          * @return true if overdue
          */
         public boolean isOverdue() {
+            // It's only 'Overdue' if it's NOT returned and the due date has passed.
             return !returned && getDaysOverdue() > 0;
         }
+
+
 
         /**
          * Checks if the record is due soon (within specified days).
@@ -199,20 +220,29 @@ public final class BooksDB implements Serializable {
          * Mirrors the logic in the standalone {@code IssueRecord} entity.
          */
         public String getStatusText() {
-            if (returned)   return "Returned";
-            if (isOverdue()) return "Overdue " + getDaysOverdue() + "d";
-            if (isDueSoon(3)) return "Due in " + getDaysRemaining() + "d";
-            return "Active - " + getDaysRemaining() + "d left";
+            if (returned) {
+                long late = getDaysOverdue();
+                String suffix = (late > 0) ? " (Late " + late + "d)" : "";
+                if (getRemainingFine() > 0) {
+                    return "Returned" + suffix + " - Fine Due";
+                }
+                return "Returned" + suffix;
+            }
+            if (isOverdue()) {
+                return "Overdue " + getDaysOverdue() + "d";
+            }
+            long left = getDaysRemaining();
+            if (left == 0) return "Due Today";
+            return "Active - " + left + "d left";
         }
 
-        /**
-         * CSS chip style-class matching the current status.
-         * Values align with the chip-* classes defined in theme.css.
-         */
         public String getStatusStyleClass() {
-            if (returned)   return "chip-success";
+            if (returned) {
+                return getRemainingFine() > 0 ? "chip-warning" : "chip-success";
+            }
             if (isOverdue()) return "chip-error";
-            if (isDueSoon(3)) return "chip-warning";
+            long left = getDaysRemaining();
+            if (left <= 3) return "chip-warning";
             return "chip-primary";
         }
 
@@ -239,6 +269,35 @@ public final class BooksDB implements Serializable {
     }
 
     /**
+     * Represents a record of a fine payment invoice.
+     */
+    public static final class InvoiceData implements Serializable {
+        private static final long serialVersionUID = 1L;
+        private final String id;
+        private final String userId;
+        private final String isbn;
+        private final String bookTitle;
+        private final double amount;
+        private final java.time.LocalDateTime date;
+
+        public InvoiceData(String id, String userId, String isbn, String bookTitle, double amount) {
+            this.id = id;
+            this.userId = userId;
+            this.isbn = isbn;
+            this.bookTitle = bookTitle;
+            this.amount = amount;
+            this.date = java.time.LocalDateTime.now();
+        }
+
+        public String getId() { return id; }
+        public String getUserId() { return userId; }
+        public String getIsbn() { return isbn; }
+        public String getBookTitle() { return bookTitle; }
+        public double getAmount() { return amount; }
+        public java.time.LocalDateTime getDate() { return date; }
+    }
+
+    /**
      * Private constructor for singleton pattern.
      */
     private BooksDB() {
@@ -246,6 +305,7 @@ public final class BooksDB implements Serializable {
         this.issuedBooks = new LinkedHashMap<>();
         this.borrowerDetails = new LinkedHashMap<>();
         this.issueRecords = new LinkedHashMap<>();
+        this.invoiceHistory = new ArrayList<>();
         loadAllData();
     }
 
@@ -287,7 +347,47 @@ public final class BooksDB implements Serializable {
         if (defaultLoanDays <= 0) defaultLoanDays = DEFAULT_LOAN_DAYS;
         if (finePerDay < 0) finePerDay = FINE_PER_DAY;
         if (maxRenewalCount < 0) maxRenewalCount = MAX_RENEWAL_COUNT;
+        if (invoiceHistory == null) invoiceHistory = new ArrayList<>();
+        pruneInvoiceHistory();
         loadAllData();
+    }
+
+    /**
+     * Adds an invoice record to history and persists.
+     */
+    public void addInvoiceRecord(InvoiceData data) {
+        lock.writeLock().lock();
+        try {
+            invoiceHistory.add(data);
+            if (autoSave) saveAllData();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Removes invoice records older than 7 days.
+     */
+    public void pruneInvoiceHistory() {
+        lock.writeLock().lock();
+        try {
+            java.time.LocalDateTime weekAgo = java.time.LocalDateTime.now().minusDays(7);
+            invoiceHistory.removeIf(i -> i.getDate().isBefore(weekAgo));
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * Returns a copy of the recent invoice history.
+     */
+    public List<InvoiceData> getInvoiceHistory() {
+        lock.readLock().lock();
+        try {
+            return new ArrayList<>(invoiceHistory);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     // --- Book Management Operations ---
@@ -768,6 +868,25 @@ public final class BooksDB implements Serializable {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Retrieves all issue records relevant to current circulation:
+     * - All unreturned books (Active/Overdue)
+     * - All returned books that still have an outstanding fine (Settlements)
+     *
+     * @return list of current circulation records
+     */
+    public List<IssueRecord> getCirculationRecords() {
+        lock.readLock().lock();
+        try {
+            return issueRecords.values().stream()
+                    .flatMap(List::stream)
+                    .filter(r -> !r.isReturned() || r.getRemainingFine() > 0)
+                    .collect(Collectors.toList());
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     public List<IssueRecord> getAllActiveIssueRecords() {
         return getAllIssueRecords().stream()
                 .filter(record -> !record.isReturned())
@@ -781,9 +900,11 @@ public final class BooksDB implements Serializable {
     }
 
     public List<IssueRecord> getAllOverdueIssueRecords() {
-        return getAllActiveIssueRecords().stream()
-                .filter(IssueRecord::isOverdue)
-                .collect(Collectors.toList());
+        javafx.collections.transformation.FilteredList<IssueRecord> overdueData =
+                new javafx.collections.transformation.FilteredList<>(
+                        javafx.collections.FXCollections.observableArrayList(getAllActiveIssueRecords()), 
+                        IssueRecord::isOverdue);
+        return new ArrayList<>(overdueData);
     }
 
     public double calculateUserFine(String userId) {
@@ -825,6 +946,26 @@ public final class BooksDB implements Serializable {
     public void setAutoSave(boolean autoSave) { this.autoSave = autoSave; }
 
     // --- Private Helper Methods ---
+
+    public void forceReload() {
+        lock.writeLock().lock();
+        try {
+            BooksDB loaded = DataStorage.readSerialized(dataFile(BOOKS_DB_FILE), BooksDB.class);
+            if (loaded != null) {
+                this.books.clear();
+                this.books.putAll(loaded.books);
+                this.maxBorrowLimit = loaded.maxBorrowLimit;
+                this.defaultLoanDays = loaded.defaultLoanDays;
+                this.finePerDay = loaded.finePerDay;
+                this.maxRenewalCount = loaded.maxRenewalCount;
+            }
+            loadAllData();
+        } catch (Exception e) {
+            LOGGER.log(Level.WARNING, "Force reload failed", e);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 
     private void loadAllData() {
         try {
@@ -879,7 +1020,7 @@ public final class BooksDB implements Serializable {
         }
     }
 
-    private void saveAllData() {
+    public void saveAllData() {
         try {
             DataStorage.writeSerialized(dataFile(BOOKS_DB_FILE), this);
             DataStorage.writeSerializedMap(dataFile(ISSUED_BOOKS_FILE), issuedBooks);

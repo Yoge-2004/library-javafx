@@ -6,7 +6,6 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.Stage;
 
 /**
  * Settings dialog with icons on every item and functional callbacks.
@@ -20,6 +19,7 @@ public class SettingsView extends ScrollPane {
         void openLibraryConfiguration();
         void openDataManagement();
         void openAnalytics();
+        void deleteAccount();
     }
 
     public SettingsView(UserRole userRole, Actions actions) {
@@ -53,7 +53,11 @@ public class SettingsView extends ScrollPane {
 
                 settingItem(AppTheme.ICON_LOCK, "Password",
                         "Change your account password",
-                        "#3B82F6", () -> openFromSettings(actions::openPassword))
+                        "#3B82F6", () -> openFromSettings(actions::openPassword)),
+
+                settingItem(AppTheme.ICON_DELETE, "Delete Account",
+                        "Permanently remove your account and all associated data",
+                        "#DC2626", () -> openFromSettings(actions::deleteAccount))
         );
 
         // ── Administration section (staff only) ──────────────────
@@ -85,9 +89,9 @@ public class SettingsView extends ScrollPane {
         StackPane aboutIcon = createIconBubble(AppTheme.ICON_HELP, "#64748B");
 
         VBox aboutTxt = new VBox(2);
-        Label aboutTitle = new Label("Library OS  v3.1");
+        Label aboutTitle = new Label("Library OS  v3.2 - Stable Release");
         aboutTitle.setStyle("-fx-font-size:15px; -fx-font-weight:700; -fx-text-fill:" + textPrimary() + ";");
-        Label aboutSub = new Label("Modern library management . JavaFX 26 . Java 26");
+        Label aboutSub = new Label("Product of Yogesh | JavaFX 26 . Java 26");
         aboutSub.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
         aboutTxt.getChildren().addAll(aboutTitle, aboutSub);
         aboutCard.getChildren().addAll(aboutIcon, aboutTxt);

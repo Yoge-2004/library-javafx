@@ -75,7 +75,7 @@ public class RegistrationDialog {
 
         // Username
         Label uLbl = fieldLabel("Username");
-        TextField usernameField = inputField("letters, numbers, . _ - (min 3 chars)");
+        TextField usernameField = inputField("Letters, numbers, . or _ (min 3 chars)");
         Label uFeedback = new Label();
         uFeedback.setStyle("-fx-font-size: 11px;");
         usernameField.textProperty().addListener((o, old, v) -> checkUsername(uFeedback, v));
@@ -122,46 +122,54 @@ public class RegistrationDialog {
 
         if (!isFirstUser && allowRoleSelection) {
             Label rLbl = fieldLabel("Account Type");
+            
             RadioButton userRb = new RadioButton();
             userRb.setToggleGroup(roleGroup);
             userRb.setUserData(UserRole.USER);
             userRb.setSelected(true);
-            VBox userOption = roleOption(
-                    userRb,
-                    "Library User",
-                    "Borrow books, track due dates, and manage your requests.",
-                    false);
+            VBox userOption = roleOption(userRb, "Library User", "Borrow books and manage requests.", true);
 
             RadioButton libRb  = new RadioButton();
             libRb.setToggleGroup(roleGroup);
             libRb.setUserData(UserRole.LIBRARIAN);
-            VBox librarianOption = roleOption(
-                    libRb,
-                    "Librarian",
-                    "Manage circulation and catalog tasks after administrator approval.",
-                    false);
+            VBox librarianOption = roleOption(libRb, "Librarian", "Manage circulation and catalog.", false);
 
-            VBox radioRow = new VBox(10, userOption, librarianOption);
+            RadioButton adminRb = new RadioButton();
+            adminRb.setToggleGroup(roleGroup);
+            adminRb.setUserData(UserRole.ADMIN);
+            VBox adminOption = roleOption(adminRb, "Administrator", "Full system access and user management.", false);
+
+            RadioButton resAdminRb = new RadioButton();
+            resAdminRb.setToggleGroup(roleGroup);
+            resAdminRb.setUserData(UserRole.RESTRICTED_ADMIN);
+            VBox resAdminOption = roleOption(resAdminRb, "Restricted Admin", "Limited administrative access.", false);
+
+            VBox radioRow;
+            if (isFirstUser) {
+                // First user is always Administrator
+                radioRow = new VBox(10, adminOption);
+            } else {
+                radioRow = new VBox(10, userOption, librarianOption, resAdminOption);
+            }
             radioRow.setAlignment(Pos.CENTER_LEFT);
 
-            librarianNotice.setText("Librarian accounts start as inactive. " +
-                    "An admin must approve before you can log in.");
-            librarianNotice.setStyle("-fx-font-size: 12px; -fx-text-fill: #92400E; " +
-                    "-fx-background-color: #FEF3C7; -fx-background-radius: 8px; " +
-                    "-fx-padding: 10 14; -fx-wrap-text: true;");
+            librarianNotice.setText("Staff accounts (Librarian/Admin) require administrator approval.");
+            librarianNotice.setStyle("-fx-font-size: 12px; -fx-text-fill: #92400E; -fx-background-color: #FEF3C7; -fx-background-radius: 8px; -fx-padding: 8 12;");
             librarianNotice.setWrapText(true);
             librarianNotice.setVisible(false);
             librarianNotice.setManaged(false);
 
             roleGroup.selectedToggleProperty().addListener((o, old, nw) -> {
-                boolean lib = nw != null && nw.getUserData() == UserRole.LIBRARIAN;
-                librarianNotice.setVisible(lib);
-                librarianNotice.setManaged(lib);
+                boolean needsAppr = nw != null && (nw.getUserData() == UserRole.LIBRARIAN || nw.getUserData() == UserRole.ADMIN || nw.getUserData() == UserRole.RESTRICTED_ADMIN);
+                librarianNotice.setVisible(needsAppr);
+                librarianNotice.setManaged(needsAppr);
                 userOption.setStyle(roleOptionStyle(userRb.isSelected()));
                 librarianOption.setStyle(roleOptionStyle(libRb.isSelected()));
+                adminOption.setStyle(roleOptionStyle(adminRb.isSelected()));
             });
             userOption.setStyle(roleOptionStyle(true));
             librarianOption.setStyle(roleOptionStyle(false));
+            adminOption.setStyle(roleOptionStyle(false));
 
             roleBox = new VBox(8, rLbl, radioRow, librarianNotice);
         }
@@ -253,7 +261,7 @@ public class RegistrationDialog {
                         usernameField.getText().trim(),
                         passField.getText(),
                         role,
-                        role == UserRole.LIBRARIAN,
+                        !isFirstUser && (role == UserRole.LIBRARIAN || role == UserRole.ADMIN || role == UserRole.RESTRICTED_ADMIN),
                         emailField.getText().trim(),
                         phoneField.getText().trim()
                 );

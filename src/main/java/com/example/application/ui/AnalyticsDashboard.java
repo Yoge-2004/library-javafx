@@ -25,7 +25,9 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
@@ -67,7 +69,7 @@ public class AnalyticsDashboard extends BorderPane {
     private Runnable onNavigateToCirculation;
     private Runnable onNavigateToCatalog;
 
-    private FlowPane statsPane;
+    private GridPane statsPane;
     private FlowPane chartsPane;
     private FlowPane bottomPane;
     private VBox recentPanel;
@@ -123,7 +125,7 @@ public class AnalyticsDashboard extends BorderPane {
         scroll.setFitToWidth(true);
         scroll.setFitToHeight(false);
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.ALWAYS);
         scroll.setStyle("-fx-background:transparent; -fx-background-color:transparent;");
 
         VBox content = new VBox(24);
@@ -137,7 +139,15 @@ public class AnalyticsDashboard extends BorderPane {
                         ? "Real-time circulation health, category mix, and overdue follow-up."
                         : "Your active books, requests, fines, and overdue items in one place.");
 
-        statsPane = createWrappingSection(16);
+        statsPane = new GridPane();
+        statsPane.setHgap(16);
+        statsPane.setVgap(20);
+        
+        for (int i = 0; i < 3; i++) {
+            ColumnConstraints col = new ColumnConstraints();
+            col.setPercentWidth(33.33);
+            statsPane.getColumnConstraints().add(col);
+        }
         chartsPane = createWrappingSection(16);
         bottomPane = createWrappingSection(16);
 
@@ -187,12 +197,11 @@ public class AnalyticsDashboard extends BorderPane {
         trendCategoryFilter = filterCombo("All categories", List.of("All categories"));
         trendStyleFilter = filterCombo("Bar", List.of("Bar", "Line"));
 
-        trendPanel.getChildren().addAll(
+        trendPanel.getChildren().add(
                 filterRow(
                         filterGroup("Range", trendRangeFilter),
                         filterGroup("Group", trendGroupingFilter),
-                        filterGroup("Series", trendSeriesFilter)),
-                filterRow(
+                        filterGroup("Series", trendSeriesFilter),
                         filterGroup("Category", trendCategoryFilter),
                         filterGroup("Style", trendStyleFilter))
         );
@@ -377,7 +386,7 @@ public class AnalyticsDashboard extends BorderPane {
             int pending = num(stats, "pendingRequests");
             double utilization = totalCopies > 0 ? issued * 100.0 / totalCopies : 0.0;
 
-            statsPane.getChildren().addAll(
+            List<Node> cards = List.of(
                     statCard(AppTheme.ICON_LIBRARY, "Books in Catalog", str(totalBooks),
                             totalCopies + " copies across the collection", "#0D9488", onNavigateToCatalog),
                     statCard(AppTheme.ICON_CHECK, "Available Copies", str(available),
@@ -393,6 +402,17 @@ public class AnalyticsDashboard extends BorderPane {
                     statCard(AppTheme.ICON_USER, "Registered Users", str(totalUsers),
                             staffCount + " staff account(s)", "#06B6D4", null)
             );
+
+            int row = 0;
+            int col = 0;
+            for (Node card : cards) {
+                statsPane.add(card, col, row);
+                col++;
+                if (col >= 3) {
+                    col = 0;
+                    row++;
+                }
+            }
         } else {
             int myBorrowed = BookService.getUserTotalBorrowedBooks(currentUser);
             int myOverdue = BookService.getUserOverdueBooks(currentUser).size();
@@ -401,7 +421,7 @@ public class AnalyticsDashboard extends BorderPane {
                     .filter(request -> request.getStatus() == com.example.entities.BorrowRequest.Status.PENDING)
                     .count();
 
-            statsPane.getChildren().addAll(
+            List<Node> cards = List.of(
                     statCard(AppTheme.ICON_LIBRARY, "Borrowed Right Now", str(myBorrowed),
                             "Books currently issued to you", "#0D9488", onNavigateToCirculation),
                     statCard(AppTheme.ICON_WARNING, "Need to Return", str(myOverdue),
@@ -411,6 +431,17 @@ public class AnalyticsDashboard extends BorderPane {
                     statCard(AppTheme.ICON_NOTIFICATION, "Pending Requests", str(myPending),
                             "Requests waiting for approval", "#8B5CF6", onNavigateToCirculation)
             );
+
+            int row = 0;
+            int col = 0;
+            for (Node card : cards) {
+                statsPane.add(card, col, row);
+                col++;
+                if (col >= 3) {
+                    col = 0;
+                    row++;
+                }
+            }
         }
 
         AppTheme.staggeredEntrance(statsPane.getChildren(), 25, 35);
@@ -419,15 +450,17 @@ public class AnalyticsDashboard extends BorderPane {
 
     private VBox statCard(String iconPath, String label, String value, String subText,
                           String accentColor, Runnable onClick) {
-        VBox card = new VBox(12);
+        VBox card = new VBox(8);
         card.getStyleClass().add("metric-card");
         card.setPadding(new Insets(18));
-        // Set a sensible initial width; responsive layout will override later
         card.setMinWidth(200);
         card.setPrefWidth(240);
-        card.setMaxWidth(Double.MAX_VALUE);
-        card.setScaleX(1.0);
-        card.setScaleY(1.0);
+        card.setMaxWidth(480);
+        
+        // Ensure vertical stability
+        card.setMinHeight(160);
+        card.setPrefHeight(160);
+        card.setMaxHeight(160);
 
         HBox header = new HBox(12);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -435,41 +468,40 @@ public class AnalyticsDashboard extends BorderPane {
         StackPane badge = new StackPane(AppTheme.createIcon(iconPath, 18));
         badge.setMinSize(40, 40);
         badge.setPrefSize(40, 40);
-        badge.setMaxSize(40, 40);
         badge.setStyle("-fx-background-color:" + accentColor + "22; -fx-background-radius: 12px;");
 
         Label labelText = new Label(label);
         labelText.setStyle("-fx-font-size: 13px; -fx-font-weight: 700; -fx-text-fill:" + textMuted() + ";");
         labelText.setWrapText(true);
-        labelText.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(labelText, Priority.ALWAYS);
 
-        header.getChildren().addAll(badge, labelText);
+        javafx.scene.shape.SVGPath arrowIcon = (javafx.scene.shape.SVGPath) AppTheme.createIcon(AppTheme.ICON_CHEVRON_RIGHT, 14);
+        arrowIcon.setStroke(javafx.scene.paint.Color.web(accentColor));
+        arrowIcon.setStrokeWidth(2.5);
+        arrowIcon.setStrokeLineCap(javafx.scene.shape.StrokeLineCap.ROUND);
+        arrowIcon.setStrokeLineJoin(javafx.scene.shape.StrokeLineJoin.ROUND);
+        
+        StackPane arrow = new StackPane(arrowIcon);
+        
+        if (onClick != null) {
+            card.setCursor(javafx.scene.Cursor.HAND);
+            card.setOnMouseClicked(event -> onClick.run());
+            arrow.setOpacity(1.0);
+        } else {
+            arrow.setOpacity(0);
+        }
+
+        header.getChildren().addAll(badge, labelText, arrow);
 
         Label valueText = new Label(value);
-        valueText.setStyle("-fx-font-size: 28px; -fx-font-weight: 800; -fx-text-fill:" + accentColor + ";");
-
-        // Animate count-up for pure numeric values
-        try {
-            int numericValue = Integer.parseInt(value.replaceAll("[^0-9]", ""));
-            if (!value.contains(".") && !value.startsWith("$") && !value.startsWith("£")) {
-                valueText.setText("0");
-                AppTheme.animateCount(valueText, numericValue, "", "");
-            }
-        } catch (NumberFormatException ignored) { }
+        valueText.setStyle("-fx-font-size: 26px; -fx-font-weight: 800; -fx-text-fill:" + accentColor + ";");
 
         Label subLabel = new Label(subText);
-        subLabel.setStyle("-fx-font-size: 12px; -fx-text-fill:" + textSoft() + ";");
+        subLabel.setStyle("-fx-font-size: 11px; -fx-text-fill:" + textSoft() + ";");
         subLabel.setWrapText(true);
+        VBox.setVgrow(subLabel, Priority.ALWAYS);
 
         card.getChildren().addAll(header, valueText, subLabel);
-
-        if (onClick != null) {
-            Label hint = new Label("Open details");
-            hint.setStyle("-fx-font-size: 11px; -fx-font-weight: 600; -fx-text-fill:" + accentColor + ";");
-            card.getChildren().add(hint);
-            card.setOnMouseClicked(event -> onClick.run());
-        }
 
         return card;
     }
@@ -901,13 +933,15 @@ public class AnalyticsDashboard extends BorderPane {
         if (isStaff) {
             Button contactBtn = new Button();
             contactBtn.setGraphic(AppTheme.createIcon(AppTheme.ICON_USER, 14));
-            contactBtn.getStyleClass().addAll("app-button", "btn-ghost");
+            contactBtn.getStyleClass().add("app-button");
+            contactBtn.getStyleClass().add("btn-ghost");
             contactBtn.setTooltip(AppTheme.createTooltip("View borrower contact"));
             contactBtn.setOnAction(event -> showContactSummary(record.getUserId()));
 
             Button reminderBtn = new Button();
             reminderBtn.setGraphic(AppTheme.createIcon(AppTheme.ICON_MAIL, 14));
-            reminderBtn.getStyleClass().addAll("app-button", "btn-ghost");
+            reminderBtn.getStyleClass().add("app-button");
+            reminderBtn.getStyleClass().add("btn-ghost");
             reminderBtn.setTooltip(AppTheme.createTooltip("Send overdue reminder"));
             reminderBtn.setOnAction(event -> sendDashboardReminder(record, reminderBtn));
 
@@ -1076,17 +1110,26 @@ public class AnalyticsDashboard extends BorderPane {
         return AppTheme.darkMode ? "#334155" : "#E2E8F0";
     }
 
-    private void updateResponsiveSections() {
-        double availableWidth = Math.max(360, getWidth() - 112);
+    private double lastWidth = -1;
 
-        // Stats: exactly 3 cards per row, occupying 1/3 viewport width regardless of size
-        applyResponsiveWidths(statsPane, availableWidth, 3, 3, 3, 0, Double.MAX_VALUE);
+    private void updateResponsiveSections() {
+        double currentWidth = getWidth();
+        // Ignore tiny changes or noise during transitions
+        if (Math.abs(currentWidth - lastWidth) < 15 && lastWidth > 0) return;
+        lastWidth = currentWidth;
+
+        double availableWidth = Math.max(360, currentWidth - 64);
+
+        // Stats: flexible columns based on width
+        statsPane.setMaxWidth(availableWidth);
+        
         // Bottom panels: 2 columns on wide, 1 on narrow
         applyResponsiveWidths(bottomPane, availableWidth,
                 availableWidth >= 1080 ? 2 : 1,
                 availableWidth >= 1080 ? 2 : 1,
                 1, 320, Double.MAX_VALUE);
-        // Charts: always 1 per row — each chart occupies the full viewport width
+                
+        // Charts: always 1 per row
         applyResponsiveWidths(chartsPane, availableWidth, 1, 1, 1, 320, Double.MAX_VALUE);
 
         if (trendChartHolder != null) {
@@ -1106,39 +1149,44 @@ public class AnalyticsDashboard extends BorderPane {
     }
 
     public void refreshLayout() {
+        lastWidth = -1; // Force update
         updateResponsiveSections();
+        
+        // Initial entrance animation if this is a fresh layout
+        if (statsPane.getOpacity() < 0.1) {
+            com.example.application.ui.AppTheme.staggeredEntrance(statsPane, 100);
+            com.example.application.ui.AppTheme.staggeredEntrance(chartsPane, 300);
+            com.example.application.ui.AppTheme.staggeredEntrance(bottomPane, 500);
+        }
     }
 
     private void applyResponsiveWidths(FlowPane pane, double availableWidth, int wideColumns,
                                        int mediumColumns, int narrowColumns,
                                        double minWidth, double maxWidth) {
-        if (pane == null || pane.getChildren().isEmpty()) {
-            return;
-        }
+        if (pane == null || pane.getChildren().isEmpty()) return;
 
         int columns;
-        if (availableWidth >= 1280) {
-            columns = wideColumns;
-        } else if (availableWidth >= 860) {
-            columns = mediumColumns;
-        } else {
-            columns = narrowColumns;
-        }
+        if (availableWidth >= 1100) columns = wideColumns;
+        else if (availableWidth >= 700) columns = mediumColumns;
+        else columns = narrowColumns;
         columns = Math.max(1, columns);
 
         double gap = pane.getHgap();
-        double targetWidth = (availableWidth - ((columns - 1) * gap)) / columns;
-        targetWidth = Math.max(minWidth, targetWidth);
-        if (Double.isFinite(maxWidth)) {
+        double targetWidth = Math.floor((availableWidth - ((columns - 1) * gap)) / columns);
+        
+        // Clamp width
+        targetWidth = Math.floor(Math.max(minWidth, targetWidth));
+        if (maxWidth > 0 && maxWidth < Double.MAX_VALUE) {
             targetWidth = Math.min(maxWidth, targetWidth);
         }
 
-        pane.setPrefWrapLength(availableWidth);
+        pane.setPrefWrapLength(columns * targetWidth + (columns - 1) * gap + 1); 
         for (Node child : pane.getChildren()) {
             if (child instanceof Region region) {
-                region.setPrefWidth(targetWidth);
-                region.setMaxWidth(targetWidth); // Force 1/3 width
+                // Use fixed width constraints to prevent jitter
                 region.setMinWidth(targetWidth);
+                region.setPrefWidth(targetWidth);
+                region.setMaxWidth(targetWidth);
             }
         }
         pane.requestLayout();

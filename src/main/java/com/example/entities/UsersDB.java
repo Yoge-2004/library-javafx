@@ -418,6 +418,17 @@ public final class UsersDB implements Serializable {
         }
     }
 
+    public void forceReload() {
+        lock.writeLock().lock();
+        try {
+            users.clear();
+            loadUsersFromStorage();
+            initializeAfterDeserialization();
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
     /**
      * Loads users from storage during initialization.
      */
