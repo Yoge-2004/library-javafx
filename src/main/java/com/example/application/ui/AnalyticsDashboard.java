@@ -140,16 +140,16 @@ public class AnalyticsDashboard extends BorderPane {
                         : "Your active books, requests, fines, and overdue items in one place.");
 
         statsPane = new GridPane();
-        statsPane.setHgap(16);
-        statsPane.setVgap(20);
+        statsPane.setHgap(24);
+        statsPane.setVgap(24);
         
         for (int i = 0; i < 3; i++) {
             ColumnConstraints col = new ColumnConstraints();
             col.setPercentWidth(33.33);
             statsPane.getColumnConstraints().add(col);
         }
-        chartsPane = createWrappingSection(16);
-        bottomPane = createWrappingSection(16);
+        chartsPane = createWrappingSection(24);
+        bottomPane = createWrappingSection(24);
 
         content.getChildren().addAll(header, statsPane);
         if (isStaff) {
@@ -209,6 +209,7 @@ public class AnalyticsDashboard extends BorderPane {
         trendChartHolder = new StackPane();
         trendChartHolder.setMinHeight(320);
         trendChartHolder.setPrefHeight(320);
+        VBox.setVgrow(trendChartHolder, Priority.NEVER);
         trendPanel.getChildren().add(trendChartHolder);
 
         VBox categoryPanel = createSurfacePanel("Category Mix");
@@ -230,11 +231,11 @@ public class AnalyticsDashboard extends BorderPane {
         categoryChart.setLabelsVisible(true);
         categoryChart.setLegendVisible(true);
         categoryChart.setLegendSide(javafx.geometry.Side.BOTTOM);
-        categoryChart.setPrefHeight(360);
-        categoryChart.setMinHeight(320);
+        categoryChart.setPrefHeight(320);
+        categoryChart.setMinHeight(280);
         categoryChart.setStyle("-fx-font-size: 11px;");
+        VBox.setVgrow(categoryChart, Priority.NEVER);
         categoryPanel.getChildren().add(categoryChart);
-
         VBox overdueInsightsPanel = createSurfacePanel("Overdue Insights");
         overdueInsightsPanel.setMinWidth(300);
         overdueInsightsPanel.setMaxWidth(Double.MAX_VALUE);
@@ -249,8 +250,9 @@ public class AnalyticsDashboard extends BorderPane {
         ));
 
         overdueChartHolder = new StackPane();
-        overdueChartHolder.setMinHeight(300);
-        overdueChartHolder.setPrefHeight(300);
+        overdueChartHolder.setMinHeight(320);
+        overdueChartHolder.setPrefHeight(320);
+        VBox.setVgrow(overdueChartHolder, Priority.NEVER);
         overdueInsightsPanel.getChildren().add(overdueChartHolder);
 
         chartsPane.getChildren().addAll(trendPanel, categoryPanel, overdueInsightsPanel);
@@ -317,9 +319,9 @@ public class AnalyticsDashboard extends BorderPane {
     }
 
     private VBox createSurfacePanel(String title) {
-        VBox panel = new VBox(12);
+        VBox panel = new VBox(6);
         panel.getStyleClass().add("surface-card");
-        panel.setPadding(new Insets(20));
+        panel.setPadding(new Insets(20, 20, 0, 20));
 
         Label titleLabel = new Label(title);
         titleLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 700; -fx-text-fill:" + textPrimary() + ";");
@@ -452,7 +454,7 @@ public class AnalyticsDashboard extends BorderPane {
                           String accentColor, Runnable onClick) {
         VBox card = new VBox(8);
         card.getStyleClass().add("metric-card");
-        card.setPadding(new Insets(18));
+        card.setPadding(new Insets(20));
         card.setMinWidth(200);
         card.setPrefWidth(240);
         card.setMaxWidth(480);
@@ -461,6 +463,8 @@ public class AnalyticsDashboard extends BorderPane {
         card.setMinHeight(160);
         card.setPrefHeight(160);
         card.setMaxHeight(160);
+        
+        AppTheme.configureTooltip(card, "Click to view details for " + label);
 
         HBox header = new HBox(12);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -698,6 +702,7 @@ public class AnalyticsDashboard extends BorderPane {
         xAxis.setLabel(xLabel);
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel(yLabel);
+        yAxis.getStyleClass().add("y-axis-with-gap");
 
         XYChart<String, Number> chart;
         if ("Line".equals(style)) {
@@ -714,8 +719,8 @@ public class AnalyticsDashboard extends BorderPane {
         }
 
         chart.setLegendVisible(true);
-        chart.setPrefHeight(300);
-        chart.setMinHeight(300);
+        chart.setPrefHeight(320);
+        chart.setMinHeight(280);
         chart.setStyle("-fx-font-size: 11px;");
         return chart;
     }
@@ -1058,12 +1063,18 @@ public class AnalyticsDashboard extends BorderPane {
         return label;
     }
 
-    private ComboBox<String> filterCombo(String initialValue, List<String> items) {
-        ComboBox<String> comboBox = new ComboBox<>(FXCollections.observableArrayList(items));
-        comboBox.setValue(initialValue);
-        comboBox.setVisibleRowCount(Math.min(8, items.size()));
-        comboBox.setMaxWidth(Double.MAX_VALUE);
-        return comboBox;
+    private ComboBox<String> filterCombo(String value, List<String> items, String tooltip) {
+        ComboBox<String> combo = new ComboBox<>(FXCollections.observableArrayList(items));
+        combo.setValue(value);
+        combo.setVisibleRowCount(Math.min(8, items.size()));
+        combo.setMaxWidth(Double.MAX_VALUE);
+        combo.getStyleClass().add("filter-combo");
+        AppTheme.configureTooltip(combo, tooltip);
+        return combo;
+    }
+
+    private ComboBox<String> filterCombo(String value, List<String> items) {
+        return filterCombo(value, items, "Filter data by " + value.toLowerCase());
     }
 
     private VBox filterGroup(String label, ComboBox<String> comboBox) {
@@ -1133,18 +1144,18 @@ public class AnalyticsDashboard extends BorderPane {
         applyResponsiveWidths(chartsPane, availableWidth, 1, 1, 1, 320, Double.MAX_VALUE);
 
         if (trendChartHolder != null) {
-            double chartHeight = availableWidth < 760 ? 320 : 360;
+            double chartHeight = 320;
             trendChartHolder.setMinHeight(chartHeight);
             trendChartHolder.setPrefHeight(chartHeight);
         }
         if (overdueChartHolder != null) {
-            double chartHeight = availableWidth < 760 ? 300 : 340;
+            double chartHeight = 320;
             overdueChartHolder.setMinHeight(chartHeight);
             overdueChartHolder.setPrefHeight(chartHeight);
         }
         if (categoryChart != null) {
-            categoryChart.setMinHeight(availableWidth < 760 ? 320 : 360);
-            categoryChart.setPrefHeight(availableWidth < 760 ? 320 : 380);
+            categoryChart.setMinHeight(320);
+            categoryChart.setPrefHeight(320);
         }
     }
 

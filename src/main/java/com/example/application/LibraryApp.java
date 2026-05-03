@@ -78,6 +78,8 @@ public class LibraryApp extends Application implements ToastDisplay {
         Scene scene = AppTheme.createScene(rootStack, w, h);
         stage.setScene(scene);
         AppTheme.applyWindowIcon(stage);
+        // Re-apply after small delay to force refresh on some Linux WMs
+        Platform.runLater(() -> AppTheme.runLater(() -> AppTheme.applyWindowIcon(stage), 1500));
 
         AppConfiguration cfg = AppConfigurationService.getConfiguration();
         initializeLibrarySelection(cfg);
@@ -1108,5 +1110,8 @@ public class LibraryApp extends Application implements ToastDisplay {
         }
     }
 
-    public static void main(String[] args) { launch(args); }
+    public static void main(String[] args) {
+        System.setProperty("glass.wm.class", "com.example.application.LibraryApp");
+        launch(args);
+    }
 }

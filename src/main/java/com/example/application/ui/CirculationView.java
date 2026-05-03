@@ -39,8 +39,8 @@ import com.example.services.InvoiceService;
  */
 public class CirculationView extends BorderPane {
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("MMM dd, yyyy");
-    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("MMM dd, HH:mm");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final DateTimeFormatter DATETIME_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy, HH:mm");
 
     private final ObservableList<IssueRecord> issueRecords;
     private final boolean isStaff;
@@ -395,7 +395,6 @@ public class CirculationView extends BorderPane {
                 setAlignment(Pos.CENTER_LEFT);
 
                 Tooltip tip = AppTheme.createTooltip(s);
-                tip.setWrapText(true);
                 tip.setMaxWidth(350);
                 setTooltip(tip);
             }
@@ -884,15 +883,22 @@ public class CirculationView extends BorderPane {
             }
         });
         issueDatePicker.setEditable(false);
-        issueDatePicker.setPrefWidth(160);
-        issueDatePicker.setStyle(inputStyle());
+        issueDatePicker.setConverter(new javafx.util.StringConverter<LocalDate>() {
+            private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            @Override public String toString(LocalDate date) { return (date != null) ? formatter.format(date) : ""; }
+            @Override public LocalDate fromString(String string) { return (string != null && !string.isEmpty()) ? LocalDate.parse(string, formatter) : null; }
+        });
+        issueDatePicker.setPrefWidth(180);
+        issueDatePicker.setPrefHeight(28);
+        issueDatePicker.setStyle(inputStyle() + "-fx-font-size: 12px;");
 
         Label loanDaysLbl = fieldLabel("Loan Period (Days)");
         Spinner<Integer> loanDaysSpin = new Spinner<>(1, 365, BookService.getLoanPeriodDays());
         loanDaysSpin.setEditable(true);
         loanDaysSpin.getStyleClass().add("themed-spinner");
-        loanDaysSpin.setPrefWidth(120);
-        loanDaysSpin.getEditor().setStyle("-fx-font-size:13px; -fx-alignment:CENTER;");
+        loanDaysSpin.setPrefWidth(100);
+        loanDaysSpin.setPrefHeight(28);
+        loanDaysSpin.getEditor().setStyle("-fx-font-size:12px; -fx-alignment:CENTER;");
 
         Label testingHint = new Label("Search and click books to toggle selection. Selections persist across searches.");
         testingHint.setStyle("-fx-font-size:12px; -fx-text-fill:" + textMuted() + ";");
@@ -908,7 +914,7 @@ public class CirculationView extends BorderPane {
                 bookLbl, bookSearch, bookList, bookAvail,
                 selectedHdr, selectedBooksBox,
                 userLbl, userSearch, userListView,
-                new HBox(24, // More gap
+                new HBox(24,
                         new VBox(6, issueDateLbl, issueDatePicker),
                         new VBox(6, loanDaysLbl, loanDaysSpin)),
                 testingHint,

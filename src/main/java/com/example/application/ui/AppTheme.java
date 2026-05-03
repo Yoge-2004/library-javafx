@@ -123,10 +123,13 @@ public final class AppTheme {
 
     private static final String THEME_PATH = "/theme.css";
     private static String cachedStylesheet;
+    private static Image cachedGiantIcon;
     private static Image cachedLargeIcon;
     private static Image cachedMediumIcon;
+    private static Image cachedStandardIcon;
     private static Image cachedSmallIcon;
     private static Image cachedTinyIcon;
+    private static Image cachedMicroIcon;
     public static boolean darkMode = false;
 
     public static final Interpolator SPRING_INTERPOLATOR = new Interpolator() {
@@ -294,6 +297,7 @@ public final class AppTheme {
         svg.setContent(pathContent);
         svg.getStyleClass().add("icon-svg");
         svg.setFill(Color.web("#64748B"));
+        svg.setMouseTransparent(true);
         double scale = size <= 0 ? 1.0 : size / 24.0;
         svg.setScaleX(scale);
         svg.setScaleY(scale);
@@ -309,14 +313,19 @@ public final class AppTheme {
     public static void applyWindowIcon(Stage stage) {
         if (stage == null) return;
         if (cachedLargeIcon == null) {
-            cachedLargeIcon = createAppIcon(512);
-            cachedMediumIcon = createAppIcon(256);
-            cachedSmallIcon = createAppIcon(128);
+            cachedGiantIcon = createAppIcon(512);
+            cachedLargeIcon = createAppIcon(256);
+            cachedMediumIcon = createAppIcon(128);
+            cachedStandardIcon = createAppIcon(64);
+            cachedSmallIcon = createAppIcon(48);
             cachedTinyIcon = createAppIcon(32);
-            applyTaskbarIcon(cachedLargeIcon);
+            cachedMicroIcon = createAppIcon(16);
+            applyTaskbarIcon(cachedGiantIcon);
         }
-        // Small-to-large order often works better for Linux taskbar managers
-        stage.getIcons().setAll(cachedTinyIcon, cachedSmallIcon, cachedMediumIcon, cachedLargeIcon);
+        stage.getIcons().setAll(
+            cachedGiantIcon, cachedLargeIcon, cachedMediumIcon, 
+            cachedStandardIcon, cachedSmallIcon, cachedTinyIcon, cachedMicroIcon
+        );
     }
 
     public static Button createButton(String text, ButtonStyle style) {
@@ -343,40 +352,24 @@ public final class AppTheme {
         return button;
     }
 
-    public static void configureTooltip(Control node, String text) {
+    public static void configureTooltip(javafx.scene.Node node, String text) {
         if (node == null || text == null || text.isBlank()) return;
         Tooltip tooltip = createTooltip(text);
-        node.setTooltip(tooltip);
+        if (node instanceof Control control) {
+            control.setTooltip(tooltip);
+        } else {
+            Tooltip.install(node, tooltip);
+        }
     }
 
     public static Tooltip createTooltip(String text) {
         Tooltip tooltip = new Tooltip(text);
         tooltip.getStyleClass().add("modern-tooltip");
-        tooltip.setShowDelay(Duration.millis(400));
-        tooltip.setShowDuration(Duration.hours(48)); // Essentially indefinitely
-        tooltip.setHideDelay(Duration.millis(150));
+        tooltip.setShowDelay(Duration.millis(150));
+        tooltip.setShowDuration(Duration.INDEFINITE); 
+        tooltip.setHideDelay(Duration.millis(500));
         tooltip.setWrapText(true);
         tooltip.setMaxWidth(320);
-
-        // Enhanced show animation
-        tooltip.showingProperty().addListener((obs, wasShowing, isShowing) -> {
-            if (isShowing) {
-                Node skinNode = tooltip.getSkin().getNode();
-                if (skinNode != null) {
-                    skinNode.setOpacity(0);
-                    skinNode.setTranslateY(8);
-                    
-                    FadeTransition ft = new FadeTransition(Duration.millis(250), skinNode);
-                    ft.setToValue(1.0);
-                    
-                    TranslateTransition tt = new TranslateTransition(Duration.millis(250), skinNode);
-                    tt.setToY(0);
-                    tt.setInterpolator(Interpolator.EASE_OUT);
-                    
-                    new ParallelTransition(ft, tt).play();
-                }
-            }
-        });
         return tooltip;
     }
 
@@ -744,35 +737,45 @@ public final class AppTheme {
 
     private static Image createAppIcon(int size) {
         try {
-            InputStream is = AppTheme.class.getResourceAsStream("/app-icon.png");
-            if (is != null) {
-                return new Image(is, size, size, true, true);
+            URL url = AppTheme.class.getResource("/app-icon.png");
+            if (url != null) {
+                return new Image(url.toExternalForm(), size, size, true, true, false);
             }
         } catch (Exception ignored) {}
 
         Canvas canvas = new Canvas(size, size);
         GraphicsContext graphics = canvas.getGraphicsContext2D();
         double arc = size * 0.28;
+        // Background
         graphics.setFill(new LinearGradient(
                 0, 0, 1, 1, true, CycleMethod.NO_CYCLE,
                 new Stop(0, Color.web("#0F172A")),
                 new Stop(0.55, Color.web("#134E4A")),
                 new Stop(1, Color.web("#14B8A6"))));
-        graphics.fillRoundRect(0, 0, size, size, arc, arc);
+        graphics.fillRoundRect(0, 0, size, size, size * 0.28, size * 0.28);
+        
+        // Decorative background circle
         graphics.setFill(Color.web("#FFFFFF", 0.12));
-        graphics.fillOval(size * 0.10, size * 0.08, size * 0.66, size * 0.66);
+        graphics.fillOval(size * (64.0-170.0)/256.0, size * (51.0-170.0)/256.0, size * 340.0/256.0, size * 340.0/256.0);
+        
+        // Book block
         graphics.setFill(Color.WHITE);
-        double bookX = size * 0.26, bookY = size * 0.18, bookW = size * 0.48, bookH = size * 0.58;
-        graphics.fillRoundRect(bookX, bookY, bookW, bookH, size * 0.08, size * 0.08);
+        graphics.fillRoundRect(size * 66.0/256.0, size * 46.0/256.0, size * 123.0/256.0, size * 148.0/256.0, size * 20.0/256.0, size * 20.0/256.0);
+        
+        // Book spine
         graphics.setFill(Color.web("#CCFBF1"));
-        graphics.fillRoundRect(bookX + bookW * 0.10, bookY + bookH * 0.14, bookW * 0.18, bookH * 0.72, size * 0.04, size * 0.04);
+        graphics.fillRoundRect(size * 66.0/256.0, size * 46.0/256.0, size * 37.0/256.0, size * 148.0/256.0, size * 10.0/256.0, size * 10.0/256.0);
+        
+        // Book lines
         graphics.setStroke(Color.web("#0F766E", 0.85));
-        graphics.setLineWidth(Math.max(2.0, size * 0.03));
-        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.26, bookX + bookW * 0.78, bookY + bookH * 0.26);
-        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.48, bookX + bookW * 0.78, bookY + bookH * 0.48);
-        graphics.strokeLine(bookX + bookW * 0.36, bookY + bookH * 0.70, bookX + bookW * 0.66, bookY + bookH * 0.70);
+        graphics.setLineWidth(size * 7.0/256.0);
+        graphics.strokeLine(size * 92.0/256.0, size * 60.0/256.0, size * 172.0/256.0, size * 60.0/256.0);
+        graphics.strokeLine(size * 92.0/256.0, size * 103.0/256.0, size * 172.0/256.0, size * 103.0/256.0);
+        graphics.strokeLine(size * 92.0/256.0, size * 146.0/256.0, size * 147.0/256.0, size * 146.0/256.0);
+        
+        // Bottom decoration
         graphics.setFill(Color.web("#99F6E4"));
-        graphics.fillRoundRect(size * 0.30, size * 0.74, size * 0.40, size * 0.08, size * 0.03, size * 0.03);
+        graphics.fillRoundRect(size * 77.0/256.0, size * 190.0/256.0, size * 103.0/256.0, size * 20.0/256.0, size * 8.0/256.0, size * 8.0/256.0);
         WritableImage image = new WritableImage(size, size);
         canvas.snapshot(new SnapshotParameters(), image);
         return image;

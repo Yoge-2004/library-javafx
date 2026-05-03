@@ -1046,6 +1046,20 @@
 .dark-mode .chart-pie-label { -fx-fill: #CBD5E1; }
 .chart-pie-label-line      { -fx-stroke: #94A3B8; }
 
+
+.y-axis-with-gap .axis-label {
+    -fx-translate-x: -15;
+}
+.axis:bottom {
+    -fx-padding: 0 0 25 0;
+}
+.chart-legend {
+    -fx-padding: 10 0 0 0;
+}
+.chart {
+    -fx-padding: 10;
+}
+
 /* Legend symbol colors must match pie colors */
 .default-color0.chart-legend-item-symbol { -fx-background-color: #0D9488; }
 .default-color1.chart-legend-item-symbol { -fx-background-color: #3B82F6; }
